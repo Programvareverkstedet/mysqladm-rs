@@ -28,6 +28,8 @@
         (toolchain.withComponents [
           "cargo" "rustc" "rustfmt" "clippy"
         ])
+        pkgs.openssl
+        pkgs.pkg-config
       ];
       RUST_SRC_PATH = "${toolchain.rust-src}/lib/rustlib/src/rust/";
     });

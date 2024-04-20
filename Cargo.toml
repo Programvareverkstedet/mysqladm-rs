@@ -4,3 +4,13 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+anyhow = "1.0.82"
+clap = { version = "4.5.4", features = ["derive"] }
+mysql = "25.0.0"
+serde = "1.0.198"
+toml = "0.8.12"
+
+[[bin]]
+name = "mysqladm"
+bench = false
+path = "src/main.rs"
