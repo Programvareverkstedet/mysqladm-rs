@@ -1,0 +1,7 @@
+# This should go to `/etc/mysqladm/config.toml`
+
+[mysql]
+host = "localhost"
+posrt = 3306
+username = "root"
+password = "secret"
