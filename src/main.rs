@@ -6,6 +6,9 @@ use clap::Parser;
 mod cli;
 mod core;
 
+#[cfg(feature = "tui")]
+mod tui;
+
 #[derive(Parser)]
 struct Args {
     #[command(subcommand)]
@@ -13,6 +16,10 @@ struct Args {
 
     #[command(flatten)]
     config_overrides: core::config::ConfigOverrideArgs,
+
+    #[cfg(feature = "tui")]
+    #[arg(short, long, alias = "tui", global = true)]
+    interactive: bool,
 }
 
 /// Database administration tool designed for non-admin users to manage their own MySQL databases and users.
