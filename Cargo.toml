@@ -2,6 +2,16 @@
 name = "mysqladm-rs"
 version = "0.1.0"
 edition = "2021"
+license = "BSD3"
+authors = [
+  "oysteikt@pvv.ntnu.no",
+  "felixalb@pvv.ntnu.no",
+]
+repository = "https://git.pvv.ntnu.no/Projects/mysqladm-rs"
+description = "A command-line utility for MySQL administration for non-admin users"
+categories = ["command-line-interface", "command-line-utilities"]
+keywords = ["mysql", "cli", "administration"]
+readme = "README.md"
 
 [dependencies]
 anyhow = "1.0.95"
@@ -54,3 +64,37 @@ anyhow = "1.0.95"
 
 [dev-dependencies]
 regex = "1.11.1"
+
+# TODO: package shell completions
+[package.metadata.deb]
+maintainer = "Programvareverkstedet <projects@pvv.ntnu.no>"
+section = "admin"
+assets = [
+    [
+        "target/release/mysqladm",
+        "usr/bin/",
+        "755",
+    ],
+    [
+        "example-config.toml",
+        "etc/mysqladm/config.toml",
+        "644",
+    ],
+    [
+        "assets/completions/_*",
+        "usr/share/zsh/site-functions/completions/",
+        "644",
+    ],
+    [
+        "assets/completions/*.bash",
+        "usr/share/bash-completion/completions/",
+        "644",
+    ],
+    [
+        "assets/completions/*.fish",
+        "usr/share/fish/vendor_completions.d/",
+        "644",
+    ],
+]
+conf-files = ["etc/mysqladm/config.toml"]
+depends = []

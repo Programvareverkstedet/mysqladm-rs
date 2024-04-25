@@ -48,6 +48,7 @@
         mysql-client
         cargo-nextest
         cargo-deny
+        cargo-deb
       ];
 
       RUST_SRC_PATH = "${toolchain}/lib/rustlib/src/rust/library";
