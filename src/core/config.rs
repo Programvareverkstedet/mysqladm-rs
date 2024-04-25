@@ -1,6 +1,6 @@
-use std::{fs, path::PathBuf};
+use std::{fs, path::PathBuf, time::Duration};
 
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 use clap::Parser;
 use serde::{Deserialize, Serialize};
 use sqlx::{mysql::MySqlConnectOptions, ConnectOptions, MySqlConnection};
@@ -110,13 +110,19 @@ pub fn get_config(args: ConfigOverrideArgs) -> anyhow::Result<Config> {
 
 /// TODO: Add timeout.
 pub async fn mysql_connection_from_config(config: Config) -> anyhow::Result<MySqlConnection> {
-    MySqlConnectOptions::new()
-        .host(&config.mysql.host)
-        .username(&config.mysql.username)
-        .password(&config.mysql.password)
-        .port(config.mysql.port.unwrap_or(3306))
-        .database("mysql")
-        .connect()
-        .await
-        .context("Failed to connect to MySQL")
+    match tokio::time::timeout(
+        Duration::from_secs(2),
+        MySqlConnectOptions::new()
+            .host(&config.mysql.host)
+            .username(&config.mysql.username)
+            .password(&config.mysql.password)
+            .port(config.mysql.port.unwrap_or(3306))
+            .database("mysql")
+            .connect(),
+    ).await {
+        Ok(conn) => conn.context("Failed to connect to MySQL"),
+        Err(_) => {
+            Err(anyhow!("Timed out after 2 seconds")).context("Failed to connect to MySQL")
+        }
+    }
 }
