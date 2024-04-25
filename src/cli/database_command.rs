@@ -1,7 +1,7 @@
 use anyhow::Context;
 use clap::Parser;
 use prettytable::{Cell, Row, Table};
-use sqlx::MySqlConnection;
+use sqlx::{Connection, MySqlConnection};
 
 use crate::core::{self, database_operations::DatabasePrivileges};
 
@@ -124,19 +124,23 @@ struct DatabaseEditPermArgs {
     yes: bool,
 }
 
-pub async fn handle_command(args: DatabaseArgs, conn: MySqlConnection) -> anyhow::Result<()> {
-    match args.subcmd {
-        DatabaseCommand::Create(args) => create_databases(args, conn).await,
-        DatabaseCommand::Drop(args) => drop_databases(args, conn).await,
-        DatabaseCommand::List(args) => list_databases(args, conn).await,
-        DatabaseCommand::ShowPerm(args) => show_databases(args, conn).await,
-        DatabaseCommand::EditPerm(args) => edit_permissions(args, conn).await,
-    }
+pub async fn handle_command(args: DatabaseArgs, mut conn: MySqlConnection) -> anyhow::Result<()> {
+    let result = match args.subcmd {
+        DatabaseCommand::Create(args) => create_databases(args, &mut conn).await,
+        DatabaseCommand::Drop(args) => drop_databases(args, &mut conn).await,
+        DatabaseCommand::List(args) => list_databases(args, &mut conn).await,
+        DatabaseCommand::ShowPerm(args) => show_databases(args, &mut conn).await,
+        DatabaseCommand::EditPerm(args) => edit_permissions(args, &mut conn).await,
+    };
+
+    conn.close().await?;
+
+    result
 }
 
 async fn create_databases(
     args: DatabaseCreateArgs,
-    mut conn: MySqlConnection,
+    conn: &mut MySqlConnection,
 ) -> anyhow::Result<()> {
     if args.name.is_empty() {
         anyhow::bail!("No database names provided");
@@ -144,7 +148,7 @@ async fn create_databases(
 
     for name in args.name {
         // TODO: This can be optimized by fetching all the database privileges in one query.
-        if let Err(e) = core::database_operations::create_database(&name, &mut conn).await {
+        if let Err(e) = core::database_operations::create_database(&name, conn).await {
             eprintln!("Failed to create database '{}': {}", name, e);
             eprintln!("Skipping...");
         }
@@ -153,14 +157,14 @@ async fn create_databases(
     Ok(())
 }
 
-async fn drop_databases(args: DatabaseDropArgs, mut conn: MySqlConnection) -> anyhow::Result<()> {
+async fn drop_databases(args: DatabaseDropArgs, conn: &mut MySqlConnection) -> anyhow::Result<()> {
     if args.name.is_empty() {
         anyhow::bail!("No database names provided");
     }
 
     for name in args.name {
         // TODO: This can be optimized by fetching all the database privileges in one query.
-        if let Err(e) = core::database_operations::drop_database(&name, &mut conn).await {
+        if let Err(e) = core::database_operations::drop_database(&name, conn).await {
             eprintln!("Failed to drop database '{}': {}", name, e);
             eprintln!("Skipping...");
         }
@@ -169,8 +173,8 @@ async fn drop_databases(args: DatabaseDropArgs, mut conn: MySqlConnection) -> an
     Ok(())
 }
 
-async fn list_databases(args: DatabaseListArgs, mut conn: MySqlConnection) -> anyhow::Result<()> {
-    let databases = core::database_operations::get_database_list(&mut conn).await?;
+async fn list_databases(args: DatabaseListArgs, conn: &mut MySqlConnection) -> anyhow::Result<()> {
+    let databases = core::database_operations::get_database_list(conn).await?;
 
     if databases.is_empty() {
         println!("No databases to show.");
@@ -188,14 +192,17 @@ async fn list_databases(args: DatabaseListArgs, mut conn: MySqlConnection) -> an
     Ok(())
 }
 
-async fn show_databases(args: DatabaseShowPermArgs, mut conn: MySqlConnection) -> anyhow::Result<()> {
+async fn show_databases(
+    args: DatabaseShowPermArgs,
+    conn: &mut MySqlConnection,
+) -> anyhow::Result<()> {
     let database_users_to_show = if args.name.is_empty() {
-        core::database_operations::get_all_database_privileges(&mut conn).await?
+        core::database_operations::get_all_database_privileges(conn).await?
     } else {
         // TODO: This can be optimized by fetching all the database privileges in one query.
         let mut result = Vec::with_capacity(args.name.len());
         for name in args.name {
-            match core::database_operations::get_database_privileges(&name, &mut conn).await {
+            match core::database_operations::get_database_privileges(&name, conn).await {
                 Ok(db) => result.extend(db),
                 Err(e) => {
                     eprintln!("Failed to show database '{}': {}", name, e);
@@ -305,11 +312,14 @@ fn parse_permission_table_cli_arg(arg: &str) -> anyhow::Result<DatabasePrivilege
     Ok(result)
 }
 
-async fn edit_permissions(args: DatabaseEditPermArgs, mut conn: MySqlConnection) -> anyhow::Result<()> {
+async fn edit_permissions(
+    args: DatabaseEditPermArgs,
+    conn: &mut MySqlConnection,
+) -> anyhow::Result<()> {
     let _data = if let Some(name) = &args.name {
-        core::database_operations::get_database_privileges(name, &mut conn).await?
+        core::database_operations::get_database_privileges(name, conn).await?
     } else {
-        core::database_operations::get_all_database_privileges(&mut conn).await?
+        core::database_operations::get_all_database_privileges(conn).await?
     };
 
     if !args.text {

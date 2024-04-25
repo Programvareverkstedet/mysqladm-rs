@@ -2,7 +2,7 @@ use std::vec;
 
 use anyhow::Context;
 use clap::Parser;
-use sqlx::MySqlConnection;
+use sqlx::{Connection, MySqlConnection};
 
 use crate::core::user_operations::validate_ownership_of_user_name;
 
@@ -57,24 +57,28 @@ struct UserShowArgs {
     username: Vec<String>,
 }
 
-pub async fn handle_command(args: UserArgs, conn: MySqlConnection) -> anyhow::Result<()> {
-    match args.subcmd {
-        UserCommand::Create(args) => create_users(args, conn).await,
-        UserCommand::Drop(args) => drop_users(args, conn).await,
-        UserCommand::Passwd(args) => change_password_for_user(args, conn).await,
-        UserCommand::Show(args) => show_users(args, conn).await,
-    }
+pub async fn handle_command(args: UserArgs, mut conn: MySqlConnection) -> anyhow::Result<()> {
+    let result = match args.subcmd {
+        UserCommand::Create(args) => create_users(args, &mut conn).await,
+        UserCommand::Drop(args) => drop_users(args, &mut conn).await,
+        UserCommand::Passwd(args) => change_password_for_user(args, &mut conn).await,
+        UserCommand::Show(args) => show_users(args, &mut conn).await,
+    };
+
+    conn.close().await?;
+
+    result
 }
 
 // TODO: provide a better error message when the user already exists
-async fn create_users(args: UserCreateArgs, mut conn: MySqlConnection) -> anyhow::Result<()> {
+async fn create_users(args: UserCreateArgs, conn: &mut MySqlConnection) -> anyhow::Result<()> {
     if args.username.is_empty() {
         anyhow::bail!("No usernames provided");
     }
 
     for username in args.username {
         if let Err(e) =
-            crate::core::user_operations::create_database_user(&username, &mut conn).await
+            crate::core::user_operations::create_database_user(&username, conn).await
         {
             eprintln!("{}", e);
             eprintln!("Skipping...");
@@ -84,14 +88,14 @@ async fn create_users(args: UserCreateArgs, mut conn: MySqlConnection) -> anyhow
 }
 
 // TODO: provide a better error message when the user does not exist
-async fn drop_users(args: UserDeleteArgs, mut conn: MySqlConnection) -> anyhow::Result<()> {
+async fn drop_users(args: UserDeleteArgs, conn: &mut MySqlConnection) -> anyhow::Result<()> {
     if args.username.is_empty() {
         anyhow::bail!("No usernames provided");
     }
 
     for username in args.username {
         if let Err(e) =
-            crate::core::user_operations::delete_database_user(&username, &mut conn).await
+            crate::core::user_operations::delete_database_user(&username, conn).await
         {
             eprintln!("{}", e);
             eprintln!("Skipping...");
@@ -102,7 +106,7 @@ async fn drop_users(args: UserDeleteArgs, mut conn: MySqlConnection) -> anyhow::
 
 async fn change_password_for_user(
     args: UserPasswdArgs,
-    mut conn: MySqlConnection,
+    conn: &mut MySqlConnection,
 ) -> anyhow::Result<()> {
     // NOTE: although this also is checked in `set_password_for_database_user`, we check it here
     //       to provide a more natural order of error messages.
@@ -131,18 +135,18 @@ async fn change_password_for_user(
     crate::core::user_operations::set_password_for_database_user(
         &args.username,
         &password,
-        &mut conn,
+        conn,
     )
     .await?;
 
     Ok(())
 }
 
-async fn show_users(args: UserShowArgs, mut conn: MySqlConnection) -> anyhow::Result<()> {
+async fn show_users(args: UserShowArgs, conn: &mut MySqlConnection) -> anyhow::Result<()> {
     let user = crate::core::common::get_current_unix_user()?;
 
     let users = if args.username.is_empty() {
-        crate::core::user_operations::get_all_database_users_for_user(&user, &mut conn).await?
+        crate::core::user_operations::get_all_database_users_for_user(&user, conn).await?
     } else {
         let mut result = vec![];
         for username in args.username {
@@ -153,7 +157,7 @@ async fn show_users(args: UserShowArgs, mut conn: MySqlConnection) -> anyhow::Re
             }
 
             let user =
-                crate::core::user_operations::get_database_user_for_user(&username, &mut conn)
+                crate::core::user_operations::get_database_user_for_user(&username, conn)
                     .await?;
             if let Some(user) = user {
                 result.push(user);
