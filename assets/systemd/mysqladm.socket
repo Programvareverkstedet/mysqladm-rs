@@ -1,0 +1,8 @@
+[Unit]
+Description=MySQL administration tool for non-admin users
+WantedBy=sockets.target
+
+[Socket]
+ListenStream=/run/mysqladm/mysqladm.sock
+Accept=no
+PassCredentials=true

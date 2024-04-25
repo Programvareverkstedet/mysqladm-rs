@@ -49,6 +49,8 @@
         cargo-nextest
         cargo-edit
         cargo-deny
+        cargo-deb
+        dpkg
       ];
 
       RUST_SRC_PATH = "${toolchain}/lib/rustlib/src/rust/library";

@@ -68,3 +68,47 @@ anyhow = "1.0.100"
 
 [dev-dependencies]
 regex = "1.12.2"
+
+[package.metadata.deb]
+name = "mysqladm-rs"
+priority = "optional"
+section = "databases"
+depends = "$auto"
+license-file = ["LICENSE", "0"]
+maintainer = "Programvareverkstedet <projects@pvv.ntnu.no>"
+copyright = "Copyright (c) 2025, Programvareverkstedet"
+assets = [
+    [
+        "target/release/mysqladm",
+        "usr/bin/",
+        "755",
+    ],
+    [
+        "example-config.toml",
+        "etc/mysqladm/config.toml",
+        "600",
+    ],
+    [
+        "assets/completions/_*",
+        "usr/share/zsh/site-functions/completions/",
+        "644",
+    ],
+    [
+        "assets/completions/*.bash",
+        "usr/share/bash-completion/completions/",
+        "644",
+    ],
+    [
+        "assets/completions/*.fish",
+        "usr/share/fish/vendor_completions.d/",
+        "644",
+    ],
+    [
+        "assets/systemd/*",
+        "etc/systemd/system/",
+        "644",
+    ],
+]
+systemd-units = [
+    { unit-name = "mysqladm", unit-scripts = "assets/systemd", enable = true },
+]
