@@ -1,9 +1,19 @@
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 use clap::Parser;
+use indoc::indoc;
+use itertools::Itertools;
 use prettytable::{Cell, Row, Table};
+use rand::prelude::*;
 use sqlx::{Connection, MySqlConnection};
 
-use crate::core::{self, database_operations::DatabasePrivileges};
+use crate::core::{
+    self,
+    common::get_current_unix_user,
+    database_operations::{
+        apply_permission_diffs, db_priv_field_human_readable_name, diff_permissions, yn,
+        DatabasePrivileges, DATABASE_PRIVILEGE_FIELDS,
+    },
+};
 
 #[derive(Parser)]
 pub struct DatabaseArgs {
@@ -36,32 +46,31 @@ enum DatabaseCommand {
 
     /// Change permissions for the DATABASE(S). Run `edit-perm --help` for more information.
     ///
-    /// TODO: fix this help message.
-    ///
     /// This command has two modes of operation:
-    /// 1. Interactive mode: If the `-t` flag is used, the user will be prompted to edit the permissions using a text editor.
-    /// 2. Non-interactive mode: If the `-t` flag is not used, the user can specify the permissions to change using the `-p` flag.
+    /// 1. Interactive mode: If nothing else is specified, the user will be prompted to edit the permissions using a text editor.
     ///
-    /// In non-interactive mode, the `-p` flag should be followed by strings, each representing a single permission change.
+    ///    Follow the instructions inside the editor for more information.
     ///
-    /// The permission arguments should be a string, formatted as `db:user:privileges`
-    /// where privs are a string of characters, each representing a single permissions,
-    /// with the exception of `A` which represents all permissions.
+    /// 2. Non-interactive mode: If the `-p` flag is specified, the user can write permissions using arguments.
     ///
-    /// The permission to character mapping is as follows:
+    ///    The permission arguments should be formatted as `<db>:<user>:<privileges>`
+    ///    where the privileges are a string of characters, each representing a single permissions.
+    ///    The character `A` is an exception, because it represents all permissions.
     ///
-    /// - `s` - SELECT
-    /// - `i` - INSERT
-    /// - `u` - UPDATE
-    /// - `d` - DELETE
-    /// - `c` - CREATE
-    /// - `D` - DROP
-    /// - `a` - ALTER
-    /// - `I` - INDEX
-    /// - `t` - CREATE TEMPORARY TABLES
-    /// - `l` - LOCK TABLES
-    /// - `r` - REFERENCES
-    /// - `A` - ALL PRIVILEGES
+    ///    The permission to character mapping is as follows:
+    ///
+    ///    - `s` - SELECT
+    ///    - `i` - INSERT
+    ///    - `u` - UPDATE
+    ///    - `d` - DELETE
+    ///    - `c` - CREATE
+    ///    - `D` - DROP
+    ///    - `a` - ALTER
+    ///    - `I` - INDEX
+    ///    - `t` - CREATE TEMPORARY TABLES
+    ///    - `l` - LOCK TABLES
+    ///    - `r` - REFERENCES
+    ///    - `A` - ALL PRIVILEGES
     ///
     #[command(display_name = "edit-perm", alias = "e", verbatim_doc_comment)]
     EditPerm(DatabaseEditPermArgs),
@@ -110,10 +119,6 @@ struct DatabaseEditPermArgs {
     /// Whether to output the information in JSON format.
     #[arg(short, long)]
     json: bool,
-
-    /// Whether to edit the permissions using a text editor.
-    #[arg(short, long)]
-    text: bool,
 
     /// Specify the text editor to use for editing permissions.
     #[arg(short, long)]
@@ -184,9 +189,9 @@ async fn list_databases(args: DatabaseListArgs, conn: &mut MySqlConnection) -> a
     if args.json {
         println!("{}", serde_json::to_string_pretty(&databases)?);
     } else {
-      for db in databases {
-        println!("{}", db);
-      }
+        for db in databases {
+            println!("{}", db);
+        }
     }
 
     Ok(())
@@ -223,9 +228,10 @@ async fn show_databases(
     } else {
         let mut table = Table::new();
         table.add_row(Row::new(
-            core::database_operations::HUMAN_READABLE_DATABASE_PRIVILEGE_NAMES
-                .iter()
-                .map(|(name, _)| Cell::new(name))
+            DATABASE_PRIVILEGE_FIELDS
+                .into_iter()
+                .map(db_priv_field_human_readable_name)
+                .map(|name| Cell::new(&name))
                 .collect(),
         ));
 
@@ -266,44 +272,44 @@ fn parse_permission_table_cli_arg(arg: &str) -> anyhow::Result<DatabasePrivilege
     let mut result = DatabasePrivileges {
         db,
         user,
-        select_priv: "N".to_string(),
-        insert_priv: "N".to_string(),
-        update_priv: "N".to_string(),
-        delete_priv: "N".to_string(),
-        create_priv: "N".to_string(),
-        drop_priv: "N".to_string(),
-        alter_priv: "N".to_string(),
-        index_priv: "N".to_string(),
-        create_tmp_table_priv: "N".to_string(),
-        lock_tables_priv: "N".to_string(),
-        references_priv: "N".to_string(),
+        select_priv: false,
+        insert_priv: false,
+        update_priv: false,
+        delete_priv: false,
+        create_priv: false,
+        drop_priv: false,
+        alter_priv: false,
+        index_priv: false,
+        create_tmp_table_priv: false,
+        lock_tables_priv: false,
+        references_priv: false,
     };
 
     for char in privs.chars() {
         match char {
-            's' => result.select_priv = "Y".to_string(),
-            'i' => result.insert_priv = "Y".to_string(),
-            'u' => result.update_priv = "Y".to_string(),
-            'd' => result.delete_priv = "Y".to_string(),
-            'c' => result.create_priv = "Y".to_string(),
-            'D' => result.drop_priv = "Y".to_string(),
-            'a' => result.alter_priv = "Y".to_string(),
-            'I' => result.index_priv = "Y".to_string(),
-            't' => result.create_tmp_table_priv = "Y".to_string(),
-            'l' => result.lock_tables_priv = "Y".to_string(),
-            'r' => result.references_priv = "Y".to_string(),
+            's' => result.select_priv = true,
+            'i' => result.insert_priv = true,
+            'u' => result.update_priv = true,
+            'd' => result.delete_priv = true,
+            'c' => result.create_priv = true,
+            'D' => result.drop_priv = true,
+            'a' => result.alter_priv = true,
+            'I' => result.index_priv = true,
+            't' => result.create_tmp_table_priv = true,
+            'l' => result.lock_tables_priv = true,
+            'r' => result.references_priv = true,
             'A' => {
-                result.select_priv = "Y".to_string();
-                result.insert_priv = "Y".to_string();
-                result.update_priv = "Y".to_string();
-                result.delete_priv = "Y".to_string();
-                result.create_priv = "Y".to_string();
-                result.drop_priv = "Y".to_string();
-                result.alter_priv = "Y".to_string();
-                result.index_priv = "Y".to_string();
-                result.create_tmp_table_priv = "Y".to_string();
-                result.lock_tables_priv = "Y".to_string();
-                result.references_priv = "Y".to_string();
+                result.select_priv = true;
+                result.insert_priv = true;
+                result.update_priv = true;
+                result.delete_priv = true;
+                result.create_priv = true;
+                result.drop_priv = true;
+                result.alter_priv = true;
+                result.index_priv = true;
+                result.create_tmp_table_priv = true;
+                result.lock_tables_priv = true;
+                result.references_priv = true;
             }
             _ => anyhow::bail!("Invalid permission character: {}", char),
         }
@@ -312,18 +318,88 @@ fn parse_permission_table_cli_arg(arg: &str) -> anyhow::Result<DatabasePrivilege
     Ok(result)
 }
 
+fn parse_permission(yn: &str) -> anyhow::Result<bool> {
+    match yn.to_ascii_lowercase().as_str() {
+        "y" => Ok(true),
+        "n" => Ok(false),
+        _ => Err(anyhow!("Expected Y or N, found {}", yn)),
+    }
+}
+
+fn parse_permission_data_from_editor(content: String) -> anyhow::Result<Vec<DatabasePrivileges>> {
+    content
+        .trim()
+        .split('\n')
+        .map(|line| line.trim())
+        .filter(|line| !(line.starts_with('#') || line.starts_with("//") || line == &""))
+        .skip(1)
+        .map(|line| {
+            let line_parts: Vec<&str> = line.trim().split_ascii_whitespace().collect();
+            if line_parts.len() != DATABASE_PRIVILEGE_FIELDS.len() {
+                anyhow::bail!("")
+            }
+
+            Ok(DatabasePrivileges {
+                db: (*line_parts.get(0).unwrap()).to_owned(),
+                user: (*line_parts.get(1).unwrap()).to_owned(),
+                select_priv: parse_permission(*line_parts.get(2).unwrap())
+                    .context("Could not parse SELECT privilege")?,
+                insert_priv: parse_permission(*line_parts.get(3).unwrap())
+                    .context("Could not parse INSERT privilege")?,
+                update_priv: parse_permission(*line_parts.get(4).unwrap())
+                    .context("Could not parse UPDATE privilege")?,
+                delete_priv: parse_permission(*line_parts.get(5).unwrap())
+                    .context("Could not parse DELETE privilege")?,
+                create_priv: parse_permission(*line_parts.get(6).unwrap())
+                    .context("Could not parse CREATE privilege")?,
+                drop_priv: parse_permission(*line_parts.get(7).unwrap())
+                    .context("Could not parse DROP privilege")?,
+                alter_priv: parse_permission(*line_parts.get(8).unwrap())
+                    .context("Could not parse ALTER privilege")?,
+                index_priv: parse_permission(*line_parts.get(9).unwrap())
+                    .context("Could not parse INDEX privilege")?,
+                create_tmp_table_priv: parse_permission(*line_parts.get(10).unwrap())
+                    .context("Could not parse CREATE TEMPORARY TABLE privilege")?,
+                lock_tables_priv: parse_permission(*line_parts.get(11).unwrap())
+                    .context("Could not parse LOCK TABLES privilege")?,
+                references_priv: parse_permission(*line_parts.get(12).unwrap())
+                    .context("Could not parse REFERENCES privilege")?,
+            })
+        })
+        .collect::<anyhow::Result<Vec<DatabasePrivileges>>>()
+}
+
+fn display_permissions_as_editor_line(privs: &DatabasePrivileges) -> String {
+    vec![
+        privs.db.as_str(),
+        privs.user.as_str(),
+        yn(privs.select_priv),
+        yn(privs.insert_priv),
+        yn(privs.update_priv),
+        yn(privs.delete_priv),
+        yn(privs.create_priv),
+        yn(privs.drop_priv),
+        yn(privs.alter_priv),
+        yn(privs.index_priv),
+        yn(privs.create_tmp_table_priv),
+        yn(privs.lock_tables_priv),
+        yn(privs.references_priv),
+    ]
+    .join("\t")
+}
+
 async fn edit_permissions(
     args: DatabaseEditPermArgs,
     conn: &mut MySqlConnection,
 ) -> anyhow::Result<()> {
-    let _data = if let Some(name) = &args.name {
+    let permission_data = if let Some(name) = &args.name {
         core::database_operations::get_database_privileges(name, conn).await?
     } else {
         core::database_operations::get_all_database_privileges(conn).await?
     };
 
-    if !args.text {
-        let permissions_to_change: Vec<DatabasePrivileges> = if let Some(name) = args.name {
+    let permissions_to_change = if !args.perm.is_empty() {
+        if let Some(name) = args.name {
             args.perm
                 .iter()
                 .map(|perm| {
@@ -339,15 +415,61 @@ async fn edit_permissions(
                         .context(format!("Failed parsing database permissions: `{}`", &perm))
                 })
                 .collect::<anyhow::Result<Vec<DatabasePrivileges>>>()?
+        }
+    } else {
+        let comment = indoc! {r#"
+            # Welcome to the permission editor.
+            # To add permissions
+        "#};
+        let header = DATABASE_PRIVILEGE_FIELDS
+            .map(db_priv_field_human_readable_name)
+            .join("\t");
+        let example_line = {
+            let unix_user = get_current_unix_user()?;
+            let mut rng = thread_rng();
+            let random_yes_nos = (0..(DATABASE_PRIVILEGE_FIELDS.len() - 2))
+                .map(|_| ['Y', 'N'].choose(&mut rng).unwrap())
+                .join("\t");
+            format!(
+                "# {}_db\t{}_user\t{}",
+                unix_user.name, unix_user.name, random_yes_nos
+            )
         };
 
-        println!("{:#?}", permissions_to_change);
-    } else {
-        // TODO: debug assert that -p is not used with -t
+        let result = edit::edit_with_builder(
+            format!(
+                "{}\n{}\n{}",
+                comment,
+                header,
+                if permission_data.is_empty() {
+                    example_line
+                } else {
+                    permission_data
+                        .iter()
+                        .map(display_permissions_as_editor_line)
+                        .join("\n")
+                }
+            ),
+            edit::Builder::new()
+                .prefix("database-permissions")
+                .suffix(".tsv")
+                .rand_bytes(10),
+        )?;
+
+        parse_permission_data_from_editor(result)
+            .context("Could not parse permission data from editor")?
+    };
+
+    let diffs = diff_permissions(permission_data, &permissions_to_change).await;
+
+    if diffs.is_empty() {
+        println!("No changes to make.");
+        return Ok(());
     }
 
-    // TODO: find the difference between the two vectors, and ask for confirmation before applying the changes.
+    // TODO: Add confirmation prompt.
 
-    // TODO: apply the changes to the database.
-    unimplemented!();
+    apply_permission_diffs(diffs, conn).await?;
+
+    Ok(())
 }

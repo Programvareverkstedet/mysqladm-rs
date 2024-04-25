@@ -77,9 +77,7 @@ async fn create_users(args: UserCreateArgs, conn: &mut MySqlConnection) -> anyho
     }
 
     for username in args.username {
-        if let Err(e) =
-            crate::core::user_operations::create_database_user(&username, conn).await
-        {
+        if let Err(e) = crate::core::user_operations::create_database_user(&username, conn).await {
             eprintln!("{}", e);
             eprintln!("Skipping...");
         }
@@ -94,9 +92,7 @@ async fn drop_users(args: UserDeleteArgs, conn: &mut MySqlConnection) -> anyhow:
     }
 
     for username in args.username {
-        if let Err(e) =
-            crate::core::user_operations::delete_database_user(&username, conn).await
-        {
+        if let Err(e) = crate::core::user_operations::delete_database_user(&username, conn).await {
             eprintln!("{}", e);
             eprintln!("Skipping...");
         }
@@ -132,12 +128,8 @@ async fn change_password_for_user(
         pass1
     };
 
-    crate::core::user_operations::set_password_for_database_user(
-        &args.username,
-        &password,
-        conn,
-    )
-    .await?;
+    crate::core::user_operations::set_password_for_database_user(&args.username, &password, conn)
+        .await?;
 
     Ok(())
 }
@@ -157,8 +149,7 @@ async fn show_users(args: UserShowArgs, conn: &mut MySqlConnection) -> anyhow::R
             }
 
             let user =
-                crate::core::user_operations::get_database_user_for_user(&username, conn)
-                    .await?;
+                crate::core::user_operations::get_database_user_for_user(&username, conn).await?;
             if let Some(user) = user {
                 result.push(user);
             } else {

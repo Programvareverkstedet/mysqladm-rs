@@ -119,10 +119,10 @@ pub async fn mysql_connection_from_config(config: Config) -> anyhow::Result<MySq
             .port(config.mysql.port.unwrap_or(3306))
             .database("mysql")
             .connect(),
-    ).await {
+    )
+    .await
+    {
         Ok(conn) => conn.context("Failed to connect to MySQL"),
-        Err(_) => {
-            Err(anyhow!("Timed out after 2 seconds")).context("Failed to connect to MySQL")
-        }
+        Err(_) => Err(anyhow!("Timed out after 2 seconds")).context("Failed to connect to MySQL"),
     }
 }
