@@ -31,7 +31,7 @@
         pkgs.openssl
         pkgs.pkg-config
       ];
-      RUST_SRC_PATH = "${toolchain.rust-src}/lib/rustlib/src/rust/";
+      RUST_SRC_PATH = "${toolchain.rust-src}/lib/rustlib/src/rust/library";
     });
   };
 }
