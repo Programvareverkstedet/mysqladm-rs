@@ -2,6 +2,6 @@
 
 [mysql]
 host = "localhost"
-posrt = 3306
+port = 3306
 username = "root"
 password = "secret"
