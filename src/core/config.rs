@@ -17,56 +17,44 @@ pub struct MysqlConfig {
     pub port: Option<u16>,
     pub username: String,
     pub password: String,
+    pub timeout: Option<u64>,
 }
+
+const DEFAULT_PORT: u16 = 3306;
+const DEFAULT_TIMEOUT: u64 = 2;
 
 #[derive(Parser)]
 pub struct GlobalConfigArgs {
     /// Path to the configuration file.
     #[arg(
-      short,
-      long,
-      value_name = "PATH",
-      global = true,
-      hide_short_help = true,
-      default_value = "/etc/mysqladm/config.toml",
+        short,
+        long,
+        value_name = "PATH",
+        global = true,
+        hide_short_help = true,
+        default_value = "/etc/mysqladm/config.toml"
     )]
     config_file: String,
 
     /// Hostname of the MySQL server.
-    #[arg(
-      long,
-      value_name = "HOST",
-      global = true,
-      hide_short_help = true,
-    )]
+    #[arg(long, value_name = "HOST", global = true, hide_short_help = true)]
     mysql_host: Option<String>,
 
     /// Port of the MySQL server.
-    #[arg(
-      long,
-      value_name = "PORT",
-      global = true,
-      hide_short_help = true,
-    )]
+    #[arg(long, value_name = "PORT", global = true, hide_short_help = true)]
     mysql_port: Option<u16>,
 
     /// Username to use for the MySQL connection.
-    #[arg(
-      long,
-      value_name = "USER",
-      global = true,
-      hide_short_help = true,
-    )]
+    #[arg(long, value_name = "USER", global = true, hide_short_help = true)]
     mysql_user: Option<String>,
 
     /// Path to a file containing the MySQL password.
-    #[arg(
-      long,
-      value_name = "PATH",
-      global = true,
-      hide_short_help = true,
-    )]
+    #[arg(long, value_name = "PATH", global = true, hide_short_help = true)]
     mysql_password_file: Option<String>,
+
+    /// Seconds to wait for the MySQL connection to be established.
+    #[arg(long, value_name = "SECONDS", global = true, hide_short_help = true)]
+    mysql_connect_timeout: Option<u64>,
 }
 
 pub fn get_config(args: GlobalConfigArgs) -> anyhow::Result<Config> {
@@ -98,6 +86,7 @@ pub fn get_config(args: GlobalConfigArgs) -> anyhow::Result<Config> {
         port: args.mysql_port.or(mysql.port),
         username: args.mysql_user.unwrap_or(mysql.username.to_owned()),
         password,
+        timeout: args.mysql_connect_timeout.or(mysql.timeout),
     };
 
     Ok(Config {
@@ -105,15 +94,14 @@ pub fn get_config(args: GlobalConfigArgs) -> anyhow::Result<Config> {
     })
 }
 
-/// TODO: Make timeout configurable
 pub async fn mysql_connection_from_config(config: Config) -> anyhow::Result<MySqlConnection> {
     match tokio::time::timeout(
-        Duration::from_secs(2),
+        Duration::from_secs(config.mysql.timeout.unwrap_or(DEFAULT_TIMEOUT)),
         MySqlConnectOptions::new()
             .host(&config.mysql.host)
             .username(&config.mysql.username)
             .password(&config.mysql.password)
-            .port(config.mysql.port.unwrap_or(3306))
+            .port(config.mysql.port.unwrap_or(DEFAULT_PORT))
             .database("mysql")
             .connect(),
     )
