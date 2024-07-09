@@ -20,60 +20,57 @@ pub struct MysqlConfig {
 }
 
 #[derive(Parser)]
-pub struct ConfigOverrideArgs {
+pub struct GlobalConfigArgs {
+    /// Path to the configuration file.
     #[arg(
+      short,
       long,
       value_name = "PATH",
       global = true,
-      help_heading = Some("Configuration overrides"),
       hide_short_help = true,
-      alias = "config",
-      alias = "conf",
+      default_value = "/etc/mysqladm/config.toml",
     )]
-    config_file: Option<String>,
+    config_file: String,
 
+    /// Hostname of the MySQL server.
     #[arg(
       long,
       value_name = "HOST",
       global = true,
-      help_heading = Some("Configuration overrides"),
       hide_short_help = true,
     )]
     mysql_host: Option<String>,
 
+    /// Port of the MySQL server.
     #[arg(
       long,
       value_name = "PORT",
       global = true,
-      help_heading = Some("Configuration overrides"),
       hide_short_help = true,
     )]
     mysql_port: Option<u16>,
 
+    /// Username to use for the MySQL connection.
     #[arg(
       long,
       value_name = "USER",
       global = true,
-      help_heading = Some("Configuration overrides"),
       hide_short_help = true,
     )]
     mysql_user: Option<String>,
 
+    /// Path to a file containing the MySQL password.
     #[arg(
       long,
       value_name = "PATH",
       global = true,
-      help_heading = Some("Configuration overrides"),
       hide_short_help = true,
     )]
     mysql_password_file: Option<String>,
 }
 
-pub fn get_config(args: ConfigOverrideArgs) -> anyhow::Result<Config> {
-    let config_path = args
-        .config_file
-        .unwrap_or("/etc/mysqladm/config.toml".to_string());
-    let config_path = PathBuf::from(config_path);
+pub fn get_config(args: GlobalConfigArgs) -> anyhow::Result<Config> {
+    let config_path = PathBuf::from(args.config_file);
 
     let config: Config = fs::read_to_string(&config_path)
         .context(format!(
@@ -108,7 +105,7 @@ pub fn get_config(args: ConfigOverrideArgs) -> anyhow::Result<Config> {
     })
 }
 
-/// TODO: Add timeout.
+/// TODO: Make timeout configurable
 pub async fn mysql_connection_from_config(config: Config) -> anyhow::Result<MySqlConnection> {
     match tokio::time::timeout(
         Duration::from_secs(2),

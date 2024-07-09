@@ -13,38 +13,40 @@ pub struct UserArgs {
 }
 
 #[derive(Parser)]
-enum UserCommand {
-    /// Create the USER(s).
-    #[command(alias = "add", alias = "c")]
-    Create(UserCreateArgs),
+pub enum UserCommand {
+    /// Create one or more users
+    #[command()]
+    CreateUser(UserCreateArgs),
 
-    /// Delete the USER(s).
-    #[command(alias = "remove", alias = "delete", alias = "rm", alias = "d")]
-    Drop(UserDeleteArgs),
+    /// Delete one or more users
+    #[command()]
+    DropUser(UserDeleteArgs),
 
-    /// Change the MySQL password for the USER.
-    #[command(alias = "password", alias = "p")]
-    Passwd(UserPasswdArgs),
+    /// Change the MySQL password for a user
+    #[command()]
+    PasswdUser(UserPasswdArgs),
 
-    /// Give information about the USER(s), or if no USER is given, all USERs you have access to.
-    #[command(alias = "list", alias = "ls", alias = "s")]
-    Show(UserShowArgs),
+    /// Give information about one or more users
+    ///
+    /// If no username is provided, all users you have access will be shown.
+    #[command()]
+    ShowUser(UserShowArgs),
 }
 
 #[derive(Parser)]
-struct UserCreateArgs {
+pub struct UserCreateArgs {
     #[arg(num_args = 1..)]
     username: Vec<String>,
 }
 
 #[derive(Parser)]
-struct UserDeleteArgs {
+pub struct UserDeleteArgs {
     #[arg(num_args = 1..)]
     username: Vec<String>,
 }
 
 #[derive(Parser)]
-struct UserPasswdArgs {
+pub struct UserPasswdArgs {
     username: String,
 
     #[clap(short, long)]
@@ -52,17 +54,17 @@ struct UserPasswdArgs {
 }
 
 #[derive(Parser)]
-struct UserShowArgs {
+pub struct UserShowArgs {
     #[arg(num_args = 0..)]
     username: Vec<String>,
 }
 
-pub async fn handle_command(args: UserArgs, mut conn: MySqlConnection) -> anyhow::Result<()> {
-    let result = match args.subcmd {
-        UserCommand::Create(args) => create_users(args, &mut conn).await,
-        UserCommand::Drop(args) => drop_users(args, &mut conn).await,
-        UserCommand::Passwd(args) => change_password_for_user(args, &mut conn).await,
-        UserCommand::Show(args) => show_users(args, &mut conn).await,
+pub async fn handle_command(command: UserCommand, mut conn: MySqlConnection) -> anyhow::Result<()> {
+    let result = match command {
+        UserCommand::CreateUser(args) => create_users(args, &mut conn).await,
+        UserCommand::DropUser(args) => drop_users(args, &mut conn).await,
+        UserCommand::PasswdUser(args) => change_password_for_user(args, &mut conn).await,
+        UserCommand::ShowUser(args) => show_users(args, &mut conn).await,
     };
 
     conn.close().await?;

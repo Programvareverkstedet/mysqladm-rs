@@ -15,39 +15,37 @@ use crate::core::{
     },
 };
 
-#[derive(Parser)]
-pub struct DatabaseArgs {
-    #[clap(subcommand)]
-    subcmd: DatabaseCommand,
-}
-
 // TODO: Support batch creation/dropping,showing of databases,
 //       using a comma-separated list of database names.
 
 #[derive(Parser)]
-enum DatabaseCommand {
-    /// Create the DATABASE(S).
-    #[command(alias = "add", alias = "c")]
-    Create(DatabaseCreateArgs),
-
-    /// Delete the DATABASE(S).
-    #[command(alias = "remove", alias = "delete", alias = "rm", alias = "d")]
-    Drop(DatabaseDropArgs),
-
-    /// List the DATABASE(S) you own.
+// #[command(next_help_heading = Some(DATABASE_COMMAND_HEADER))]
+pub enum DatabaseCommand {
+    /// Create one or more databases
     #[command()]
-    List(DatabaseListArgs),
+    CreateDb(DatabaseCreateArgs),
 
-    /// Give information about the DATABASE(S), or if none are given, all the ones you own.
+    /// Delete one or more databases
+    #[command()]
+    DropDb(DatabaseDropArgs),
+
+    /// List all databases you have access to
+    #[command()]
+    ListDb(DatabaseListArgs),
+
+    /// List user permissions for one or more databases
     ///
-    /// In particular, this will show the permissions for the database(s) owned by the current user.
-    #[command(alias = "s")]
-    ShowPerm(DatabaseShowPermArgs),
+    /// If no database names are provided, it will show permissions for all databases you have access to.
+    #[command()]
+    ShowDbPerm(DatabaseShowPermArgs),
 
-    /// Change permissions for the DATABASE(S). Run `edit-perm --help` for more information.
+    /// Change user permissions for one or more databases. See `edit-db-perm --help` for details.
     ///
     /// This command has two modes of operation:
+    ///
     /// 1. Interactive mode: If nothing else is specified, the user will be prompted to edit the permissions using a text editor.
+    ///
+    ///    You can configure your preferred text editor by setting the `VISUAL` or `EDITOR` environment variables.
     ///
     ///    Follow the instructions inside the editor for more information.
     ///
@@ -57,7 +55,7 @@ enum DatabaseCommand {
     ///    where the privileges are a string of characters, each representing a single permissions.
     ///    The character `A` is an exception, because it represents all permissions.
     ///
-    ///    The permission to character mapping is as follows:
+    ///    The character to permission mapping is declared as follows:
     ///
     ///    - `s` - SELECT
     ///    - `i` - INSERT
@@ -72,33 +70,49 @@ enum DatabaseCommand {
     ///    - `r` - REFERENCES
     ///    - `A` - ALL PRIVILEGES
     ///
-    #[command(display_name = "edit-perm", alias = "e", verbatim_doc_comment)]
-    EditPerm(DatabaseEditPermArgs),
+    ///   If you provide a database name, you can omit it from the permission arguments.
+    ///
+    ///   Example usage of non-interactive mode:
+    ///
+    ///     Set permissions `SELECT`, `INSERT`, and `UPDATE` for user `my_user` on database `my_db`:
+    ///
+    ///       mysqladm edit-db-perm -p my_db:my_user:siu
+    ///
+    ///     Set all permissions for user `my_other_user` on database `my_other_db`:
+    ///
+    ///       mysqladm edit-db-perm -p my_other_db:my_other_user:A
+    ///
+    ///     Set miscellaneous permissions for multiple users on database `my_db`:
+    ///
+    ///       mysqladm edit-db-perm my_db -p my_user:siu my_other_user:ct
+    ///
+    #[command(verbatim_doc_comment)]
+    EditDbPerm(DatabaseEditPermArgs),
 }
 
 #[derive(Parser)]
-struct DatabaseCreateArgs {
+pub struct DatabaseCreateArgs {
     /// The name of the database(s) to create.
     #[arg(num_args = 1..)]
     name: Vec<String>,
 }
 
 #[derive(Parser)]
-struct DatabaseDropArgs {
+pub struct DatabaseDropArgs {
     /// The name of the database(s) to drop.
     #[arg(num_args = 1..)]
     name: Vec<String>,
 }
 
 #[derive(Parser)]
-struct DatabaseListArgs {
+pub struct DatabaseListArgs {
     /// Whether to output the information in JSON format.
     #[arg(short, long)]
     json: bool,
 }
 
 #[derive(Parser)]
-struct DatabaseShowPermArgs {
+pub struct DatabaseShowPermArgs {
     /// The name of the database(s) to show.
     #[arg(num_args = 0..)]
     name: Vec<String>,
@@ -109,7 +123,7 @@ struct DatabaseShowPermArgs {
 }
 
 #[derive(Parser)]
-struct DatabaseEditPermArgs {
+pub struct DatabaseEditPermArgs {
     /// The name of the database to edit permissions for.
     name: Option<String>,
 
@@ -124,18 +138,21 @@ struct DatabaseEditPermArgs {
     #[arg(short, long)]
     editor: Option<String>,
 
-    /// Disable confirmation before saving changes.
+    /// Disable interactive confirmation before saving changes.
     #[arg(short, long)]
     yes: bool,
 }
 
-pub async fn handle_command(args: DatabaseArgs, mut conn: MySqlConnection) -> anyhow::Result<()> {
-    let result = match args.subcmd {
-        DatabaseCommand::Create(args) => create_databases(args, &mut conn).await,
-        DatabaseCommand::Drop(args) => drop_databases(args, &mut conn).await,
-        DatabaseCommand::List(args) => list_databases(args, &mut conn).await,
-        DatabaseCommand::ShowPerm(args) => show_databases(args, &mut conn).await,
-        DatabaseCommand::EditPerm(args) => edit_permissions(args, &mut conn).await,
+pub async fn handle_command(
+    command: DatabaseCommand,
+    mut conn: MySqlConnection,
+) -> anyhow::Result<()> {
+    let result = match command {
+        DatabaseCommand::CreateDb(args) => create_databases(args, &mut conn).await,
+        DatabaseCommand::DropDb(args) => drop_databases(args, &mut conn).await,
+        DatabaseCommand::ListDb(args) => list_databases(args, &mut conn).await,
+        DatabaseCommand::ShowDbPerm(args) => show_databases(args, &mut conn).await,
+        DatabaseCommand::EditDbPerm(args) => edit_permissions(args, &mut conn).await,
     };
 
     conn.close().await?;
