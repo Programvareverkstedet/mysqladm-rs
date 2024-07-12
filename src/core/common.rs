@@ -2,6 +2,8 @@ use anyhow::Context;
 use indoc::indoc;
 use itertools::Itertools;
 use nix::unistd::{getuid, Group, User};
+
+#[cfg(not(target_os = "macos"))]
 use std::ffi::CString;
 
 pub fn get_current_unix_user() -> anyhow::Result<User> {
@@ -10,6 +12,13 @@ pub fn get_current_unix_user() -> anyhow::Result<User> {
         .and_then(|u| u.ok_or(anyhow::anyhow!("Failed to look up your UNIX username")))
 }
 
+#[cfg(target_os = "macos")]
+pub fn get_unix_groups(_user: &User) -> anyhow::Result<Vec<Group>> {
+    // Return an empty list on macOS since there is no `getgrouplist` function
+    Ok(vec![])
+}
+
+#[cfg(not(target_os = "macos"))]
 pub fn get_unix_groups(user: &User) -> anyhow::Result<Vec<Group>> {
     let user_cstr =
         CString::new(user.name.as_bytes()).context("Failed to convert username to CStr")?;
