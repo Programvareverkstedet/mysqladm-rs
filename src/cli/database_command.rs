@@ -3,7 +3,6 @@ use clap::Parser;
 use indoc::indoc;
 use itertools::Itertools;
 use prettytable::{Cell, Row, Table};
-use rand::prelude::*;
 use sqlx::{Connection, MySqlConnection};
 
 use crate::core::{
@@ -357,29 +356,29 @@ fn parse_permission_data_from_editor(content: String) -> anyhow::Result<Vec<Data
             }
 
             Ok(DatabasePrivileges {
-                db: (*line_parts.get(0).unwrap()).to_owned(),
+                db: (*line_parts.first().unwrap()).to_owned(),
                 user: (*line_parts.get(1).unwrap()).to_owned(),
-                select_priv: parse_permission(*line_parts.get(2).unwrap())
+                select_priv: parse_permission(line_parts.get(2).unwrap())
                     .context("Could not parse SELECT privilege")?,
-                insert_priv: parse_permission(*line_parts.get(3).unwrap())
+                insert_priv: parse_permission(line_parts.get(3).unwrap())
                     .context("Could not parse INSERT privilege")?,
-                update_priv: parse_permission(*line_parts.get(4).unwrap())
+                update_priv: parse_permission(line_parts.get(4).unwrap())
                     .context("Could not parse UPDATE privilege")?,
-                delete_priv: parse_permission(*line_parts.get(5).unwrap())
+                delete_priv: parse_permission(line_parts.get(5).unwrap())
                     .context("Could not parse DELETE privilege")?,
-                create_priv: parse_permission(*line_parts.get(6).unwrap())
+                create_priv: parse_permission(line_parts.get(6).unwrap())
                     .context("Could not parse CREATE privilege")?,
-                drop_priv: parse_permission(*line_parts.get(7).unwrap())
+                drop_priv: parse_permission(line_parts.get(7).unwrap())
                     .context("Could not parse DROP privilege")?,
-                alter_priv: parse_permission(*line_parts.get(8).unwrap())
+                alter_priv: parse_permission(line_parts.get(8).unwrap())
                     .context("Could not parse ALTER privilege")?,
-                index_priv: parse_permission(*line_parts.get(9).unwrap())
+                index_priv: parse_permission(line_parts.get(9).unwrap())
                     .context("Could not parse INDEX privilege")?,
-                create_tmp_table_priv: parse_permission(*line_parts.get(10).unwrap())
+                create_tmp_table_priv: parse_permission(line_parts.get(10).unwrap())
                     .context("Could not parse CREATE TEMPORARY TABLE privilege")?,
-                lock_tables_priv: parse_permission(*line_parts.get(11).unwrap())
+                lock_tables_priv: parse_permission(line_parts.get(11).unwrap())
                     .context("Could not parse LOCK TABLES privilege")?,
-                references_priv: parse_permission(*line_parts.get(12).unwrap())
+                references_priv: parse_permission(line_parts.get(12).unwrap())
                     .context("Could not parse REFERENCES privilege")?,
             })
         })
@@ -436,20 +435,26 @@ async fn edit_permissions(
     } else {
         let comment = indoc! {r#"
             # Welcome to the permission editor.
-            # To add permissions
+            # Each line defines what permissions a single user has on a single database.
+            # The first two columns respectively represent the database name and the user, and the remaining columns are the permissions.
+            # If the user should have a permission, write 'Y', otherwise write 'N'.
+            #
+            # Lines starting with '#' are comments and will be ignored.
         "#};
         let header = DATABASE_PRIVILEGE_FIELDS
             .map(db_priv_field_human_readable_name)
             .join("\t");
         let example_line = {
             let unix_user = get_current_unix_user()?;
-            let mut rng = thread_rng();
-            let random_yes_nos = (0..(DATABASE_PRIVILEGE_FIELDS.len() - 2))
-                .map(|_| ['Y', 'N'].choose(&mut rng).unwrap())
-                .join("\t");
+            let permissions_bools = [
+                true, true, true, true, false, false, false, false, false, false, false,
+            ]
+            .map(yn)
+            .join("\t");
+
             format!(
                 "# {}_db\t{}_user\t{}",
-                unix_user.name, unix_user.name, random_yes_nos
+                unix_user.name, unix_user.name, permissions_bools
             )
         };
 

@@ -162,14 +162,13 @@ impl DatabasePrivileges {
             diff: DATABASE_PRIVILEGE_FIELDS
                 .into_iter()
                 .skip(2)
-                .map(|field| {
+                .filter_map(|field| {
                     diff_single_priv(
                         self.get_privilege_by_name(field),
                         other.get_privilege_by_name(field),
                         field,
                     )
                 })
-                .flatten()
                 .collect(),
         }
     }
