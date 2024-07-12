@@ -255,17 +255,17 @@ async fn show_databases(
             table.add_row(row![
                 row.db,
                 row.user,
-                row.select_priv,
-                row.insert_priv,
-                row.update_priv,
-                row.delete_priv,
-                row.create_priv,
-                row.drop_priv,
-                row.alter_priv,
-                row.index_priv,
-                row.create_tmp_table_priv,
-                row.lock_tables_priv,
-                row.references_priv
+                c->yn(row.select_priv),
+                c->yn(row.insert_priv),
+                c->yn(row.update_priv),
+                c->yn(row.delete_priv),
+                c->yn(row.create_priv),
+                c->yn(row.drop_priv),
+                c->yn(row.alter_priv),
+                c->yn(row.index_priv),
+                c->yn(row.create_tmp_table_priv),
+                c->yn(row.lock_tables_priv),
+                c->yn(row.references_priv),
             ]);
         }
         table.printstd();
@@ -385,23 +385,29 @@ fn parse_permission_data_from_editor(content: String) -> anyhow::Result<Vec<Data
         .collect::<anyhow::Result<Vec<DatabasePrivileges>>>()
 }
 
-fn display_permissions_as_editor_line(privs: &DatabasePrivileges) -> String {
-    vec![
-        privs.db.as_str(),
-        privs.user.as_str(),
-        yn(privs.select_priv),
-        yn(privs.insert_priv),
-        yn(privs.update_priv),
-        yn(privs.delete_priv),
-        yn(privs.create_priv),
-        yn(privs.drop_priv),
-        yn(privs.alter_priv),
-        yn(privs.index_priv),
-        yn(privs.create_tmp_table_priv),
-        yn(privs.lock_tables_priv),
-        yn(privs.references_priv),
-    ]
-    .join("\t")
+fn format_privileges_line(
+    privs: &DatabasePrivileges,
+    username_len: usize,
+    database_name_len: usize,
+) -> String {
+    // Format a privileges line by padding each value with spaces
+    // The first two fields are padded to the length of the longest username and database name
+    // The remaining fields are padded to the length of the corresponding field name
+
+    DATABASE_PRIVILEGE_FIELDS
+        .into_iter()
+        .map(|field| match field {
+            "db" => format!("{:width$}", privs.db, width = database_name_len),
+            "user" => format!("{:width$}", privs.user, width = username_len),
+            privilege => format!(
+                "{:width$}",
+                yn(privs.get_privilege_by_name(privilege)),
+                width = db_priv_field_human_readable_name(privilege).len()
+            ),
+        })
+        .join(" ")
+        .trim()
+        .to_string()
 }
 
 async fn edit_permissions(
@@ -441,34 +447,65 @@ async fn edit_permissions(
             #
             # Lines starting with '#' are comments and will be ignored.
         "#};
-        let header = DATABASE_PRIVILEGE_FIELDS
-            .map(db_priv_field_human_readable_name)
-            .join("\t");
-        let example_line = {
-            let unix_user = get_current_unix_user()?;
-            let permissions_bools = [
-                true, true, true, true, false, false, false, false, false, false, false,
-            ]
-            .map(yn)
-            .join("\t");
 
-            format!(
-                "# {}_db\t{}_user\t{}",
-                unix_user.name, unix_user.name, permissions_bools
-            )
-        };
+        let unix_user = get_current_unix_user()?;
+        let example_user = format!("{}_user", unix_user.name);
+        let example_db = format!("{}_db", unix_user.name);
+
+        let longest_username = permission_data
+            .iter()
+            .map(|p| p.user.len())
+            .max()
+            .unwrap_or(example_user.len());
+
+        let longest_database_name = permission_data
+            .iter()
+            .map(|p| p.db.len())
+            .max()
+            .unwrap_or(example_db.len());
+
+        let mut header: Vec<_> = DATABASE_PRIVILEGE_FIELDS
+            .into_iter()
+            .map(db_priv_field_human_readable_name)
+            .collect();
+
+        // Pad the first two columns with spaces to align the permissions.
+        header[0] = format!("{:width$}", header[0], width = longest_database_name);
+        header[1] = format!("{:width$}", header[1], width = longest_username);
+
+        let example_line = format_privileges_line(
+            &DatabasePrivileges {
+                db: example_db,
+                user: example_user,
+                select_priv: true,
+                insert_priv: true,
+                update_priv: true,
+                delete_priv: true,
+                create_priv: false,
+                drop_priv: false,
+                alter_priv: false,
+                index_priv: false,
+                create_tmp_table_priv: false,
+                lock_tables_priv: false,
+                references_priv: false,
+            },
+            longest_username,
+            longest_database_name,
+        );
 
         let result = edit::edit_with_builder(
             format!(
                 "{}\n{}\n{}",
                 comment,
-                header,
+                header.join(" "),
                 if permission_data.is_empty() {
-                    example_line
+                    format!("# {}", example_line)
                 } else {
                     permission_data
                         .iter()
-                        .map(display_permissions_as_editor_line)
+                        .map(|perm| {
+                            format_privileges_line(perm, longest_username, longest_database_name)
+                        })
                         .join("\n")
                 }
             ),
