@@ -6,7 +6,7 @@ use sqlx::{prelude::*, MySqlConnection};
 
 use crate::core::common::quote_literal;
 
-use super::common::{get_current_unix_user, get_unix_groups, validate_prefix_for_user};
+use super::common::{create_user_group_matching_regex, get_current_unix_user, validate_prefix_for_user};
 
 pub async fn create_database_user(db_user: &str, conn: &mut MySqlConnection) -> anyhow::Result<()> {
     let unix_user = get_current_unix_user()?;
@@ -71,22 +71,10 @@ pub struct DatabaseUser {
     pub authentication_string: String,
 }
 
-pub async fn get_all_database_users_for_user(
-    user: &User,
+pub async fn get_all_database_users_for_unix_user(
+    unix_user: &User,
     conn: &mut MySqlConnection,
 ) -> anyhow::Result<Vec<DatabaseUser>> {
-    let groups = get_unix_groups(user)?;
-
-    let regex = format!(
-        "({}|{})(_.+)?",
-        user.name,
-        groups
-            .iter()
-            .map(|g| g.name.as_str())
-            .collect::<Vec<_>>()
-            .join("|")
-    );
-
     let users = sqlx::query_as::<_, DatabaseUser>(
         r#"
           SELECT `User`, `Host`, `Password`, `authentication_string`
@@ -94,7 +82,7 @@ pub async fn get_all_database_users_for_user(
           WHERE `User` REGEXP ?
         "#,
     )
-    .bind(regex)
+    .bind(create_user_group_matching_regex(unix_user))
     .fetch_all(conn)
     .await?;
 

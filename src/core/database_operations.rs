@@ -8,7 +8,8 @@ use serde::{Deserialize, Serialize};
 use sqlx::{mysql::MySqlRow, prelude::*, MySqlConnection};
 
 use super::common::{
-    get_current_unix_user, get_unix_groups, quote_identifier, validate_prefix_for_user,
+    create_user_group_matching_regex, get_current_unix_user, quote_identifier,
+    validate_prefix_for_user,
 };
 
 pub async fn create_database(name: &str, conn: &mut MySqlConnection) -> anyhow::Result<()> {
@@ -56,10 +57,6 @@ struct DatabaseName {
 
 pub async fn get_database_list(conn: &mut MySqlConnection) -> anyhow::Result<Vec<String>> {
     let unix_user = get_current_unix_user()?;
-    let unix_groups = get_unix_groups(&unix_user)?
-        .into_iter()
-        .map(|g| g.name)
-        .collect::<Vec<_>>();
 
     let databases = sqlx::query_as::<_, DatabaseName>(
         r#"
@@ -69,11 +66,7 @@ pub async fn get_database_list(conn: &mut MySqlConnection) -> anyhow::Result<Vec
             AND `SCHEMA_NAME` REGEXP ?
         "#,
     )
-    .bind(format!(
-        "({}|{})_.+",
-        unix_user.name,
-        unix_groups.iter().map(|g| g.to_string()).join("|")
-    ))
+    .bind(create_user_group_matching_regex(&unix_user))
     .fetch_all(conn)
     .await
     .context(format!(
@@ -241,10 +234,6 @@ pub async fn get_all_database_privileges(
     conn: &mut MySqlConnection,
 ) -> anyhow::Result<Vec<DatabasePrivileges>> {
     let unix_user = get_current_unix_user()?;
-    let unix_groups = get_unix_groups(&unix_user)?
-        .into_iter()
-        .map(|g| g.name)
-        .collect::<Vec<_>>();
 
     let result = sqlx::query_as::<_, DatabasePrivileges>(&format!(
         indoc! {r#"
@@ -259,11 +248,7 @@ pub async fn get_all_database_privileges(
             .map(|field| format!("`{field}`"))
             .join(","),
     ))
-    .bind(format!(
-        "({}|{})_.+",
-        unix_user.name,
-        unix_groups.iter().map(|g| g.to_string()).join("|")
-    ))
+    .bind(create_user_group_matching_regex(&unix_user))
     .fetch_all(conn)
     .await
     .context("Failed to show databases")?;

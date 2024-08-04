@@ -137,14 +137,14 @@ async fn change_password_for_user(
 }
 
 async fn show_users(args: UserShowArgs, conn: &mut MySqlConnection) -> anyhow::Result<()> {
-    let user = crate::core::common::get_current_unix_user()?;
+    let unix_user = crate::core::common::get_current_unix_user()?;
 
     let users = if args.username.is_empty() {
-        crate::core::user_operations::get_all_database_users_for_user(&user, conn).await?
+        crate::core::user_operations::get_all_database_users_for_unix_user(&unix_user, conn).await?
     } else {
         let mut result = vec![];
         for username in args.username {
-            if let Err(e) = validate_ownership_of_user_name(&username, &user) {
+            if let Err(e) = validate_ownership_of_user_name(&username, &unix_user) {
                 eprintln!("{}", e);
                 eprintln!("Skipping...");
                 continue;

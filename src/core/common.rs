@@ -42,6 +42,26 @@ pub fn get_unix_groups(user: &User) -> anyhow::Result<Vec<Group>> {
     Ok(groups)
 }
 
+/// This function creates a regex that matches items (users, databases)
+/// that belong to the user or any of the user's groups.
+pub fn create_user_group_matching_regex(user: &User) -> String {
+    let groups = get_unix_groups(user).unwrap_or_default();
+
+    if groups.is_empty() {
+        format!("{}(_.+)?", user.name)
+    } else {
+        format!(
+            "({}|{})(_.+)?",
+            user.name,
+            groups
+                .iter()
+                .map(|g| g.name.as_str())
+                .collect::<Vec<_>>()
+                .join("|")
+        )
+    }
+}
+
 pub fn validate_prefix_for_user<'a>(name: &'a str, user: &User) -> anyhow::Result<&'a str> {
     let user_groups = get_unix_groups(user)?;
 
