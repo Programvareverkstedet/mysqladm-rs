@@ -1,2 +1,8 @@
+# Rust
 /target
 config.toml
+
+# Nix
+/.direnv/
+result
+result-*
