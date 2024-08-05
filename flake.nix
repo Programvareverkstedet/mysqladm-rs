@@ -28,14 +28,7 @@
     in f system pkgs toolchain);
   in {
     devShell = forAllSystems (system: pkgs: toolchain: pkgs.mkShell {
-      nativeBuildInputs = [
-        toolchain
-        pkgs.pkg-config
-      ];
-
-      buildInputs = [
-        pkgs.openssl
-      ];
+      nativeBuildInputs = [ toolchain ];
 
       RUST_SRC_PATH = "${toolchain}/lib/rustlib/src/rust/library";
     });
