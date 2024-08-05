@@ -1,19 +1,44 @@
 use anyhow::Context;
-use indoc::indoc;
 use nix::unistd::User;
 use serde::{Deserialize, Serialize};
 use sqlx::{prelude::*, MySqlConnection};
 
 use crate::core::common::quote_literal;
 
-use super::common::{create_user_group_matching_regex, get_current_unix_user, validate_prefix_for_user};
+use super::common::{create_user_group_matching_regex, get_current_unix_user, validate_name_token, validate_ownership_by_user_prefix};
+
+pub async fn user_exists(db_user: &str, conn: &mut MySqlConnection) -> anyhow::Result<bool> {
+    let unix_user = get_current_unix_user()?;
+
+    validate_user_name(db_user, &unix_user)?;
+
+    let user_exists = sqlx::query(
+        r#"
+          SELECT EXISTS(
+            SELECT 1
+            FROM `mysql`.`user`
+            WHERE `User` = ?
+          )
+        "#,
+    )
+    .bind(db_user)
+    .fetch_one(conn)
+    .await?
+    .get::<bool, _>(0);
+
+    Ok(user_exists)
+}
 
 pub async fn create_database_user(db_user: &str, conn: &mut MySqlConnection) -> anyhow::Result<()> {
     let unix_user = get_current_unix_user()?;
 
-    validate_ownership_of_user_name(db_user, &unix_user)?;
+    validate_user_name(db_user, &unix_user)?;
 
-    // NOTE: see the note about SQL injections in `validate_ownershipt_of_user_name`
+    if user_exists(db_user, conn).await? {
+        anyhow::bail!("User '{}' already exists", db_user);
+    }
+
+    // NOTE: see the note about SQL injections in `validate_ownership_of_user_name`
     sqlx::query(format!("CREATE USER {}@'%'", quote_literal(db_user),).as_str())
         .execute(conn)
         .await?;
@@ -24,9 +49,13 @@ pub async fn create_database_user(db_user: &str, conn: &mut MySqlConnection) -> 
 pub async fn delete_database_user(db_user: &str, conn: &mut MySqlConnection) -> anyhow::Result<()> {
     let unix_user = get_current_unix_user()?;
 
-    validate_ownership_of_user_name(db_user, &unix_user)?;
+    validate_user_name(db_user, &unix_user)?;
 
-    // NOTE: see the note about SQL injections in `validate_ownershipt_of_user_name`
+    if !user_exists(db_user, conn).await? {
+        anyhow::bail!("User '{}' does not exist", db_user);
+    }
+
+    // NOTE: see the note about SQL injections in `validate_ownership_of_user_name`
     sqlx::query(format!("DROP USER {}@'%'", quote_literal(db_user),).as_str())
         .execute(conn)
         .await?;
@@ -40,9 +69,13 @@ pub async fn set_password_for_database_user(
     conn: &mut MySqlConnection,
 ) -> anyhow::Result<()> {
     let unix_user = crate::core::common::get_current_unix_user()?;
-    validate_ownership_of_user_name(db_user, &unix_user)?;
+    validate_user_name(db_user, &unix_user)?;
 
-    // NOTE: see the note about SQL injections in `validate_ownershipt_of_user_name`
+    if !user_exists(db_user, conn).await? {
+        anyhow::bail!("User '{}' does not exist", db_user);
+    }
+
+    // NOTE: see the note about SQL injections in `validate_ownership_of_user_name`
     sqlx::query(
         format!(
             "ALTER USER {}@'%' IDENTIFIED BY {}",
@@ -55,6 +88,27 @@ pub async fn set_password_for_database_user(
     .await?;
 
     Ok(())
+}
+
+#[derive(sqlx::FromRow)]
+#[sqlx(transparent)]
+pub struct PasswordIsSet(bool);
+
+pub async fn password_is_set_for_database_user(
+    db_user: &str,
+    conn: &mut MySqlConnection,
+) -> anyhow::Result<Option<bool>> {
+    let unix_user = crate::core::common::get_current_unix_user()?;
+    validate_user_name(db_user, &unix_user)?;
+
+    let user_has_password = sqlx::query_as::<_, PasswordIsSet>(
+            "SELECT authentication_string != '' FROM mysql.user WHERE User = ?"
+        )
+        .bind(db_user)
+        .fetch_optional(conn)
+        .await?;
+
+    Ok(user_has_password.map(|PasswordIsSet(is_set)| is_set))
 }
 
 #[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
@@ -111,29 +165,9 @@ pub async fn get_database_user_for_user(
 ///       properly. MySQL does not seem to allow for prepared statements, binding
 ///       the database name as a parameter to the query. This means that we have
 ///       to validate the database name ourselves to prevent SQL injection.
-pub fn validate_ownership_of_user_name(name: &str, user: &User) -> anyhow::Result<()> {
-    if name.contains(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '-') {
-        anyhow::bail!(
-            indoc! {r#"
-              Username '{}' contains invalid characters.
-              Only A-Z, a-z, 0-9, _ (underscore) and - (dash) permitted.
-            "#},
-            name
-        );
-    }
-
-    // TODO: does the name have a length limit?
-    // if name.len() > 48 {
-    //     anyhow::bail!(
-    //         indoc! {r#"
-    //           Username '{}' is too long.
-    //           Maximum length is 48 characters. Skipping.
-    //         "#},
-    //         name
-    //     );
-    // }
-
-    validate_prefix_for_user(name, user).context(format!("Invalid username: '{}'", name))?;
+pub fn validate_user_name(name: &str, user: &User) -> anyhow::Result<()> {
+    validate_name_token(name).context(format!("Invalid username: '{}'", name))?;
+    validate_ownership_by_user_prefix(name, user).context(format!("Invalid username: '{}'", name))?;
 
     Ok(())
 }

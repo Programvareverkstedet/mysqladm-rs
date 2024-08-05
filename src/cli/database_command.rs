@@ -124,22 +124,22 @@ pub struct DatabaseShowPermArgs {
 #[derive(Parser)]
 pub struct DatabaseEditPermArgs {
     /// The name of the database to edit permissions for.
-    name: Option<String>,
+    pub name: Option<String>,
 
     #[arg(short, long, value_name = "[DATABASE:]USER:PERMISSIONS", num_args = 0..)]
-    perm: Vec<String>,
+    pub perm: Vec<String>,
 
     /// Whether to output the information in JSON format.
     #[arg(short, long)]
-    json: bool,
+    pub json: bool,
 
     /// Specify the text editor to use for editing permissions.
     #[arg(short, long)]
-    editor: Option<String>,
+    pub editor: Option<String>,
 
     /// Disable interactive confirmation before saving changes.
     #[arg(short, long)]
-    yes: bool,
+    pub yes: bool,
 }
 
 pub async fn handle_command(
@@ -410,7 +410,7 @@ fn format_privileges_line(
         .to_string()
 }
 
-async fn edit_permissions(
+pub async fn edit_permissions(
     args: DatabaseEditPermArgs,
     conn: &mut MySqlConnection,
 ) -> anyhow::Result<()> {

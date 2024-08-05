@@ -47,3 +47,28 @@ To stop and remove the container, run the following command:
 ```bash
 docker stop mariadb
 ```
+
+## Compatibility mode with [mysql-admutils](https://git.pvv.ntnu.no/Projects/mysql-admutils)
+
+If you enable the feature flag `mysql-admutils-compatibility` (enabled by default), the output directory will contain two symlinks to the binary, `mysql-dbadm` and `mysql-useradm`. In the same fashion as busybox, the binary will react to its `argv[0]` and behave as if it was called with the corresponding name. While the internal functionality is written in rust, these modes strive to behave as similar as possible to the original programs.
+
+```bash
+cargo build
+./target/debug/mysql-dbadm --help
+./target/debug/mysql-useradm --help
+```
+
+### Known deviations from the original programs
+
+- Added flags for database configuration, not present in the original programs
+- `--help` output is formatted by clap in a modern style.
+- `mysql-dbadm edit-perm` uses the new implementation. The idea was that the parsing
+  logic was too complex to be worth porting, and there wouldn't be any scripts depending
+  on this command anyway. As such, the new implementation is more user-friendly and only
+  brings positive changes.
+- The new tools use the modern implementation to find it's configuration. If you compiled
+  the old programs with `--sysconfdir=<somewhere>`, you might have to provide `--config-file`
+  where the old program would just work by itself.
+- The order in which some things are validated (e.g. whether you own a user, whether the
+  contains illegal characters, whether the user does or does not exist) might be different
+  from the original program, leading to the same command giving the errors in a different order.

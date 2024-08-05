@@ -1,6 +1,12 @@
 #[macro_use]
 extern crate prettytable;
 
+#[cfg(feature = "mysql-admutils-compatibility")]
+use std::path::PathBuf;
+
+#[cfg(feature = "mysql-admutils-compatibility")]
+use crate::cli::mysql_admutils_compatibility::{mysql_dbadm, mysql_useradm};
+
 use clap::Parser;
 
 mod cli;
@@ -41,6 +47,22 @@ enum Command {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     env_logger::init();
+
+    #[cfg(feature = "mysql-admutils-compatibility")]
+    {
+        let argv0 = std::env::args().next().and_then(|s| {
+            PathBuf::from(s)
+                .file_name()
+                .map(|s| s.to_string_lossy().to_string())
+        });
+
+        match argv0.as_deref() {
+            Some("mysql-dbadm") => return mysql_dbadm::main().await,
+            Some("mysql-useradm") => return mysql_useradm::main().await,
+            _ => { /* fall through */ }
+        }
+    }
+
     let args: Args = Args::parse();
     let config = core::config::get_config(args.config_overrides)?;
     let connection = core::config::mysql_connection_from_config(config).await?;

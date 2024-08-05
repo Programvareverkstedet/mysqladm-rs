@@ -4,7 +4,7 @@ use anyhow::Context;
 use clap::Parser;
 use sqlx::{Connection, MySqlConnection};
 
-use crate::core::user_operations::validate_ownership_of_user_name;
+use crate::core::user_operations::validate_user_name;
 
 #[derive(Parser)]
 pub struct UserArgs {
@@ -102,6 +102,23 @@ async fn drop_users(args: UserDeleteArgs, conn: &mut MySqlConnection) -> anyhow:
     Ok(())
 }
 
+pub fn read_password_from_stdin_with_double_check(username: &str) -> anyhow::Result<String> {
+    let pass1 = rpassword::prompt_password(format!("New MySQL password for user '{}': ", username))
+        .context("Failed to read password")?;
+
+    let pass2 = rpassword::prompt_password(format!(
+        "Retype new MySQL password for user '{}': ",
+        username
+    ))
+    .context("Failed to read password")?;
+
+    if pass1 != pass2 {
+        anyhow::bail!("Passwords do not match");
+    }
+
+    Ok(pass1)
+}
+
 async fn change_password_for_user(
     args: UserPasswdArgs,
     conn: &mut MySqlConnection,
@@ -109,7 +126,7 @@ async fn change_password_for_user(
     // NOTE: although this also is checked in `set_password_for_database_user`, we check it here
     //       to provide a more natural order of error messages.
     let unix_user = crate::core::common::get_current_unix_user()?;
-    validate_ownership_of_user_name(&args.username, &unix_user)?;
+    validate_user_name(&args.username, &unix_user)?;
 
     let password = if let Some(password_file) = args.password_file {
         std::fs::read_to_string(password_file)
@@ -117,17 +134,7 @@ async fn change_password_for_user(
             .trim()
             .to_string()
     } else {
-        let pass1 = rpassword::prompt_password("Enter new password: ")
-            .context("Failed to read password")?;
-
-        let pass2 = rpassword::prompt_password("Re-enter new password: ")
-            .context("Failed to read password")?;
-
-        if pass1 != pass2 {
-            anyhow::bail!("Passwords do not match");
-        }
-
-        pass1
+        read_password_from_stdin_with_double_check(&args.username)?
     };
 
     crate::core::user_operations::set_password_for_database_user(&args.username, &password, conn)
@@ -144,7 +151,7 @@ async fn show_users(args: UserShowArgs, conn: &mut MySqlConnection) -> anyhow::R
     } else {
         let mut result = vec![];
         for username in args.username {
-            if let Err(e) = validate_ownership_of_user_name(&username, &unix_user) {
+            if let Err(e) = validate_user_name(&username, &unix_user) {
                 eprintln!("{}", e);
                 eprintln!("Skipping...");
                 continue;
