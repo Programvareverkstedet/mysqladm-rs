@@ -93,10 +93,13 @@ pub async fn set_password_for_database_user(
     Ok(())
 }
 
+/// Helper struct to deserialize the query made in `password_is_set_for_database_user`.
 #[derive(sqlx::FromRow)]
 #[sqlx(transparent)]
-pub struct PasswordIsSet(bool);
+struct PasswordIsSet(bool);
 
+/// This function checks if a database user has a password set.
+/// It returns `Ok(None)` if the user does not exist.
 pub async fn password_is_set_for_database_user(
     db_user: &str,
     conn: &mut MySqlConnection,
@@ -114,6 +117,8 @@ pub async fn password_is_set_for_database_user(
     Ok(user_has_password.map(|PasswordIsSet(is_set)| is_set))
 }
 
+/// This struct contains information about a database user.
+/// This can be extended if we need more information in the future.
 #[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
 pub struct DatabaseUser {
     #[sqlx(rename = "User")]
@@ -128,6 +133,8 @@ pub struct DatabaseUser {
     pub authentication_string: String,
 }
 
+/// This function fetches all database users that have a prefix matching the
+/// unix username and group names of the given unix user.
 pub async fn get_all_database_users_for_unix_user(
     unix_user: &User,
     conn: &mut MySqlConnection,
@@ -146,6 +153,7 @@ pub async fn get_all_database_users_for_unix_user(
     Ok(users)
 }
 
+/// This function fetches a database user if it exists.
 pub async fn get_database_user_for_user(
     username: &str,
     conn: &mut MySqlConnection,
