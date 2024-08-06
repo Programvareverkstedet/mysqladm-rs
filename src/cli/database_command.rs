@@ -11,7 +11,7 @@ use crate::core::{
     database_operations::{
         apply_permission_diffs, db_priv_field_human_readable_name, diff_permissions, yn,
         DatabasePrivileges, DATABASE_PRIVILEGE_FIELDS,
-    },
+    }, user_operations::user_exists,
 };
 
 // TODO: Support batch creation/dropping,showing of databases,
@@ -518,6 +518,13 @@ pub async fn edit_permissions(
         parse_permission_data_from_editor(result)
             .context("Could not parse permission data from editor")?
     };
+
+    for row in permissions_to_change.iter() {
+      if !user_exists(&row.user, conn).await? {
+        // TODO: allow user to return and correct their mistake
+        anyhow::bail!("User {} does not exist", row.user);
+      }
+    }
 
     let diffs = diff_permissions(permission_data, &permissions_to_change).await;
 
