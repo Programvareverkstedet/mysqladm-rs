@@ -54,12 +54,7 @@ pub struct Args {
 /// This is a compatibility layer for the mysql-dbadm command.
 /// Please consider using the newer mysqladm command instead.
 #[derive(Parser)]
-#[command(
-    version,
-    about,
-    disable_help_subcommand = true,
-    verbatim_doc_comment,
-)]
+#[command(version, about, disable_help_subcommand = true, verbatim_doc_comment)]
 pub enum Command {
     /// create the DATABASE(s).
     Create(CreateArgs),
@@ -73,7 +68,6 @@ pub enum Command {
 
     // TODO: make this output more verbatim_doc_comment-like,
     //       without messing up the indentation.
-
     /// change permissions for the DATABASE(s). Your
     /// favorite editor will be started, allowing you
     /// to make changes to the permission table.

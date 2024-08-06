@@ -71,7 +71,10 @@ pub fn validate_name_token(name: &str) -> anyhow::Result<()> {
         anyhow::bail!("Database name is too long. Maximum length is 64 characters.");
     }
 
-    if !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-') {
+    if !name
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+    {
         anyhow::bail!(
             indoc! {r#"
               Invalid characters in name: '{}'
@@ -85,7 +88,10 @@ pub fn validate_name_token(name: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub fn validate_ownership_by_user_prefix<'a>(name: &'a str, user: &User) -> anyhow::Result<&'a str> {
+pub fn validate_ownership_by_user_prefix<'a>(
+    name: &'a str,
+    user: &User,
+) -> anyhow::Result<&'a str> {
     let user_groups = get_unix_groups(user)?;
 
     let mut split_name = name.split('_');

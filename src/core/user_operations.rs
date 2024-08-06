@@ -5,7 +5,10 @@ use sqlx::{prelude::*, MySqlConnection};
 
 use crate::core::common::quote_literal;
 
-use super::common::{create_user_group_matching_regex, get_current_unix_user, validate_name_token, validate_ownership_by_user_prefix};
+use super::common::{
+    create_user_group_matching_regex, get_current_unix_user, validate_name_token,
+    validate_ownership_by_user_prefix,
+};
 
 pub async fn user_exists(db_user: &str, conn: &mut MySqlConnection) -> anyhow::Result<bool> {
     let unix_user = get_current_unix_user()?;
@@ -102,11 +105,11 @@ pub async fn password_is_set_for_database_user(
     validate_user_name(db_user, &unix_user)?;
 
     let user_has_password = sqlx::query_as::<_, PasswordIsSet>(
-            "SELECT authentication_string != '' FROM mysql.user WHERE User = ?"
-        )
-        .bind(db_user)
-        .fetch_optional(conn)
-        .await?;
+        "SELECT authentication_string != '' FROM mysql.user WHERE User = ?",
+    )
+    .bind(db_user)
+    .fetch_optional(conn)
+    .await?;
 
     Ok(user_has_password.map(|PasswordIsSet(is_set)| is_set))
 }
@@ -167,7 +170,8 @@ pub async fn get_database_user_for_user(
 ///       to validate the database name ourselves to prevent SQL injection.
 pub fn validate_user_name(name: &str, user: &User) -> anyhow::Result<()> {
     validate_name_token(name).context(format!("Invalid username: '{}'", name))?;
-    validate_ownership_by_user_prefix(name, user).context(format!("Invalid username: '{}'", name))?;
+    validate_ownership_by_user_prefix(name, user)
+        .context(format!("Invalid username: '{}'", name))?;
 
     Ok(())
 }

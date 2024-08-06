@@ -8,7 +8,8 @@ use serde::{Deserialize, Serialize};
 use sqlx::{mysql::MySqlRow, prelude::*, MySqlConnection};
 
 use super::common::{
-    create_user_group_matching_regex, get_current_unix_user, quote_identifier, validate_name_token, validate_ownership_by_user_prefix
+    create_user_group_matching_regex, get_current_unix_user, quote_identifier, validate_name_token,
+    validate_ownership_by_user_prefix,
 };
 
 pub async fn create_database(name: &str, conn: &mut MySqlConnection) -> anyhow::Result<()> {
