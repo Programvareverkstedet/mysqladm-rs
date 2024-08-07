@@ -50,6 +50,10 @@ pub struct Args {
     pub help_editperm: bool,
 }
 
+// NOTE: mysql-dbadm explicitly calls privileges "permissions".
+//       This is something we're trying to move away from.
+//       See https://git.pvv.ntnu.no/Projects/mysqladm-rs/issues/29
+
 /// Create, drop or edit permissions for the DATABASE(s),
 /// as determined by the COMMAND.
 ///
@@ -158,15 +162,15 @@ pub async fn main() -> anyhow::Result<()> {
             //       Hopefully, not many people rely on this in an automated fashion, as it
             //       is made to be interactive in nature. However, we should still try to
             //        replicate the old behavior as closely as possible.
-            let edit_permissions_args = database_command::DatabaseEditPermArgs {
+            let edit_privileges_args = database_command::DatabaseEditPrivsArgs {
                 name: Some(args.database),
-                perm: vec![],
+                privs: vec![],
                 json: false,
                 editor: None,
                 yes: false,
             };
 
-            database_command::edit_permissions(edit_permissions_args, &mut connection).await?;
+            database_command::edit_privileges(edit_privileges_args, &mut connection).await?;
         }
     }
 
@@ -178,7 +182,7 @@ async fn show_db(name: &str, conn: &mut MySqlConnection) -> anyhow::Result<()> {
     //       for non-existent databases will report with no users.
     //       This function should *not* check for db existence, only
     //       validate the names.
-    let permissions = database_privilege_operations::get_database_privileges(name, conn)
+    let privileges = database_privilege_operations::get_database_privileges(name, conn)
         .await
         .unwrap_or(vec![]);
 
@@ -190,24 +194,24 @@ async fn show_db(name: &str, conn: &mut MySqlConnection) -> anyhow::Result<()> {
         ),
         name,
     );
-    if permissions.is_empty() {
+    if privileges.is_empty() {
         println!("# (no permissions currently granted to any users)");
     } else {
-        for permission in permissions {
+        for privilege in privileges {
             println!(
                 "  {:<16}      {:<7} {:<7} {:<7} {:<7} {:<7} {:<7} {:<7} {:<7} {:<7} {:<7} {}",
-                permission.user,
-                yn(permission.select_priv),
-                yn(permission.insert_priv),
-                yn(permission.update_priv),
-                yn(permission.delete_priv),
-                yn(permission.create_priv),
-                yn(permission.drop_priv),
-                yn(permission.alter_priv),
-                yn(permission.index_priv),
-                yn(permission.create_tmp_table_priv),
-                yn(permission.lock_tables_priv),
-                yn(permission.references_priv)
+                privilege.user,
+                yn(privilege.select_priv),
+                yn(privilege.insert_priv),
+                yn(privilege.update_priv),
+                yn(privilege.delete_priv),
+                yn(privilege.create_priv),
+                yn(privilege.drop_priv),
+                yn(privilege.alter_priv),
+                yn(privilege.index_priv),
+                yn(privilege.create_tmp_table_priv),
+                yn(privilege.lock_tables_priv),
+                yn(privilege.references_priv)
             );
         }
     }

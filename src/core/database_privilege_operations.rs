@@ -5,7 +5,7 @@
 //!
 //! A lot of the complexity comes from two core components:
 //!
-//! - The permission editor that needs to be able to print
+//! - The privilege editor that needs to be able to print
 //!   an editable table of privileges and reparse the content
 //!   after the user has made manual changes.
 //!
@@ -28,6 +28,9 @@ use crate::core::{
     database_operations::validate_database_name,
 };
 
+/// This is the list of fields that are used to fetch the db + user + privileges
+/// from the `db` table in the database. If you need to add or remove privilege
+/// fields, this is a good place to start.
 pub const DATABASE_PRIVILEGE_FIELDS: [&str; 13] = [
     "db",
     "user",
@@ -227,7 +230,7 @@ pub enum DatabasePrivilegesDiff {
     Deleted(DatabasePrivilegeRow),
 }
 
-pub async fn diff_permissions(
+pub async fn diff_privileges(
     from: Vec<DatabasePrivilegeRow>,
     to: &[DatabasePrivilegeRow],
 ) -> Vec<DatabasePrivilegesDiff> {
@@ -265,7 +268,7 @@ pub async fn diff_permissions(
     result
 }
 
-pub async fn apply_permission_diffs(
+pub async fn apply_privilege_diffs(
     diffs: Vec<DatabasePrivilegesDiff>,
     conn: &mut MySqlConnection,
 ) -> anyhow::Result<()> {
@@ -349,7 +352,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_diff_permissions() {
+    async fn test_diff_privileges() {
         let from = vec![DatabasePrivilegeRow {
             db: "db".to_owned(),
             user: "user".to_owned(),
@@ -382,7 +385,7 @@ mod tests {
             references_priv: true,
         }];
 
-        let diffs = diff_permissions(from, &to).await;
+        let diffs = diff_privileges(from, &to).await;
 
         assert_eq!(
             diffs,

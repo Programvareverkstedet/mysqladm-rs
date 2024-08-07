@@ -28,29 +28,29 @@ pub enum DatabaseCommand {
     #[command()]
     ListDb(DatabaseListArgs),
 
-    /// List user permissions for one or more databases
+    /// List user privileges for one or more databases
     ///
-    /// If no database names are provided, it will show permissions for all databases you have access to.
+    /// If no database names are provided, it will show privileges for all databases you have access to.
     #[command()]
-    ShowDbPerm(DatabaseShowPermArgs),
+    ShowDbPrivs(DatabaseShowPrivsArgs),
 
-    /// Change user permissions for one or more databases. See `edit-db-perm --help` for details.
+    /// Change user privileges for one or more databases. See `edit-db-privs --help` for details.
     ///
     /// This command has two modes of operation:
     ///
-    /// 1. Interactive mode: If nothing else is specified, the user will be prompted to edit the permissions using a text editor.
+    /// 1. Interactive mode: If nothing else is specified, the user will be prompted to edit the privileges using a text editor.
     ///
     ///    You can configure your preferred text editor by setting the `VISUAL` or `EDITOR` environment variables.
     ///
     ///    Follow the instructions inside the editor for more information.
     ///
-    /// 2. Non-interactive mode: If the `-p` flag is specified, the user can write permissions using arguments.
+    /// 2. Non-interactive mode: If the `-p` flag is specified, the user can write privileges using arguments.
     ///
-    ///    The permission arguments should be formatted as `<db>:<user>:<privileges>`
-    ///    where the privileges are a string of characters, each representing a single permissions.
-    ///    The character `A` is an exception, because it represents all permissions.
+    ///    The privilege arguments should be formatted as `<db>:<user>:<privileges>`
+    ///    where the privileges are a string of characters, each representing a single privilege.
+    ///    The character `A` is an exception - it represents all privileges.
     ///
-    ///    The character to permission mapping is declared as follows:
+    ///    The character-to-privilege mapping is defined as follows:
     ///
     ///    - `s` - SELECT
     ///    - `i` - INSERT
@@ -65,24 +65,27 @@ pub enum DatabaseCommand {
     ///    - `r` - REFERENCES
     ///    - `A` - ALL PRIVILEGES
     ///
-    ///   If you provide a database name, you can omit it from the permission arguments.
+    ///   If you provide a database name, you can omit it from the privilege string,
+    ///   e.g. `edit-db-privs my_db -p my_user:siu` is equivalent to `edit-db-privs -p my_db:my_user:siu`.
+    ///   While it doesn't make much of a difference for a single edit, it can be useful for editing multiple users
+    ///   on the same database at once.
     ///
     ///   Example usage of non-interactive mode:
     ///
-    ///     Set permissions `SELECT`, `INSERT`, and `UPDATE` for user `my_user` on database `my_db`:
+    ///     Enable privileges `SELECT`, `INSERT`, and `UPDATE` for user `my_user` on database `my_db`:
     ///
-    ///       mysqladm edit-db-perm -p my_db:my_user:siu
+    ///       `mysqladm edit-db-privs -p my_db:my_user:siu`
     ///
-    ///     Set all permissions for user `my_other_user` on database `my_other_db`:
+    ///     Enable all privileges for user `my_other_user` on database `my_other_db`:
     ///
-    ///       mysqladm edit-db-perm -p my_other_db:my_other_user:A
+    ///       `mysqladm edit-db-privs -p my_other_db:my_other_user:A`
     ///
-    ///     Set miscellaneous permissions for multiple users on database `my_db`:
+    ///     Set miscellaneous privileges for multiple users on database `my_db`:
     ///
-    ///       mysqladm edit-db-perm my_db -p my_user:siu my_other_user:ct
+    ///       `mysqladm edit-db-privs my_db -p my_user:siu my_other_user:ct``
     ///
     #[command(verbatim_doc_comment)]
-    EditDbPerm(DatabaseEditPermArgs),
+    EditDbPrivs(DatabaseEditPrivsArgs),
 }
 
 #[derive(Parser)]
@@ -107,7 +110,7 @@ pub struct DatabaseListArgs {
 }
 
 #[derive(Parser)]
-pub struct DatabaseShowPermArgs {
+pub struct DatabaseShowPrivsArgs {
     /// The name of the database(s) to show.
     #[arg(num_args = 0..)]
     name: Vec<String>,
@@ -118,18 +121,18 @@ pub struct DatabaseShowPermArgs {
 }
 
 #[derive(Parser)]
-pub struct DatabaseEditPermArgs {
-    /// The name of the database to edit permissions for.
+pub struct DatabaseEditPrivsArgs {
+    /// The name of the database to edit privileges for.
     pub name: Option<String>,
 
-    #[arg(short, long, value_name = "[DATABASE:]USER:PERMISSIONS", num_args = 0..)]
-    pub perm: Vec<String>,
+    #[arg(short, long, value_name = "[DATABASE:]USER:PRIVILEGES", num_args = 0..)]
+    pub privs: Vec<String>,
 
     /// Whether to output the information in JSON format.
     #[arg(short, long)]
     pub json: bool,
 
-    /// Specify the text editor to use for editing permissions.
+    /// Specify the text editor to use for editing privileges
     #[arg(short, long)]
     pub editor: Option<String>,
 
@@ -149,8 +152,8 @@ pub async fn handle_command(
                     DatabaseCommand::CreateDb(args) => create_databases(args, txn).await,
                     DatabaseCommand::DropDb(args) => drop_databases(args, txn).await,
                     DatabaseCommand::ListDb(args) => list_databases(args, txn).await,
-                    DatabaseCommand::ShowDbPerm(args) => show_databases(args, txn).await,
-                    DatabaseCommand::EditDbPerm(args) => edit_permissions(args, txn).await,
+                    DatabaseCommand::ShowDbPrivs(args) => show_database_privileges(args, txn).await,
+                    DatabaseCommand::EditDbPrivs(args) => edit_privileges(args, txn).await,
                 }
             })
         })
@@ -215,8 +218,8 @@ async fn list_databases(args: DatabaseListArgs, conn: &mut MySqlConnection) -> a
     Ok(())
 }
 
-async fn show_databases(
-    args: DatabaseShowPermArgs,
+async fn show_database_privileges(
+    args: DatabaseShowPrivsArgs,
     conn: &mut MySqlConnection,
 ) -> anyhow::Result<()> {
     let database_users_to_show = if args.name.is_empty() {
@@ -276,11 +279,11 @@ async fn show_databases(
     Ok(())
 }
 
-/// See documentation for `DatabaseCommand::EditPerm`.
-fn parse_permission_table_cli_arg(arg: &str) -> anyhow::Result<DatabasePrivilegeRow> {
+/// See documentation for `DatabaseCommand::EditDbPrivs`.
+fn parse_privilege_table_cli_arg(arg: &str) -> anyhow::Result<DatabasePrivilegeRow> {
     let parts: Vec<&str> = arg.split(':').collect();
     if parts.len() != 3 {
-        anyhow::bail!("Invalid argument format. See `edit-perm --help` for more information.");
+        anyhow::bail!("Invalid argument format. See `edit-db-privs --help` for more information.");
     }
 
     let db = parts[0].to_string();
@@ -329,14 +332,14 @@ fn parse_permission_table_cli_arg(arg: &str) -> anyhow::Result<DatabasePrivilege
                 result.lock_tables_priv = true;
                 result.references_priv = true;
             }
-            _ => anyhow::bail!("Invalid permission character: {}", char),
+            _ => anyhow::bail!("Invalid privilege character: {}", char),
         }
     }
 
     Ok(result)
 }
 
-fn parse_permission(yn: &str) -> anyhow::Result<bool> {
+fn parse_privilege(yn: &str) -> anyhow::Result<bool> {
     match yn.to_ascii_lowercase().as_str() {
         "y" => Ok(true),
         "n" => Ok(false),
@@ -344,7 +347,7 @@ fn parse_permission(yn: &str) -> anyhow::Result<bool> {
     }
 }
 
-fn parse_permission_data_from_editor(content: String) -> anyhow::Result<Vec<DatabasePrivilegeRow>> {
+fn parse_privilege_data_from_editor(content: String) -> anyhow::Result<Vec<DatabasePrivilegeRow>> {
     content
         .trim()
         .split('\n')
@@ -360,27 +363,27 @@ fn parse_permission_data_from_editor(content: String) -> anyhow::Result<Vec<Data
             Ok(DatabasePrivilegeRow {
                 db: (*line_parts.first().unwrap()).to_owned(),
                 user: (*line_parts.get(1).unwrap()).to_owned(),
-                select_priv: parse_permission(line_parts.get(2).unwrap())
+                select_priv: parse_privilege(line_parts.get(2).unwrap())
                     .context("Could not parse SELECT privilege")?,
-                insert_priv: parse_permission(line_parts.get(3).unwrap())
+                insert_priv: parse_privilege(line_parts.get(3).unwrap())
                     .context("Could not parse INSERT privilege")?,
-                update_priv: parse_permission(line_parts.get(4).unwrap())
+                update_priv: parse_privilege(line_parts.get(4).unwrap())
                     .context("Could not parse UPDATE privilege")?,
-                delete_priv: parse_permission(line_parts.get(5).unwrap())
+                delete_priv: parse_privilege(line_parts.get(5).unwrap())
                     .context("Could not parse DELETE privilege")?,
-                create_priv: parse_permission(line_parts.get(6).unwrap())
+                create_priv: parse_privilege(line_parts.get(6).unwrap())
                     .context("Could not parse CREATE privilege")?,
-                drop_priv: parse_permission(line_parts.get(7).unwrap())
+                drop_priv: parse_privilege(line_parts.get(7).unwrap())
                     .context("Could not parse DROP privilege")?,
-                alter_priv: parse_permission(line_parts.get(8).unwrap())
+                alter_priv: parse_privilege(line_parts.get(8).unwrap())
                     .context("Could not parse ALTER privilege")?,
-                index_priv: parse_permission(line_parts.get(9).unwrap())
+                index_priv: parse_privilege(line_parts.get(9).unwrap())
                     .context("Could not parse INDEX privilege")?,
-                create_tmp_table_priv: parse_permission(line_parts.get(10).unwrap())
+                create_tmp_table_priv: parse_privilege(line_parts.get(10).unwrap())
                     .context("Could not parse CREATE TEMPORARY TABLE privilege")?,
-                lock_tables_priv: parse_permission(line_parts.get(11).unwrap())
+                lock_tables_priv: parse_privilege(line_parts.get(11).unwrap())
                     .context("Could not parse LOCK TABLES privilege")?,
-                references_priv: parse_permission(line_parts.get(12).unwrap())
+                references_priv: parse_privilege(line_parts.get(12).unwrap())
                     .context("Could not parse REFERENCES privilege")?,
             })
         })
@@ -412,40 +415,40 @@ fn format_privileges_line(
         .to_string()
 }
 
-pub async fn edit_permissions(
-    args: DatabaseEditPermArgs,
+pub async fn edit_privileges(
+    args: DatabaseEditPrivsArgs,
     conn: &mut MySqlConnection,
 ) -> anyhow::Result<()> {
-    let permission_data = if let Some(name) = &args.name {
+    let privilege_data = if let Some(name) = &args.name {
         get_database_privileges(name, conn).await?
     } else {
         get_all_database_privileges(conn).await?
     };
 
-    let permissions_to_change = if !args.perm.is_empty() {
+    let privileges_to_change = if !args.privs.is_empty() {
         if let Some(name) = args.name {
-            args.perm
+            args.privs
                 .iter()
-                .map(|perm| {
-                    parse_permission_table_cli_arg(&format!("{}:{}", name, &perm))
-                        .context(format!("Failed parsing database permissions: `{}`", &perm))
+                .map(|p| {
+                    parse_privilege_table_cli_arg(&format!("{}:{}", name, &p))
+                        .context(format!("Failed parsing database privileges: `{}`", &p))
                 })
                 .collect::<anyhow::Result<Vec<DatabasePrivilegeRow>>>()?
         } else {
-            args.perm
+            args.privs
                 .iter()
-                .map(|perm| {
-                    parse_permission_table_cli_arg(perm)
-                        .context(format!("Failed parsing database permissions: `{}`", &perm))
+                .map(|p| {
+                    parse_privilege_table_cli_arg(p)
+                        .context(format!("Failed parsing database privileges: `{}`", &p))
                 })
                 .collect::<anyhow::Result<Vec<DatabasePrivilegeRow>>>()?
         }
     } else {
         let comment = indoc! {r#"
-            # Welcome to the permission editor.
-            # Each line defines what permissions a single user has on a single database.
-            # The first two columns respectively represent the database name and the user, and the remaining columns are the permissions.
-            # If the user should have a permission, write 'Y', otherwise write 'N'.
+            # Welcome to the privilege editor.
+            # Each line defines what privileges a single user has on a single database.
+            # The first two columns respectively represent the database name and the user, and the remaining columns are the privileges.
+            # If the user should have a certain privilege, write 'Y', otherwise write 'N'.
             #
             # Lines starting with '#' are comments and will be ignored.
         "#};
@@ -454,13 +457,13 @@ pub async fn edit_permissions(
         let example_user = format!("{}_user", unix_user.name);
         let example_db = format!("{}_db", unix_user.name);
 
-        let longest_username = permission_data
+        let longest_username = privilege_data
             .iter()
             .map(|p| p.user.len())
             .max()
             .unwrap_or(example_user.len());
 
-        let longest_database_name = permission_data
+        let longest_database_name = privilege_data
             .iter()
             .map(|p| p.db.len())
             .max()
@@ -471,7 +474,7 @@ pub async fn edit_permissions(
             .map(db_priv_field_human_readable_name)
             .collect();
 
-        // Pad the first two columns with spaces to align the permissions.
+        // Pad the first two columns with spaces to align the privileges.
         header[0] = format!("{:width$}", header[0], width = longest_database_name);
         header[1] = format!("{:width$}", header[1], width = longest_username);
 
@@ -503,14 +506,14 @@ pub async fn edit_permissions(
                     "{}\n{}\n{}",
                     comment,
                     header.join(" "),
-                    if permission_data.is_empty() {
+                    if privilege_data.is_empty() {
                         format!("# {}", example_line)
                     } else {
-                        permission_data
+                        privilege_data
                             .iter()
-                            .map(|perm| {
+                            .map(|privs| {
                                 format_privileges_line(
-                                    perm,
+                                    privs,
                                     longest_username,
                                     longest_database_name,
                                 )
@@ -522,18 +525,18 @@ pub async fn edit_permissions(
             )?
             .unwrap();
 
-        parse_permission_data_from_editor(result)
-            .context("Could not parse permission data from editor")?
+        parse_privilege_data_from_editor(result)
+            .context("Could not parse privilege data from editor")?
     };
 
-    for row in permissions_to_change.iter() {
+    for row in privileges_to_change.iter() {
         if !user_exists(&row.user, conn).await? {
             // TODO: allow user to return and correct their mistake
             anyhow::bail!("User {} does not exist", row.user);
         }
     }
 
-    let diffs = diff_permissions(permission_data, &permissions_to_change).await;
+    let diffs = diff_privileges(privilege_data, &privileges_to_change).await;
 
     if diffs.is_empty() {
         println!("No changes to make.");
@@ -542,7 +545,7 @@ pub async fn edit_permissions(
 
     // TODO: Add confirmation prompt.
 
-    apply_permission_diffs(diffs, conn).await?;
+    apply_privilege_diffs(diffs, conn).await?;
 
     Ok(())
 }
