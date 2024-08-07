@@ -17,20 +17,24 @@ fn main() -> anyhow::Result<()> {
             .ok_or(anyhow!("Could not resolve target profile directory"))?
             .to_path_buf();
 
-        dbg!(&target_profile_dir);
+        if !target_profile_dir.exists() {
+            std::fs::create_dir_all(&target_profile_dir)?;
+        }
 
         if !target_profile_dir.join("mysql-useradm").exists() {
             symlink(
                 target_profile_dir.join("mysqladm"),
                 target_profile_dir.join("mysql-useradm"),
-            )?;
+            )
+            .ok();
         }
 
         if !target_profile_dir.join("mysql-dbadm").exists() {
             symlink(
                 target_profile_dir.join("mysqladm"),
                 target_profile_dir.join("mysql-dbadm"),
-            )?;
+            )
+            .ok();
         }
     }
 
