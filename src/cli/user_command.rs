@@ -62,6 +62,9 @@ pub struct UserPasswdArgs {
 pub struct UserShowArgs {
     #[arg(num_args = 0..)]
     username: Vec<String>,
+
+    #[clap(short, long)]
+    json: bool,
 }
 
 pub async fn handle_command(command: UserCommand, mut conn: MySqlConnection) -> anyhow::Result<()> {
@@ -193,16 +196,20 @@ async fn show_users(args: UserShowArgs, conn: &mut MySqlConnection) -> anyhow::R
         result
     };
 
-    for user in users {
-        println!(
-            "User '{}': {}",
-            &user.user,
-            if user.has_password {
-                "password set."
-            } else {
-                "no password set."
-            }
-        );
+    if args.json {
+        println!("{}", serde_json::to_string_pretty(&users)?);
+    } else {
+        for user in users {
+            println!(
+                "User '{}': {}",
+                &user.user,
+                if user.has_password {
+                    "password set."
+                } else {
+                    "no password set."
+                }
+            );
+        }
     }
 
     Ok(())
