@@ -28,7 +28,10 @@
     in f system pkgs toolchain);
   in {
     devShell = forAllSystems (system: pkgs: toolchain: pkgs.mkShell {
-      nativeBuildInputs = [ toolchain ];
+      nativeBuildInputs = [
+        toolchain
+        pkgs.mysql-client
+      ];
 
       RUST_SRC_PATH = "${toolchain}/lib/rustlib/src/rust/library";
     });
