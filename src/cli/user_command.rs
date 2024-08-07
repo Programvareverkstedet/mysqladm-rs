@@ -72,7 +72,6 @@ pub async fn handle_command(command: UserCommand, mut conn: MySqlConnection) -> 
     result
 }
 
-// TODO: provide a better error message when the user already exists
 async fn create_users(args: UserCreateArgs, conn: &mut MySqlConnection) -> anyhow::Result<()> {
     if args.username.is_empty() {
         anyhow::bail!("No usernames provided");
@@ -87,7 +86,6 @@ async fn create_users(args: UserCreateArgs, conn: &mut MySqlConnection) -> anyho
     Ok(())
 }
 
-// TODO: provide a better error message when the user does not exist
 async fn drop_users(args: UserDeleteArgs, conn: &mut MySqlConnection) -> anyhow::Result<()> {
     if args.username.is_empty() {
         anyhow::bail!("No usernames provided");
