@@ -4,7 +4,7 @@ use dialoguer::Editor;
 use indoc::indoc;
 use itertools::Itertools;
 use prettytable::{Cell, Row, Table};
-use sqlx::MySqlConnection;
+use sqlx::{Connection, MySqlConnection};
 
 use crate::core::{
     self,
@@ -148,13 +148,19 @@ pub async fn handle_command(
     command: DatabaseCommand,
     mut conn: MySqlConnection,
 ) -> anyhow::Result<()> {
-    let result = match command {
-        DatabaseCommand::CreateDb(args) => create_databases(args, &mut conn).await,
-        DatabaseCommand::DropDb(args) => drop_databases(args, &mut conn).await,
-        DatabaseCommand::ListDb(args) => list_databases(args, &mut conn).await,
-        DatabaseCommand::ShowDbPerm(args) => show_databases(args, &mut conn).await,
-        DatabaseCommand::EditDbPerm(args) => edit_permissions(args, &mut conn).await,
-    };
+    let result = conn
+        .transaction(|mut txn| {
+            Box::pin(async move {
+                match command {
+                    DatabaseCommand::CreateDb(args) => create_databases(args, &mut txn).await,
+                    DatabaseCommand::DropDb(args) => drop_databases(args, &mut txn).await,
+                    DatabaseCommand::ListDb(args) => list_databases(args, &mut txn).await,
+                    DatabaseCommand::ShowDbPerm(args) => show_databases(args, &mut txn).await,
+                    DatabaseCommand::EditDbPerm(args) => edit_permissions(args, &mut txn).await,
+                }
+            })
+        })
+        .await;
 
     close_database_connection(conn).await;
 

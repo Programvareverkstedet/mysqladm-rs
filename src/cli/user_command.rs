@@ -3,7 +3,7 @@ use std::vec;
 use anyhow::Context;
 use clap::Parser;
 use dialoguer::{Confirm, Password};
-use sqlx::MySqlConnection;
+use sqlx::{Connection, MySqlConnection};
 
 use crate::core::{common::close_database_connection, user_operations::validate_user_name};
 
@@ -65,12 +65,18 @@ pub struct UserShowArgs {
 }
 
 pub async fn handle_command(command: UserCommand, mut conn: MySqlConnection) -> anyhow::Result<()> {
-    let result = match command {
-        UserCommand::CreateUser(args) => create_users(args, &mut conn).await,
-        UserCommand::DropUser(args) => drop_users(args, &mut conn).await,
-        UserCommand::PasswdUser(args) => change_password_for_user(args, &mut conn).await,
-        UserCommand::ShowUser(args) => show_users(args, &mut conn).await,
-    };
+    let result = conn
+        .transaction(|mut txn| {
+            Box::pin(async move {
+                match command {
+                    UserCommand::CreateUser(args) => create_users(args, &mut txn).await,
+                    UserCommand::DropUser(args) => drop_users(args, &mut txn).await,
+                    UserCommand::PasswdUser(args) => change_password_for_user(args, &mut txn).await,
+                    UserCommand::ShowUser(args) => show_users(args, &mut txn).await,
+                }
+            })
+        })
+        .await;
 
     close_database_connection(conn).await;
 

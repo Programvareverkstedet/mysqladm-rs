@@ -67,8 +67,15 @@ async fn main() -> anyhow::Result<()> {
     let config = core::config::get_config(args.config_overrides)?;
     let connection = core::config::mysql_connection_from_config(config).await?;
 
-    match args.command {
+    let result = match args.command {
         Command::Db(command) => cli::database_command::handle_command(command, connection).await,
         Command::User(user_args) => cli::user_command::handle_command(user_args, connection).await,
+    };
+
+    match result {
+        Ok(_) => println!("Changes committed to database"),
+        Err(_) => println!("Changes reverted due to error"),
     }
+
+    result
 }
