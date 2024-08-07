@@ -9,7 +9,7 @@ use serde_json::json;
 use sqlx::{Connection, MySqlConnection};
 
 use crate::core::{
-    common::{close_database_connection, get_current_unix_user},
+    common::{close_database_connection, get_current_unix_user, CommandStatus},
     database_operations::*,
     user_operations::*,
 };
@@ -78,7 +78,7 @@ pub struct UserShowArgs {
 pub async fn handle_command(
     command: UserCommand,
     mut connection: MySqlConnection,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<CommandStatus> {
     let result = connection
         .transaction(|txn| {
             Box::pin(async move {
@@ -100,15 +100,18 @@ pub async fn handle_command(
 async fn create_users(
     args: UserCreateArgs,
     connection: &mut MySqlConnection,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<CommandStatus> {
     if args.username.is_empty() {
         anyhow::bail!("No usernames provided");
     }
+
+    let mut result = CommandStatus::SuccessfullyModified;
 
     for username in args.username {
         if let Err(e) = create_database_user(&username, connection).await {
             eprintln!("{}", e);
             eprintln!("Skipping...\n");
+            result = CommandStatus::PartiallySuccessfullyModified;
             continue;
         } else {
             println!("User '{}' created.", username);
@@ -133,21 +136,28 @@ async fn create_users(
         }
         println!();
     }
-    Ok(())
+    Ok(result)
 }
 
-async fn drop_users(args: UserDeleteArgs, connection: &mut MySqlConnection) -> anyhow::Result<()> {
+async fn drop_users(
+    args: UserDeleteArgs,
+    connection: &mut MySqlConnection,
+) -> anyhow::Result<CommandStatus> {
     if args.username.is_empty() {
         anyhow::bail!("No usernames provided");
     }
+
+    let mut result = CommandStatus::SuccessfullyModified;
 
     for username in args.username {
         if let Err(e) = delete_database_user(&username, connection).await {
             eprintln!("{}", e);
             eprintln!("Skipping...");
+            result = CommandStatus::PartiallySuccessfullyModified;
         }
     }
-    Ok(())
+
+    Ok(result)
 }
 
 pub fn read_password_from_stdin_with_double_check(username: &str) -> anyhow::Result<String> {
@@ -164,7 +174,7 @@ pub fn read_password_from_stdin_with_double_check(username: &str) -> anyhow::Res
 async fn change_password_for_user(
     args: UserPasswdArgs,
     connection: &mut MySqlConnection,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<CommandStatus> {
     // NOTE: although this also is checked in `set_password_for_database_user`, we check it here
     //       to provide a more natural order of error messages.
     let unix_user = get_current_unix_user()?;
@@ -181,10 +191,13 @@ async fn change_password_for_user(
 
     set_password_for_database_user(&args.username, &password, connection).await?;
 
-    Ok(())
+    Ok(CommandStatus::SuccessfullyModified)
 }
 
-async fn show_users(args: UserShowArgs, connection: &mut MySqlConnection) -> anyhow::Result<()> {
+async fn show_users(
+    args: UserShowArgs,
+    connection: &mut MySqlConnection,
+) -> anyhow::Result<CommandStatus> {
     let unix_user = get_current_unix_user()?;
 
     let users = if args.username.is_empty() {
@@ -251,5 +264,5 @@ async fn show_users(args: UserShowArgs, connection: &mut MySqlConnection) -> any
         table.printstd();
     }
 
-    Ok(())
+    Ok(CommandStatus::NoModificationsIntended)
 }

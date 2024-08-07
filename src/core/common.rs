@@ -7,6 +7,31 @@ use sqlx::{Connection, MySqlConnection};
 #[cfg(not(target_os = "macos"))]
 use std::ffi::CString;
 
+/// Report the result status of a command.
+/// This is used to display a status message to the user.
+pub enum CommandStatus {
+    /// The command was successful,
+    /// and made modification to the database.
+    SuccessfullyModified,
+
+    /// The command was mostly successful,
+    /// and modifications have been made to the database.
+    /// However, some of the requested modifications failed.
+    PartiallySuccessfullyModified,
+
+    /// The command was successful,
+    /// but no modifications were needed.
+    NoModificationsNeeded,
+
+    /// The command was successful,
+    /// and made no modification to the database.
+    NoModificationsIntended,
+
+    /// The command was cancelled, either through a dialog or a signal.
+    /// No modifications have been made to the database.
+    Cancelled,
+}
+
 pub fn get_current_unix_user() -> anyhow::Result<User> {
     User::from_uid(getuid())
         .context("Failed to look up your UNIX username")

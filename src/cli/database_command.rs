@@ -5,7 +5,7 @@ use prettytable::{Cell, Row, Table};
 use sqlx::{Connection, MySqlConnection};
 
 use crate::core::{
-    common::{close_database_connection, get_current_unix_user, yn},
+    common::{close_database_connection, get_current_unix_user, yn, CommandStatus},
     database_operations::*,
     database_privilege_operations::*,
     user_operations::user_exists,
@@ -142,7 +142,7 @@ pub struct DatabaseEditPrivsArgs {
 pub async fn handle_command(
     command: DatabaseCommand,
     mut connection: MySqlConnection,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<CommandStatus> {
     let result = connection
         .transaction(|txn| {
             Box::pin(async move {
@@ -165,67 +165,73 @@ pub async fn handle_command(
 async fn create_databases(
     args: DatabaseCreateArgs,
     connection: &mut MySqlConnection,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<CommandStatus> {
     if args.name.is_empty() {
         anyhow::bail!("No database names provided");
     }
+
+    let mut result = CommandStatus::SuccessfullyModified;
 
     for name in args.name {
         // TODO: This can be optimized by fetching all the database privileges in one query.
         if let Err(e) = create_database(&name, connection).await {
             eprintln!("Failed to create database '{}': {}", name, e);
             eprintln!("Skipping...");
+            result = CommandStatus::PartiallySuccessfullyModified;
         }
     }
 
-    Ok(())
+    Ok(result)
 }
 
 async fn drop_databases(
     args: DatabaseDropArgs,
     connection: &mut MySqlConnection,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<CommandStatus> {
     if args.name.is_empty() {
         anyhow::bail!("No database names provided");
     }
+
+    let mut result = CommandStatus::SuccessfullyModified;
 
     for name in args.name {
         // TODO: This can be optimized by fetching all the database privileges in one query.
         if let Err(e) = drop_database(&name, connection).await {
             eprintln!("Failed to drop database '{}': {}", name, e);
             eprintln!("Skipping...");
+            result = CommandStatus::PartiallySuccessfullyModified;
         }
     }
 
-    Ok(())
+    Ok(result)
 }
 
 async fn list_databases(
     args: DatabaseListArgs,
     connection: &mut MySqlConnection,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<CommandStatus> {
     let databases = get_database_list(connection).await?;
-
-    if databases.is_empty() {
-        println!("No databases to show.");
-        return Ok(());
-    }
 
     if args.json {
         println!("{}", serde_json::to_string_pretty(&databases)?);
+        return Ok(CommandStatus::NoModificationsIntended);
+    }
+
+    if databases.is_empty() {
+        println!("No databases to show.");
     } else {
         for db in databases {
             println!("{}", db);
         }
     }
 
-    Ok(())
+    Ok(CommandStatus::NoModificationsIntended)
 }
 
 async fn show_database_privileges(
     args: DatabaseShowPrivsArgs,
     connection: &mut MySqlConnection,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<CommandStatus> {
     let database_users_to_show = if args.name.is_empty() {
         get_all_database_privileges(connection).await?
     } else {
@@ -243,13 +249,13 @@ async fn show_database_privileges(
         result
     };
 
-    if database_users_to_show.is_empty() {
-        println!("No database users to show.");
-        return Ok(());
-    }
-
     if args.json {
         println!("{}", serde_json::to_string_pretty(&database_users_to_show)?);
+        return Ok(CommandStatus::NoModificationsIntended);
+    }
+
+    if database_users_to_show.is_empty() {
+        println!("No database users to show.");
     } else {
         let mut table = Table::new();
         table.add_row(Row::new(
@@ -280,13 +286,13 @@ async fn show_database_privileges(
         table.printstd();
     }
 
-    Ok(())
+    Ok(CommandStatus::NoModificationsIntended)
 }
 
 pub async fn edit_privileges(
     args: DatabaseEditPrivsArgs,
     connection: &mut MySqlConnection,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<CommandStatus> {
     let privilege_data = if let Some(name) = &args.name {
         get_database_privileges(name, connection).await?
     } else {
@@ -317,14 +323,14 @@ pub async fn edit_privileges(
 
     if diffs.is_empty() {
         println!("No changes to make.");
-        return Ok(());
+        return Ok(CommandStatus::NoModificationsNeeded);
     }
 
     // TODO: Add confirmation prompt.
 
     apply_privilege_diffs(diffs, connection).await?;
 
-    Ok(())
+    Ok(CommandStatus::SuccessfullyModified)
 }
 
 pub fn parse_privilege_tables_from_args(

@@ -1,6 +1,7 @@
 #[macro_use]
 extern crate prettytable;
 
+use core::common::CommandStatus;
 #[cfg(feature = "mysql-admutils-compatibility")]
 use std::path::PathBuf;
 
@@ -73,9 +74,26 @@ async fn main() -> anyhow::Result<()> {
     };
 
     match result {
-        Ok(_) => println!("Changes committed to database"),
-        Err(_) => println!("Changes reverted due to error"),
+        Ok(CommandStatus::SuccessfullyModified) => {
+            println!("Modifications committed successfully");
+            Ok(())
+        }
+        Ok(CommandStatus::PartiallySuccessfullyModified) => {
+            println!("Some modifications committed successfully");
+            Ok(())
+        }
+        Ok(CommandStatus::NoModificationsNeeded) => {
+            println!("No modifications made");
+            Ok(())
+        }
+        Ok(CommandStatus::NoModificationsIntended) => {
+            /* Don't report anything */
+            Ok(())
+        }
+        Ok(CommandStatus::Cancelled) => {
+            println!("Command cancelled successfully");
+            Ok(())
+        }
+        Err(e) => Err(e),
     }
-
-    result
 }
