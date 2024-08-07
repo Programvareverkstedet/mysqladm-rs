@@ -143,9 +143,9 @@ pub struct DatabaseEditPrivsArgs {
 
 pub async fn handle_command(
     command: DatabaseCommand,
-    mut conn: MySqlConnection,
+    mut connection: MySqlConnection,
 ) -> anyhow::Result<()> {
-    let result = conn
+    let result = connection
         .transaction(|txn| {
             Box::pin(async move {
                 match command {
@@ -159,14 +159,14 @@ pub async fn handle_command(
         })
         .await;
 
-    close_database_connection(conn).await;
+    close_database_connection(connection).await;
 
     result
 }
 
 async fn create_databases(
     args: DatabaseCreateArgs,
-    conn: &mut MySqlConnection,
+    connection: &mut MySqlConnection,
 ) -> anyhow::Result<()> {
     if args.name.is_empty() {
         anyhow::bail!("No database names provided");
@@ -174,7 +174,7 @@ async fn create_databases(
 
     for name in args.name {
         // TODO: This can be optimized by fetching all the database privileges in one query.
-        if let Err(e) = create_database(&name, conn).await {
+        if let Err(e) = create_database(&name, connection).await {
             eprintln!("Failed to create database '{}': {}", name, e);
             eprintln!("Skipping...");
         }
@@ -183,14 +183,17 @@ async fn create_databases(
     Ok(())
 }
 
-async fn drop_databases(args: DatabaseDropArgs, conn: &mut MySqlConnection) -> anyhow::Result<()> {
+async fn drop_databases(
+    args: DatabaseDropArgs,
+    connection: &mut MySqlConnection,
+) -> anyhow::Result<()> {
     if args.name.is_empty() {
         anyhow::bail!("No database names provided");
     }
 
     for name in args.name {
         // TODO: This can be optimized by fetching all the database privileges in one query.
-        if let Err(e) = drop_database(&name, conn).await {
+        if let Err(e) = drop_database(&name, connection).await {
             eprintln!("Failed to drop database '{}': {}", name, e);
             eprintln!("Skipping...");
         }
@@ -199,8 +202,11 @@ async fn drop_databases(args: DatabaseDropArgs, conn: &mut MySqlConnection) -> a
     Ok(())
 }
 
-async fn list_databases(args: DatabaseListArgs, conn: &mut MySqlConnection) -> anyhow::Result<()> {
-    let databases = get_database_list(conn).await?;
+async fn list_databases(
+    args: DatabaseListArgs,
+    connection: &mut MySqlConnection,
+) -> anyhow::Result<()> {
+    let databases = get_database_list(connection).await?;
 
     if databases.is_empty() {
         println!("No databases to show.");
@@ -220,15 +226,15 @@ async fn list_databases(args: DatabaseListArgs, conn: &mut MySqlConnection) -> a
 
 async fn show_database_privileges(
     args: DatabaseShowPrivsArgs,
-    conn: &mut MySqlConnection,
+    connection: &mut MySqlConnection,
 ) -> anyhow::Result<()> {
     let database_users_to_show = if args.name.is_empty() {
-        get_all_database_privileges(conn).await?
+        get_all_database_privileges(connection).await?
     } else {
         // TODO: This can be optimized by fetching all the database privileges in one query.
         let mut result = Vec::with_capacity(args.name.len());
         for name in args.name {
-            match get_database_privileges(&name, conn).await {
+            match get_database_privileges(&name, connection).await {
                 Ok(db) => result.extend(db),
                 Err(e) => {
                     eprintln!("Failed to show database '{}': {}", name, e);
@@ -417,12 +423,12 @@ fn format_privileges_line(
 
 pub async fn edit_privileges(
     args: DatabaseEditPrivsArgs,
-    conn: &mut MySqlConnection,
+    connection: &mut MySqlConnection,
 ) -> anyhow::Result<()> {
     let privilege_data = if let Some(name) = &args.name {
-        get_database_privileges(name, conn).await?
+        get_database_privileges(name, connection).await?
     } else {
-        get_all_database_privileges(conn).await?
+        get_all_database_privileges(connection).await?
     };
 
     let privileges_to_change = if !args.privs.is_empty() {
@@ -530,7 +536,7 @@ pub async fn edit_privileges(
     };
 
     for row in privileges_to_change.iter() {
-        if !user_exists(&row.user, conn).await? {
+        if !user_exists(&row.user, connection).await? {
             // TODO: allow user to return and correct their mistake
             anyhow::bail!("User {} does not exist", row.user);
         }
@@ -545,7 +551,7 @@ pub async fn edit_privileges(
 
     // TODO: Add confirmation prompt.
 
-    apply_privilege_diffs(diffs, conn).await?;
+    apply_privilege_diffs(diffs, connection).await?;
 
     Ok(())
 }

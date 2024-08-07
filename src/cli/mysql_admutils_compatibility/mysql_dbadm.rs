@@ -177,12 +177,12 @@ pub async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn show_db(name: &str, conn: &mut MySqlConnection) -> anyhow::Result<()> {
+async fn show_db(name: &str, connection: &mut MySqlConnection) -> anyhow::Result<()> {
     // NOTE: mysql-dbadm show has a quirk where valid database names
     //       for non-existent databases will report with no users.
     //       This function should *not* check for db existence, only
     //       validate the names.
-    let privileges = database_privilege_operations::get_database_privileges(name, conn)
+    let privileges = database_privilege_operations::get_database_privileges(name, connection)
         .await
         .unwrap_or(vec![]);
 

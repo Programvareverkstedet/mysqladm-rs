@@ -145,7 +145,7 @@ impl FromRow<'_, MySqlRow> for DatabasePrivilegeRow {
 
 pub async fn get_database_privileges(
     database_name: &str,
-    conn: &mut MySqlConnection,
+    connection: &mut MySqlConnection,
 ) -> anyhow::Result<Vec<DatabasePrivilegeRow>> {
     let unix_user = get_current_unix_user()?;
     validate_database_name(database_name, &unix_user)?;
@@ -158,7 +158,7 @@ pub async fn get_database_privileges(
             .join(","),
     ))
     .bind(database_name)
-    .fetch_all(conn)
+    .fetch_all(connection)
     .await
     .context("Failed to show database")?;
 
@@ -166,7 +166,7 @@ pub async fn get_database_privileges(
 }
 
 pub async fn get_all_database_privileges(
-    conn: &mut MySqlConnection,
+    connection: &mut MySqlConnection,
 ) -> anyhow::Result<Vec<DatabasePrivilegeRow>> {
     let unix_user = get_current_unix_user()?;
 
@@ -184,7 +184,7 @@ pub async fn get_all_database_privileges(
             .join(","),
     ))
     .bind(create_user_group_matching_regex(&unix_user))
-    .fetch_all(conn)
+    .fetch_all(connection)
     .await
     .context("Failed to show databases")?;
 
@@ -270,7 +270,7 @@ pub async fn diff_privileges(
 
 pub async fn apply_privilege_diffs(
     diffs: Vec<DatabasePrivilegesDiff>,
-    conn: &mut MySqlConnection,
+    connection: &mut MySqlConnection,
 ) -> anyhow::Result<()> {
     for diff in diffs {
         match diff {
@@ -300,7 +300,7 @@ pub async fn apply_privilege_diffs(
                 .bind(yn(p.create_tmp_table_priv))
                 .bind(yn(p.lock_tables_priv))
                 .bind(yn(p.references_priv))
-                .execute(&mut *conn)
+                .execute(&mut *connection)
                 .await?;
             }
             DatabasePrivilegesDiff::Modified(p) => {
@@ -318,14 +318,14 @@ pub async fn apply_privilege_diffs(
                 )
                 .bind(p.db)
                 .bind(p.user)
-                .execute(&mut *conn)
+                .execute(&mut *connection)
                 .await?;
             }
             DatabasePrivilegesDiff::Deleted(p) => {
                 sqlx::query("DELETE FROM `db` WHERE `db` = ? AND `user` = ?")
                     .bind(p.db)
                     .bind(p.user)
-                    .execute(&mut *conn)
+                    .execute(&mut *connection)
                     .await?;
             }
         }

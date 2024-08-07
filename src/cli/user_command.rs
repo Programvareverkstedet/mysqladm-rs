@@ -74,8 +74,11 @@ pub struct UserShowArgs {
     json: bool,
 }
 
-pub async fn handle_command(command: UserCommand, mut conn: MySqlConnection) -> anyhow::Result<()> {
-    let result = conn
+pub async fn handle_command(
+    command: UserCommand,
+    mut connection: MySqlConnection,
+) -> anyhow::Result<()> {
+    let result = connection
         .transaction(|txn| {
             Box::pin(async move {
                 match command {
@@ -88,18 +91,21 @@ pub async fn handle_command(command: UserCommand, mut conn: MySqlConnection) -> 
         })
         .await;
 
-    close_database_connection(conn).await;
+    close_database_connection(connection).await;
 
     result
 }
 
-async fn create_users(args: UserCreateArgs, conn: &mut MySqlConnection) -> anyhow::Result<()> {
+async fn create_users(
+    args: UserCreateArgs,
+    connection: &mut MySqlConnection,
+) -> anyhow::Result<()> {
     if args.username.is_empty() {
         anyhow::bail!("No usernames provided");
     }
 
     for username in args.username {
-        if let Err(e) = create_database_user(&username, conn).await {
+        if let Err(e) = create_database_user(&username, connection).await {
             eprintln!("{}", e);
             eprintln!("Skipping...\n");
             continue;
@@ -120,7 +126,7 @@ async fn create_users(args: UserCreateArgs, conn: &mut MySqlConnection) -> anyho
                     username,
                     password_file: None,
                 },
-                conn,
+                connection,
             )
             .await?;
         }
@@ -129,13 +135,13 @@ async fn create_users(args: UserCreateArgs, conn: &mut MySqlConnection) -> anyho
     Ok(())
 }
 
-async fn drop_users(args: UserDeleteArgs, conn: &mut MySqlConnection) -> anyhow::Result<()> {
+async fn drop_users(args: UserDeleteArgs, connection: &mut MySqlConnection) -> anyhow::Result<()> {
     if args.username.is_empty() {
         anyhow::bail!("No usernames provided");
     }
 
     for username in args.username {
-        if let Err(e) = delete_database_user(&username, conn).await {
+        if let Err(e) = delete_database_user(&username, connection).await {
             eprintln!("{}", e);
             eprintln!("Skipping...");
         }
@@ -156,7 +162,7 @@ pub fn read_password_from_stdin_with_double_check(username: &str) -> anyhow::Res
 
 async fn change_password_for_user(
     args: UserPasswdArgs,
-    conn: &mut MySqlConnection,
+    connection: &mut MySqlConnection,
 ) -> anyhow::Result<()> {
     // NOTE: although this also is checked in `set_password_for_database_user`, we check it here
     //       to provide a more natural order of error messages.
@@ -172,16 +178,16 @@ async fn change_password_for_user(
         read_password_from_stdin_with_double_check(&args.username)?
     };
 
-    set_password_for_database_user(&args.username, &password, conn).await?;
+    set_password_for_database_user(&args.username, &password, connection).await?;
 
     Ok(())
 }
 
-async fn show_users(args: UserShowArgs, conn: &mut MySqlConnection) -> anyhow::Result<()> {
+async fn show_users(args: UserShowArgs, connection: &mut MySqlConnection) -> anyhow::Result<()> {
     let unix_user = get_current_unix_user()?;
 
     let users = if args.username.is_empty() {
-        get_all_database_users_for_unix_user(&unix_user, conn).await?
+        get_all_database_users_for_unix_user(&unix_user, connection).await?
     } else {
         let mut result = vec![];
         for username in args.username {
@@ -191,7 +197,7 @@ async fn show_users(args: UserShowArgs, conn: &mut MySqlConnection) -> anyhow::R
                 continue;
             }
 
-            let user = get_database_user_for_user(&username, conn).await?;
+            let user = get_database_user_for_user(&username, connection).await?;
             if let Some(user) = user {
                 result.push(user);
             } else {
@@ -205,7 +211,7 @@ async fn show_users(args: UserShowArgs, conn: &mut MySqlConnection) -> anyhow::R
     for user in users.iter() {
         user_databases.insert(
             user.user.clone(),
-            get_databases_where_user_has_privileges(&user.user, conn).await?,
+            get_databases_where_user_has_privileges(&user.user, connection).await?,
         );
     }
 

@@ -10,7 +10,7 @@ use super::common::{
     validate_ownership_by_user_prefix,
 };
 
-pub async fn user_exists(db_user: &str, conn: &mut MySqlConnection) -> anyhow::Result<bool> {
+pub async fn user_exists(db_user: &str, connection: &mut MySqlConnection) -> anyhow::Result<bool> {
     let unix_user = get_current_unix_user()?;
 
     validate_user_name(db_user, &unix_user)?;
@@ -25,42 +25,48 @@ pub async fn user_exists(db_user: &str, conn: &mut MySqlConnection) -> anyhow::R
         "#,
     )
     .bind(db_user)
-    .fetch_one(conn)
+    .fetch_one(connection)
     .await?
     .get::<bool, _>(0);
 
     Ok(user_exists)
 }
 
-pub async fn create_database_user(db_user: &str, conn: &mut MySqlConnection) -> anyhow::Result<()> {
+pub async fn create_database_user(
+    db_user: &str,
+    connection: &mut MySqlConnection,
+) -> anyhow::Result<()> {
     let unix_user = get_current_unix_user()?;
 
     validate_user_name(db_user, &unix_user)?;
 
-    if user_exists(db_user, conn).await? {
+    if user_exists(db_user, connection).await? {
         anyhow::bail!("User '{}' already exists", db_user);
     }
 
     // NOTE: see the note about SQL injections in `validate_ownership_of_user_name`
     sqlx::query(format!("CREATE USER {}@'%'", quote_literal(db_user),).as_str())
-        .execute(conn)
+        .execute(connection)
         .await?;
 
     Ok(())
 }
 
-pub async fn delete_database_user(db_user: &str, conn: &mut MySqlConnection) -> anyhow::Result<()> {
+pub async fn delete_database_user(
+    db_user: &str,
+    connection: &mut MySqlConnection,
+) -> anyhow::Result<()> {
     let unix_user = get_current_unix_user()?;
 
     validate_user_name(db_user, &unix_user)?;
 
-    if !user_exists(db_user, conn).await? {
+    if !user_exists(db_user, connection).await? {
         anyhow::bail!("User '{}' does not exist", db_user);
     }
 
     // NOTE: see the note about SQL injections in `validate_ownership_of_user_name`
     sqlx::query(format!("DROP USER {}@'%'", quote_literal(db_user),).as_str())
-        .execute(conn)
+        .execute(connection)
         .await?;
 
     Ok(())
@@ -69,12 +75,12 @@ pub async fn delete_database_user(db_user: &str, conn: &mut MySqlConnection) -> 
 pub async fn set_password_for_database_user(
     db_user: &str,
     password: &str,
-    conn: &mut MySqlConnection,
+    connection: &mut MySqlConnection,
 ) -> anyhow::Result<()> {
     let unix_user = crate::core::common::get_current_unix_user()?;
     validate_user_name(db_user, &unix_user)?;
 
-    if !user_exists(db_user, conn).await? {
+    if !user_exists(db_user, connection).await? {
         anyhow::bail!("User '{}' does not exist", db_user);
     }
 
@@ -87,7 +93,7 @@ pub async fn set_password_for_database_user(
         )
         .as_str(),
     )
-    .execute(conn)
+    .execute(connection)
     .await?;
 
     Ok(())
@@ -113,7 +119,7 @@ pub struct DatabaseUser {
 /// unix username and group names of the given unix user.
 pub async fn get_all_database_users_for_unix_user(
     unix_user: &User,
-    conn: &mut MySqlConnection,
+    connection: &mut MySqlConnection,
 ) -> anyhow::Result<Vec<DatabaseUser>> {
     let users = sqlx::query_as::<_, DatabaseUser>(
         r#"
@@ -126,7 +132,7 @@ pub async fn get_all_database_users_for_unix_user(
         "#,
     )
     .bind(create_user_group_matching_regex(unix_user))
-    .fetch_all(conn)
+    .fetch_all(connection)
     .await?;
 
     Ok(users)
@@ -135,7 +141,7 @@ pub async fn get_all_database_users_for_unix_user(
 /// This function fetches a database user if it exists.
 pub async fn get_database_user_for_user(
     username: &str,
-    conn: &mut MySqlConnection,
+    connection: &mut MySqlConnection,
 ) -> anyhow::Result<Option<DatabaseUser>> {
     let user = sqlx::query_as::<_, DatabaseUser>(
         r#"
@@ -148,7 +154,7 @@ pub async fn get_database_user_for_user(
         "#,
     )
     .bind(username)
-    .fetch_optional(conn)
+    .fetch_optional(connection)
     .await?;
 
     Ok(user)

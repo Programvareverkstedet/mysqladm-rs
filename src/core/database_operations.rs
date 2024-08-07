@@ -13,13 +13,13 @@ use crate::core::{
     database_privilege_operations::DATABASE_PRIVILEGE_FIELDS,
 };
 
-pub async fn create_database(name: &str, conn: &mut MySqlConnection) -> anyhow::Result<()> {
+pub async fn create_database(name: &str, connection: &mut MySqlConnection) -> anyhow::Result<()> {
     let user = get_current_unix_user()?;
     validate_database_name(name, &user)?;
 
     // NOTE: see the note about SQL injections in `validate_owner_of_database_name`
     sqlx::query(&format!("CREATE DATABASE {}", quote_identifier(name)))
-        .execute(conn)
+        .execute(connection)
         .await
         .map_err(|e| {
             if e.to_string().contains("database exists") {
@@ -32,13 +32,13 @@ pub async fn create_database(name: &str, conn: &mut MySqlConnection) -> anyhow::
     Ok(())
 }
 
-pub async fn drop_database(name: &str, conn: &mut MySqlConnection) -> anyhow::Result<()> {
+pub async fn drop_database(name: &str, connection: &mut MySqlConnection) -> anyhow::Result<()> {
     let user = get_current_unix_user()?;
     validate_database_name(name, &user)?;
 
     // NOTE: see the note about SQL injections in `validate_owner_of_database_name`
     sqlx::query(&format!("DROP DATABASE {}", quote_identifier(name)))
-        .execute(conn)
+        .execute(connection)
         .await
         .map_err(|e| {
             if e.to_string().contains("doesn't exist") {
@@ -56,7 +56,7 @@ struct DatabaseName {
     database: String,
 }
 
-pub async fn get_database_list(conn: &mut MySqlConnection) -> anyhow::Result<Vec<String>> {
+pub async fn get_database_list(connection: &mut MySqlConnection) -> anyhow::Result<Vec<String>> {
     let unix_user = get_current_unix_user()?;
 
     let databases = sqlx::query_as::<_, DatabaseName>(
@@ -68,7 +68,7 @@ pub async fn get_database_list(conn: &mut MySqlConnection) -> anyhow::Result<Vec
         "#,
     )
     .bind(create_user_group_matching_regex(&unix_user))
-    .fetch_all(conn)
+    .fetch_all(connection)
     .await
     .context(format!(
         "Failed to get databases for user '{}'",
@@ -80,7 +80,7 @@ pub async fn get_database_list(conn: &mut MySqlConnection) -> anyhow::Result<Vec
 
 pub async fn get_databases_where_user_has_privileges(
     username: &str,
-    conn: &mut MySqlConnection,
+    connection: &mut MySqlConnection,
 ) -> anyhow::Result<Vec<String>> {
     let result = sqlx::query(
         formatdoc!(
@@ -98,7 +98,7 @@ pub async fn get_databases_where_user_has_privileges(
         .as_str(),
     )
     .bind(username)
-    .fetch_all(conn)
+    .fetch_all(connection)
     .await?
     .into_iter()
     .map(|databases| databases.try_get::<String, _>("database").unwrap())

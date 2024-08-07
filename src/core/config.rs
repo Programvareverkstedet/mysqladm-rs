@@ -107,7 +107,7 @@ pub async fn mysql_connection_from_config(config: Config) -> anyhow::Result<MySq
     )
     .await
     {
-        Ok(conn) => conn.context("Failed to connect to MySQL"),
+        Ok(connection) => connection.context("Failed to connect to MySQL"),
         Err(_) => Err(anyhow!("Timed out after 2 seconds")).context("Failed to connect to MySQL"),
     }
 }
