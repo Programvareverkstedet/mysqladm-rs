@@ -40,6 +40,14 @@ pub enum UserCommand {
     /// If no username is provided, all users you have access will be shown.
     #[command()]
     ShowUser(UserShowArgs),
+
+    /// Lock account for one or more users
+    #[command()]
+    LockUser(UserLockArgs),
+
+    /// Unlock account for one or more users
+    #[command()]
+    UnlockUser(UserUnlockArgs),
 }
 
 #[derive(Parser)]
@@ -75,6 +83,18 @@ pub struct UserShowArgs {
     json: bool,
 }
 
+#[derive(Parser)]
+pub struct UserLockArgs {
+    #[arg(num_args = 1..)]
+    username: Vec<String>,
+}
+
+#[derive(Parser)]
+pub struct UserUnlockArgs {
+    #[arg(num_args = 1..)]
+    username: Vec<String>,
+}
+
 pub async fn handle_command(
     command: UserCommand,
     mut connection: MySqlConnection,
@@ -87,6 +107,8 @@ pub async fn handle_command(
                     UserCommand::DropUser(args) => drop_users(args, txn).await,
                     UserCommand::PasswdUser(args) => change_password_for_user(args, txn).await,
                     UserCommand::ShowUser(args) => show_users(args, txn).await,
+                    UserCommand::LockUser(args) => lock_users(args, txn).await,
+                    UserCommand::UnlockUser(args) => unlock_users(args, txn).await,
                 }
             })
         })
@@ -236,6 +258,7 @@ async fn show_users(
                 json!({
                     "user": user.user,
                     "has_password": user.has_password,
+                    "is_locked": user.is_locked,
                     "databases": user_databases.get(&user.user).unwrap_or(&vec![]),
                 })
             })
@@ -252,12 +275,14 @@ async fn show_users(
         table.add_row(row![
             "User",
             "Password is set",
+            "Locked",
             "Databases where user has privileges"
         ]);
         for user in users {
             table.add_row(row![
                 user.user,
                 user.has_password,
+                user.is_locked,
                 user_databases.get(&user.user).unwrap_or(&vec![]).join("\n")
             ]);
         }
@@ -265,4 +290,50 @@ async fn show_users(
     }
 
     Ok(CommandStatus::NoModificationsIntended)
+}
+
+async fn lock_users(
+    args: UserLockArgs,
+    connection: &mut MySqlConnection,
+) -> anyhow::Result<CommandStatus> {
+    if args.username.is_empty() {
+        anyhow::bail!("No usernames provided");
+    }
+
+    let mut result = CommandStatus::SuccessfullyModified;
+
+    for username in args.username {
+        if let Err(e) = lock_database_user(&username, connection).await {
+            eprintln!("{}", e);
+            eprintln!("Skipping...");
+            result = CommandStatus::PartiallySuccessfullyModified;
+        } else {
+            println!("User '{}' locked.", username);
+        }
+    }
+
+    Ok(result)
+}
+
+async fn unlock_users(
+    args: UserUnlockArgs,
+    connection: &mut MySqlConnection,
+) -> anyhow::Result<CommandStatus> {
+    if args.username.is_empty() {
+        anyhow::bail!("No usernames provided");
+    }
+
+    let mut result = CommandStatus::SuccessfullyModified;
+
+    for username in args.username {
+        if let Err(e) = unlock_database_user(&username, connection).await {
+            eprintln!("{}", e);
+            eprintln!("Skipping...");
+            result = CommandStatus::PartiallySuccessfullyModified;
+        } else {
+            println!("User '{}' unlocked.", username);
+        }
+    }
+
+    Ok(result)
 }

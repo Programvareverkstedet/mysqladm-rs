@@ -99,6 +99,79 @@ pub async fn set_password_for_database_user(
     Ok(())
 }
 
+async fn user_is_locked(db_user: &str, connection: &mut MySqlConnection) -> anyhow::Result<bool> {
+    let unix_user = get_current_unix_user()?;
+
+    validate_user_name(db_user, &unix_user)?;
+
+    if !user_exists(db_user, connection).await? {
+        anyhow::bail!("User '{}' does not exist", db_user);
+    }
+
+    let is_locked = sqlx::query(
+        r#"
+          SELECT JSON_EXTRACT(`mysql`.`global_priv`.`priv`, "$.account_locked") = 'true'
+          FROM `mysql`.`global_priv`
+          WHERE `User` = ?
+          AND `Host` = '%'
+        "#,
+    )
+    .bind(db_user)
+    .fetch_one(connection)
+    .await?
+    .get::<bool, _>(0);
+
+    Ok(is_locked)
+}
+
+pub async fn lock_database_user(
+    db_user: &str,
+    connection: &mut MySqlConnection,
+) -> anyhow::Result<()> {
+    let unix_user = get_current_unix_user()?;
+
+    validate_user_name(db_user, &unix_user)?;
+
+    if !user_exists(db_user, connection).await? {
+        anyhow::bail!("User '{}' does not exist", db_user);
+    }
+
+    if user_is_locked(db_user, connection).await? {
+        anyhow::bail!("User '{}' is already locked", db_user);
+    }
+
+    // NOTE: see the note about SQL injections in `validate_ownership_of_user_name`
+    sqlx::query(format!("ALTER USER {}@'%' ACCOUNT LOCK", quote_literal(db_user),).as_str())
+        .execute(connection)
+        .await?;
+
+    Ok(())
+}
+
+pub async fn unlock_database_user(
+    db_user: &str,
+    connection: &mut MySqlConnection,
+) -> anyhow::Result<()> {
+    let unix_user = get_current_unix_user()?;
+
+    validate_user_name(db_user, &unix_user)?;
+
+    if !user_exists(db_user, connection).await? {
+        anyhow::bail!("User '{}' does not exist", db_user);
+    }
+
+    if !user_is_locked(db_user, connection).await? {
+        anyhow::bail!("User '{}' is already unlocked", db_user);
+    }
+
+    // NOTE: see the note about SQL injections in `validate_ownership_of_user_name`
+    sqlx::query(format!("ALTER USER {}@'%' ACCOUNT UNLOCK", quote_literal(db_user),).as_str())
+        .execute(connection)
+        .await?;
+
+    Ok(())
+}
+
 /// This struct contains information about a database user.
 /// This can be extended if we need more information in the future.
 #[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
@@ -111,9 +184,27 @@ pub struct DatabaseUser {
     #[sqlx(rename = "Host")]
     pub host: String,
 
-    #[sqlx(rename = "`Password` != '' OR `authentication_string` != ''")]
+    #[sqlx(rename = "has_password")]
     pub has_password: bool,
+
+    #[sqlx(rename = "is_locked")]
+    pub is_locked: bool,
 }
+
+const DB_USER_SELECT_STATEMENT: &str = r#"
+SELECT
+  `mysql`.`user`.`User`,
+  `mysql`.`user`.`Host`,
+  `mysql`.`user`.`Password` != '' OR `mysql`.`user`.`authentication_string` != '' AS `has_password`,
+  COALESCE(
+    JSON_EXTRACT(`mysql`.`global_priv`.`priv`, "$.account_locked"),
+    'false'
+  ) != 'false' AS `is_locked`
+FROM `mysql`.`user`
+JOIN `mysql`.`global_priv` ON
+  `mysql`.`user`.`User` = `mysql`.`global_priv`.`User`
+  AND `mysql`.`user`.`Host` = `mysql`.`global_priv`.`Host`
+"#;
 
 /// This function fetches all database users that have a prefix matching the
 /// unix username and group names of the given unix user.
@@ -122,14 +213,7 @@ pub async fn get_all_database_users_for_unix_user(
     connection: &mut MySqlConnection,
 ) -> anyhow::Result<Vec<DatabaseUser>> {
     let users = sqlx::query_as::<_, DatabaseUser>(
-        r#"
-          SELECT
-            `User`,
-            `Host`,
-            `Password` != '' OR `authentication_string` != ''
-          FROM `mysql`.`user`
-          WHERE `User` REGEXP ?
-        "#,
+        &(DB_USER_SELECT_STATEMENT.to_string() + "WHERE `mysql`.`user`.`User` REGEXP ?"),
     )
     .bind(create_user_group_matching_regex(unix_user))
     .fetch_all(connection)
@@ -144,14 +228,7 @@ pub async fn get_database_user_for_user(
     connection: &mut MySqlConnection,
 ) -> anyhow::Result<Option<DatabaseUser>> {
     let user = sqlx::query_as::<_, DatabaseUser>(
-        r#"
-          SELECT
-            `User`,
-            `Host`,
-            `Password` != '' OR `authentication_string` != ''
-          FROM `mysql`.`user`
-          WHERE `User` = ?
-        "#,
+        &(DB_USER_SELECT_STATEMENT.to_string() + "WHERE `mysql`.`user`.`User` = ?"),
     )
     .bind(username)
     .fetch_optional(connection)
