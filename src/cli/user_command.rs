@@ -20,6 +20,7 @@ pub struct UserArgs {
     subcmd: UserCommand,
 }
 
+#[allow(clippy::enum_variant_names)]
 #[derive(Parser)]
 pub enum UserCommand {
     /// Create one or more users

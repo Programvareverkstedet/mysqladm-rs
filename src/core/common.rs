@@ -25,17 +25,16 @@ pub fn get_unix_groups(user: &User) -> anyhow::Result<Vec<Group>> {
         CString::new(user.name.as_bytes()).context("Failed to convert username to CStr")?;
     let groups = nix::unistd::getgrouplist(&user_cstr, user.gid)?
         .iter()
-        .filter_map(|gid| {
-            match Group::from_gid(*gid).map_err(|e| {
-                log::trace!(
+        .filter_map(|gid| match Group::from_gid(*gid) {
+            Ok(Some(group)) => Some(group),
+            Ok(None) => None,
+            Err(e) => {
+                log::warn!(
                     "Failed to look up group with GID {}: {}\nIgnoring...",
                     gid,
                     e
                 );
-                e
-            }) {
-                Ok(Some(group)) => Some(group),
-                _ => None,
+                None
             }
         })
         .collect::<Vec<Group>>();
