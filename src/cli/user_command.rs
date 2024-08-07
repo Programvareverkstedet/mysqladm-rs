@@ -38,6 +38,10 @@ pub enum UserCommand {
 pub struct UserCreateArgs {
     #[arg(num_args = 1..)]
     username: Vec<String>,
+
+    /// Do not ask for a password, leave it unset
+    #[clap(long)]
+    no_password: bool,
 }
 
 #[derive(Parser)]
@@ -81,8 +85,30 @@ async fn create_users(args: UserCreateArgs, conn: &mut MySqlConnection) -> anyho
     for username in args.username {
         if let Err(e) = crate::core::user_operations::create_database_user(&username, conn).await {
             eprintln!("{}", e);
-            eprintln!("Skipping...");
+            eprintln!("Skipping...\n");
+            continue;
+        } else {
+            println!("User '{}' created.", username);
         }
+
+        if !args.no_password
+            && Confirm::new()
+                .with_prompt(format!(
+                    "Do you want to set a password for user '{}'?",
+                    username
+                ))
+                .interact()?
+        {
+            change_password_for_user(
+                UserPasswdArgs {
+                    username,
+                    password_file: None,
+                },
+                conn,
+            )
+            .await?;
+        }
+        println!("");
     }
     Ok(())
 }
