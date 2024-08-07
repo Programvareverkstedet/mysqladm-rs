@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use anyhow::Context;
-use indoc::indoc;
+use indoc::{formatdoc, indoc};
 use itertools::Itertools;
 use nix::unistd::User;
 use serde::{Deserialize, Serialize};
@@ -75,6 +75,37 @@ pub async fn get_database_list(conn: &mut MySqlConnection) -> anyhow::Result<Vec
     ))?;
 
     Ok(databases.into_iter().map(|d| d.database).collect())
+}
+
+pub async fn get_databases_where_user_has_privileges(
+    username: &str,
+    conn: &mut MySqlConnection,
+) -> anyhow::Result<Vec<String>> {
+    let result = sqlx::query(
+        formatdoc!(
+            r#"
+            SELECT `db` AS `database`
+            FROM `db`
+            WHERE `user` = ?
+              AND ({})
+        "#,
+            DATABASE_PRIVILEGE_FIELDS
+                .iter()
+                .map(|field| format!("`{}` = 'Y'", field))
+                .join(" OR "),
+        )
+        .as_str(),
+    )
+    .bind(username)
+    .fetch_all(conn)
+    .await?
+    .into_iter()
+    .map(|databases| {
+        databases.try_get::<String, _>("database").unwrap()
+    })
+    .collect();
+
+    Ok(result)
 }
 
 pub const DATABASE_PRIVILEGE_FIELDS: [&str; 13] = [

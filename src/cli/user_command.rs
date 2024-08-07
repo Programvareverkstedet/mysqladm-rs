@@ -1,11 +1,18 @@
+use std::collections::BTreeMap;
 use std::vec;
 
 use anyhow::Context;
 use clap::Parser;
 use dialoguer::{Confirm, Password};
+use prettytable::Table;
+use serde_json::json;
 use sqlx::{Connection, MySqlConnection};
 
-use crate::core::{common::close_database_connection, user_operations::validate_user_name};
+use crate::core::{
+    common::close_database_connection,
+    database_operations::get_databases_where_user_has_privileges,
+    user_operations::validate_user_name,
+};
 
 #[derive(Parser)]
 pub struct UserArgs {
@@ -196,20 +203,47 @@ async fn show_users(args: UserShowArgs, conn: &mut MySqlConnection) -> anyhow::R
         result
     };
 
+    let mut user_databases: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    for user in users.iter() {
+        user_databases.insert(
+            user.user.clone(),
+            get_databases_where_user_has_privileges(&user.user, conn).await?,
+        );
+    }
+
     if args.json {
-        println!("{}", serde_json::to_string_pretty(&users)?);
+        let users_json = users
+            .into_iter()
+            .map(|user| {
+                json!({
+                    "user": user.user,
+                    "has_password": user.has_password,
+                    "databases": user_databases.get(&user.user).unwrap_or(&vec![]),
+                })
+            })
+            .collect::<serde_json::Value>();
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&users_json)
+                .context("Failed to serialize users to JSON")?
+        );
+    } else if users.is_empty() {
+        println!("No users found.");
     } else {
+        let mut table = Table::new();
+        table.add_row(row![
+            "User",
+            "Password is set",
+            "Databases where user has privileges"
+        ]);
         for user in users {
-            println!(
-                "User '{}': {}",
-                &user.user,
-                if user.has_password {
-                    "password set."
-                } else {
-                    "no password set."
-                }
-            );
+            table.add_row(row![
+                user.user,
+                user.has_password,
+                user_databases.get(&user.user).unwrap_or(&vec![]).join("\n")
+            ]);
         }
+        table.printstd();
     }
 
     Ok(())
