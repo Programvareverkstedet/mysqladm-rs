@@ -7,12 +7,9 @@ use prettytable::{Cell, Row, Table};
 use sqlx::{Connection, MySqlConnection};
 
 use crate::core::{
-    self,
-    common::{close_database_connection, get_current_unix_user},
-    database_operations::{
-        apply_permission_diffs, db_priv_field_human_readable_name, diff_permissions, yn,
-        DatabasePrivileges, DATABASE_PRIVILEGE_FIELDS,
-    },
+    common::{close_database_connection, get_current_unix_user, yn},
+    database_operations::*,
+    database_privilege_operations::*,
     user_operations::user_exists,
 };
 
@@ -174,7 +171,7 @@ async fn create_databases(
 
     for name in args.name {
         // TODO: This can be optimized by fetching all the database privileges in one query.
-        if let Err(e) = core::database_operations::create_database(&name, conn).await {
+        if let Err(e) = create_database(&name, conn).await {
             eprintln!("Failed to create database '{}': {}", name, e);
             eprintln!("Skipping...");
         }
@@ -190,7 +187,7 @@ async fn drop_databases(args: DatabaseDropArgs, conn: &mut MySqlConnection) -> a
 
     for name in args.name {
         // TODO: This can be optimized by fetching all the database privileges in one query.
-        if let Err(e) = core::database_operations::drop_database(&name, conn).await {
+        if let Err(e) = drop_database(&name, conn).await {
             eprintln!("Failed to drop database '{}': {}", name, e);
             eprintln!("Skipping...");
         }
@@ -200,7 +197,7 @@ async fn drop_databases(args: DatabaseDropArgs, conn: &mut MySqlConnection) -> a
 }
 
 async fn list_databases(args: DatabaseListArgs, conn: &mut MySqlConnection) -> anyhow::Result<()> {
-    let databases = core::database_operations::get_database_list(conn).await?;
+    let databases = get_database_list(conn).await?;
 
     if databases.is_empty() {
         println!("No databases to show.");
@@ -223,12 +220,12 @@ async fn show_databases(
     conn: &mut MySqlConnection,
 ) -> anyhow::Result<()> {
     let database_users_to_show = if args.name.is_empty() {
-        core::database_operations::get_all_database_privileges(conn).await?
+        get_all_database_privileges(conn).await?
     } else {
         // TODO: This can be optimized by fetching all the database privileges in one query.
         let mut result = Vec::with_capacity(args.name.len());
         for name in args.name {
-            match core::database_operations::get_database_privileges(&name, conn).await {
+            match get_database_privileges(&name, conn).await {
                 Ok(db) => result.extend(db),
                 Err(e) => {
                     eprintln!("Failed to show database '{}': {}", name, e);
@@ -280,7 +277,7 @@ async fn show_databases(
 }
 
 /// See documentation for `DatabaseCommand::EditPerm`.
-fn parse_permission_table_cli_arg(arg: &str) -> anyhow::Result<DatabasePrivileges> {
+fn parse_permission_table_cli_arg(arg: &str) -> anyhow::Result<DatabasePrivilegeRow> {
     let parts: Vec<&str> = arg.split(':').collect();
     if parts.len() != 3 {
         anyhow::bail!("Invalid argument format. See `edit-perm --help` for more information.");
@@ -290,7 +287,7 @@ fn parse_permission_table_cli_arg(arg: &str) -> anyhow::Result<DatabasePrivilege
     let user = parts[1].to_string();
     let privs = parts[2].to_string();
 
-    let mut result = DatabasePrivileges {
+    let mut result = DatabasePrivilegeRow {
         db,
         user,
         select_priv: false,
@@ -347,7 +344,7 @@ fn parse_permission(yn: &str) -> anyhow::Result<bool> {
     }
 }
 
-fn parse_permission_data_from_editor(content: String) -> anyhow::Result<Vec<DatabasePrivileges>> {
+fn parse_permission_data_from_editor(content: String) -> anyhow::Result<Vec<DatabasePrivilegeRow>> {
     content
         .trim()
         .split('\n')
@@ -360,7 +357,7 @@ fn parse_permission_data_from_editor(content: String) -> anyhow::Result<Vec<Data
                 anyhow::bail!("")
             }
 
-            Ok(DatabasePrivileges {
+            Ok(DatabasePrivilegeRow {
                 db: (*line_parts.first().unwrap()).to_owned(),
                 user: (*line_parts.get(1).unwrap()).to_owned(),
                 select_priv: parse_permission(line_parts.get(2).unwrap())
@@ -387,11 +384,11 @@ fn parse_permission_data_from_editor(content: String) -> anyhow::Result<Vec<Data
                     .context("Could not parse REFERENCES privilege")?,
             })
         })
-        .collect::<anyhow::Result<Vec<DatabasePrivileges>>>()
+        .collect::<anyhow::Result<Vec<DatabasePrivilegeRow>>>()
 }
 
 fn format_privileges_line(
-    privs: &DatabasePrivileges,
+    privs: &DatabasePrivilegeRow,
     username_len: usize,
     database_name_len: usize,
 ) -> String {
@@ -420,9 +417,9 @@ pub async fn edit_permissions(
     conn: &mut MySqlConnection,
 ) -> anyhow::Result<()> {
     let permission_data = if let Some(name) = &args.name {
-        core::database_operations::get_database_privileges(name, conn).await?
+        get_database_privileges(name, conn).await?
     } else {
-        core::database_operations::get_all_database_privileges(conn).await?
+        get_all_database_privileges(conn).await?
     };
 
     let permissions_to_change = if !args.perm.is_empty() {
@@ -433,7 +430,7 @@ pub async fn edit_permissions(
                     parse_permission_table_cli_arg(&format!("{}:{}", name, &perm))
                         .context(format!("Failed parsing database permissions: `{}`", &perm))
                 })
-                .collect::<anyhow::Result<Vec<DatabasePrivileges>>>()?
+                .collect::<anyhow::Result<Vec<DatabasePrivilegeRow>>>()?
         } else {
             args.perm
                 .iter()
@@ -441,7 +438,7 @@ pub async fn edit_permissions(
                     parse_permission_table_cli_arg(perm)
                         .context(format!("Failed parsing database permissions: `{}`", &perm))
                 })
-                .collect::<anyhow::Result<Vec<DatabasePrivileges>>>()?
+                .collect::<anyhow::Result<Vec<DatabasePrivilegeRow>>>()?
         }
     } else {
         let comment = indoc! {r#"
@@ -479,7 +476,7 @@ pub async fn edit_permissions(
         header[1] = format!("{:width$}", header[1], width = longest_username);
 
         let example_line = format_privileges_line(
-            &DatabasePrivileges {
+            &DatabasePrivilegeRow {
                 db: example_db,
                 user: example_user,
                 select_priv: true,

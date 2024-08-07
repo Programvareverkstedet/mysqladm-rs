@@ -161,3 +161,24 @@ pub fn quote_literal(s: &str) -> String {
 pub fn quote_identifier(s: &str) -> String {
     format!("`{}`", s.replace('`', r"\`"))
 }
+
+#[inline]
+pub(crate) fn yn(b: bool) -> &'static str {
+    if b {
+        "Y"
+    } else {
+        "N"
+    }
+}
+
+#[inline]
+pub(crate) fn rev_yn(s: &str) -> bool {
+    match s.to_lowercase().as_str() {
+        "y" => true,
+        "n" => false,
+        _ => {
+            log::warn!("Invalid value for privilege: {}", s);
+            false
+        }
+    }
+}

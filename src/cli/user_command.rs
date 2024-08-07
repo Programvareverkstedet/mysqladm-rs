@@ -9,9 +9,9 @@ use serde_json::json;
 use sqlx::{Connection, MySqlConnection};
 
 use crate::core::{
-    common::close_database_connection,
-    database_operations::get_databases_where_user_has_privileges,
-    user_operations::validate_user_name,
+    common::{close_database_connection, get_current_unix_user},
+    database_operations::*,
+    user_operations::*,
 };
 
 #[derive(Parser)]
@@ -99,7 +99,7 @@ async fn create_users(args: UserCreateArgs, conn: &mut MySqlConnection) -> anyho
     }
 
     for username in args.username {
-        if let Err(e) = crate::core::user_operations::create_database_user(&username, conn).await {
+        if let Err(e) = create_database_user(&username, conn).await {
             eprintln!("{}", e);
             eprintln!("Skipping...\n");
             continue;
@@ -135,7 +135,7 @@ async fn drop_users(args: UserDeleteArgs, conn: &mut MySqlConnection) -> anyhow:
     }
 
     for username in args.username {
-        if let Err(e) = crate::core::user_operations::delete_database_user(&username, conn).await {
+        if let Err(e) = delete_database_user(&username, conn).await {
             eprintln!("{}", e);
             eprintln!("Skipping...");
         }
@@ -160,7 +160,7 @@ async fn change_password_for_user(
 ) -> anyhow::Result<()> {
     // NOTE: although this also is checked in `set_password_for_database_user`, we check it here
     //       to provide a more natural order of error messages.
-    let unix_user = crate::core::common::get_current_unix_user()?;
+    let unix_user = get_current_unix_user()?;
     validate_user_name(&args.username, &unix_user)?;
 
     let password = if let Some(password_file) = args.password_file {
@@ -172,17 +172,16 @@ async fn change_password_for_user(
         read_password_from_stdin_with_double_check(&args.username)?
     };
 
-    crate::core::user_operations::set_password_for_database_user(&args.username, &password, conn)
-        .await?;
+    set_password_for_database_user(&args.username, &password, conn).await?;
 
     Ok(())
 }
 
 async fn show_users(args: UserShowArgs, conn: &mut MySqlConnection) -> anyhow::Result<()> {
-    let unix_user = crate::core::common::get_current_unix_user()?;
+    let unix_user = get_current_unix_user()?;
 
     let users = if args.username.is_empty() {
-        crate::core::user_operations::get_all_database_users_for_unix_user(&unix_user, conn).await?
+        get_all_database_users_for_unix_user(&unix_user, conn).await?
     } else {
         let mut result = vec![];
         for username in args.username {
@@ -192,8 +191,7 @@ async fn show_users(args: UserShowArgs, conn: &mut MySqlConnection) -> anyhow::R
                 continue;
             }
 
-            let user =
-                crate::core::user_operations::get_database_user_for_user(&username, conn).await?;
+            let user = get_database_user_for_user(&username, conn).await?;
             if let Some(user) = user {
                 result.push(user);
             } else {

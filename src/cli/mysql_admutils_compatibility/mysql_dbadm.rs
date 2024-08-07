@@ -7,8 +7,10 @@ use crate::{
         mysql_admutils_compatibility::common::{filter_db_or_user_names, DbOrUser},
     },
     core::{
+        common::yn,
         config::{get_config, mysql_connection_from_config, GlobalConfigArgs},
-        database_operations::{self, yn},
+        database_operations::{create_database, drop_database, get_database_list},
+        database_privilege_operations,
     },
 };
 
@@ -129,20 +131,20 @@ pub async fn main() -> anyhow::Result<()> {
         Command::Create(args) => {
             let filtered_names = filter_db_or_user_names(args.name, DbOrUser::Database)?;
             for name in filtered_names {
-                database_operations::create_database(&name, &mut connection).await?;
+                create_database(&name, &mut connection).await?;
                 println!("Database {} created.", name);
             }
         }
         Command::Drop(args) => {
             let filtered_names = filter_db_or_user_names(args.name, DbOrUser::Database)?;
             for name in filtered_names {
-                database_operations::drop_database(&name, &mut connection).await?;
+                drop_database(&name, &mut connection).await?;
                 println!("Database {} dropped.", name);
             }
         }
         Command::Show(args) => {
             let names = if args.name.is_empty() {
-                database_operations::get_database_list(&mut connection).await?
+                get_database_list(&mut connection).await?
             } else {
                 filter_db_or_user_names(args.name, DbOrUser::Database)?
             };
@@ -176,7 +178,7 @@ async fn show_db(name: &str, conn: &mut MySqlConnection) -> anyhow::Result<()> {
     //       for non-existent databases will report with no users.
     //       This function should *not* check for db existence, only
     //       validate the names.
-    let permissions = database_operations::get_database_privileges(name, conn)
+    let permissions = database_privilege_operations::get_database_privileges(name, conn)
         .await
         .unwrap_or(vec![]);
 

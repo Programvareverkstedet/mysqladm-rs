@@ -100,6 +100,7 @@ pub struct DatabaseUser {
     #[sqlx(rename = "User")]
     pub user: String,
 
+    #[allow(dead_code)]
     #[serde(skip)]
     #[sqlx(rename = "Host")]
     pub host: String,
