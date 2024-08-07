@@ -172,13 +172,10 @@ pub(crate) fn yn(b: bool) -> &'static str {
 }
 
 #[inline]
-pub(crate) fn rev_yn(s: &str) -> bool {
+pub(crate) fn rev_yn(s: &str) -> Option<bool> {
     match s.to_lowercase().as_str() {
-        "y" => true,
-        "n" => false,
-        _ => {
-            log::warn!("Invalid value for privilege: {}", s);
-            false
-        }
+        "y" => Some(true),
+        "n" => Some(false),
+        _ => None,
     }
 }

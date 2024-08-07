@@ -15,7 +15,7 @@
 
 use std::collections::HashMap;
 
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 use indoc::indoc;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
@@ -123,22 +123,33 @@ impl DatabasePrivilegeRow {
     }
 }
 
+#[inline]
+fn get_row_priv_field(row: &MySqlRow, field: &str) -> Result<bool, sqlx::Error> {
+    match rev_yn(row.try_get(field)?) {
+        Some(val) => Ok(val),
+        _ => {
+            log::warn!("Invalid value for privilege: {}", field);
+            Ok(false)
+        }
+    }
+}
+
 impl FromRow<'_, MySqlRow> for DatabasePrivilegeRow {
     fn from_row(row: &MySqlRow) -> Result<Self, sqlx::Error> {
         Ok(Self {
             db: row.try_get("db")?,
             user: row.try_get("user")?,
-            select_priv: row.try_get("select_priv").map(rev_yn)?,
-            insert_priv: row.try_get("insert_priv").map(rev_yn)?,
-            update_priv: row.try_get("update_priv").map(rev_yn)?,
-            delete_priv: row.try_get("delete_priv").map(rev_yn)?,
-            create_priv: row.try_get("create_priv").map(rev_yn)?,
-            drop_priv: row.try_get("drop_priv").map(rev_yn)?,
-            alter_priv: row.try_get("alter_priv").map(rev_yn)?,
-            index_priv: row.try_get("index_priv").map(rev_yn)?,
-            create_tmp_table_priv: row.try_get("create_tmp_table_priv").map(rev_yn)?,
-            lock_tables_priv: row.try_get("lock_tables_priv").map(rev_yn)?,
-            references_priv: row.try_get("references_priv").map(rev_yn)?,
+            select_priv: get_row_priv_field(row, "select_priv")?,
+            insert_priv: get_row_priv_field(row, "insert_priv")?,
+            update_priv: get_row_priv_field(row, "update_priv")?,
+            delete_priv: get_row_priv_field(row, "delete_priv")?,
+            create_priv: get_row_priv_field(row, "create_priv")?,
+            drop_priv: get_row_priv_field(row, "drop_priv")?,
+            alter_priv: get_row_priv_field(row, "alter_priv")?,
+            index_priv: get_row_priv_field(row, "index_priv")?,
+            create_tmp_table_priv: get_row_priv_field(row, "create_tmp_table_priv")?,
+            lock_tables_priv: get_row_priv_field(row, "lock_tables_priv")?,
+            references_priv: get_row_priv_field(row, "references_priv")?,
         })
     }
 }
@@ -191,9 +202,239 @@ pub async fn get_all_database_privileges(
     Ok(result)
 }
 
-/*******************/
-/* PRIVILEGE DIFFS */
-/*******************/
+/*************************/
+/* CLI INTERFACE PARSING */
+/*************************/
+
+/// See documentation for `DatabaseCommand::EditDbPrivs`.
+pub fn parse_privilege_table_cli_arg(arg: &str) -> anyhow::Result<DatabasePrivilegeRow> {
+    let parts: Vec<&str> = arg.split(':').collect();
+    if parts.len() != 3 {
+        anyhow::bail!("Invalid argument format. See `edit-db-privs --help` for more information.");
+    }
+
+    let db = parts[0].to_string();
+    let user = parts[1].to_string();
+    let privs = parts[2].to_string();
+
+    let mut result = DatabasePrivilegeRow {
+        db,
+        user,
+        select_priv: false,
+        insert_priv: false,
+        update_priv: false,
+        delete_priv: false,
+        create_priv: false,
+        drop_priv: false,
+        alter_priv: false,
+        index_priv: false,
+        create_tmp_table_priv: false,
+        lock_tables_priv: false,
+        references_priv: false,
+    };
+
+    for char in privs.chars() {
+        match char {
+            's' => result.select_priv = true,
+            'i' => result.insert_priv = true,
+            'u' => result.update_priv = true,
+            'd' => result.delete_priv = true,
+            'c' => result.create_priv = true,
+            'D' => result.drop_priv = true,
+            'a' => result.alter_priv = true,
+            'I' => result.index_priv = true,
+            't' => result.create_tmp_table_priv = true,
+            'l' => result.lock_tables_priv = true,
+            'r' => result.references_priv = true,
+            'A' => {
+                result.select_priv = true;
+                result.insert_priv = true;
+                result.update_priv = true;
+                result.delete_priv = true;
+                result.create_priv = true;
+                result.drop_priv = true;
+                result.alter_priv = true;
+                result.index_priv = true;
+                result.create_tmp_table_priv = true;
+                result.lock_tables_priv = true;
+                result.references_priv = true;
+            }
+            _ => anyhow::bail!("Invalid privilege character: {}", char),
+        }
+    }
+
+    Ok(result)
+}
+
+/**********************************/
+/* EDITOR CONTENT PARSING/DISPLAY */
+/**********************************/
+
+// TODO: merge with `rev_yn` in `common.rs`
+
+fn parse_privilege(yn: &str) -> anyhow::Result<bool> {
+    match yn.to_ascii_lowercase().as_str() {
+        "y" => Ok(true),
+        "n" => Ok(false),
+        _ => Err(anyhow!("Expected Y or N, found {}", yn)),
+    }
+}
+
+pub fn parse_privilege_data_from_editor_content(
+    content: String,
+) -> anyhow::Result<Vec<DatabasePrivilegeRow>> {
+    content
+        .trim()
+        .split('\n')
+        .map(|line| line.trim())
+        .filter(|line| !(line.starts_with('#') || line.starts_with("//") || line == &""))
+        .skip(1)
+        .map(|line| {
+            let line_parts: Vec<&str> = line.trim().split_ascii_whitespace().collect();
+            if line_parts.len() != DATABASE_PRIVILEGE_FIELDS.len() {
+                anyhow::bail!("")
+            }
+
+            Ok(DatabasePrivilegeRow {
+                db: (*line_parts.first().unwrap()).to_owned(),
+                user: (*line_parts.get(1).unwrap()).to_owned(),
+                select_priv: parse_privilege(line_parts.get(2).unwrap())
+                    .context("Could not parse SELECT privilege")?,
+                insert_priv: parse_privilege(line_parts.get(3).unwrap())
+                    .context("Could not parse INSERT privilege")?,
+                update_priv: parse_privilege(line_parts.get(4).unwrap())
+                    .context("Could not parse UPDATE privilege")?,
+                delete_priv: parse_privilege(line_parts.get(5).unwrap())
+                    .context("Could not parse DELETE privilege")?,
+                create_priv: parse_privilege(line_parts.get(6).unwrap())
+                    .context("Could not parse CREATE privilege")?,
+                drop_priv: parse_privilege(line_parts.get(7).unwrap())
+                    .context("Could not parse DROP privilege")?,
+                alter_priv: parse_privilege(line_parts.get(8).unwrap())
+                    .context("Could not parse ALTER privilege")?,
+                index_priv: parse_privilege(line_parts.get(9).unwrap())
+                    .context("Could not parse INDEX privilege")?,
+                create_tmp_table_priv: parse_privilege(line_parts.get(10).unwrap())
+                    .context("Could not parse CREATE TEMPORARY TABLE privilege")?,
+                lock_tables_priv: parse_privilege(line_parts.get(11).unwrap())
+                    .context("Could not parse LOCK TABLES privilege")?,
+                references_priv: parse_privilege(line_parts.get(12).unwrap())
+                    .context("Could not parse REFERENCES privilege")?,
+            })
+        })
+        .collect::<anyhow::Result<Vec<DatabasePrivilegeRow>>>()
+}
+
+/// Generates a single row of the privileges table for the editor.
+pub fn format_privileges_line(
+    privs: &DatabasePrivilegeRow,
+    username_len: usize,
+    database_name_len: usize,
+) -> String {
+    // Format a privileges line by padding each value with spaces
+    // The first two fields are padded to the length of the longest username and database name
+    // The remaining fields are padded to the length of the corresponding field name
+
+    DATABASE_PRIVILEGE_FIELDS
+        .into_iter()
+        .map(|field| match field {
+            "db" => format!("{:width$}", privs.db, width = database_name_len),
+            "user" => format!("{:width$}", privs.user, width = username_len),
+            privilege => format!(
+                "{:width$}",
+                yn(privs.get_privilege_by_name(privilege)),
+                width = db_priv_field_human_readable_name(privilege).len()
+            ),
+        })
+        .join(" ")
+        .trim()
+        .to_string()
+}
+
+const EDITOR_COMMENT: &str = r#"
+# Welcome to the privilege editor.
+# Each line defines what privileges a single user has on a single database.
+# The first two columns respectively represent the database name and the user, and the remaining columns are the privileges.
+# If the user should have a certain privilege, write 'Y', otherwise write 'N'.
+#
+# Lines starting with '#' are comments and will be ignored.
+"#;
+
+/// Generates the content for the privilege editor.
+///
+/// The unix user is used in case there are no privileges to edit,
+/// so that the user can see an example line based on their username.
+pub fn generate_editor_content_from_privilege_data(
+    privilege_data: &[DatabasePrivilegeRow],
+    unix_user: &str,
+) -> String {
+    let example_user = format!("{}_user", unix_user);
+    let example_db = format!("{}_db", unix_user);
+
+    // NOTE: `.max()`` fails when the iterator is empty.
+    //       In this case, we know that the only fields in the
+    //       editor will be the example user and example db name.
+    //       Hence, it's put as the fallback value, despite not really
+    //       being a "fallback" in the normal sense.
+    let longest_username = privilege_data
+        .iter()
+        .map(|p| p.user.len())
+        .max()
+        .unwrap_or(example_user.len());
+
+    let longest_database_name = privilege_data
+        .iter()
+        .map(|p| p.db.len())
+        .max()
+        .unwrap_or(example_db.len());
+
+    let mut header: Vec<_> = DATABASE_PRIVILEGE_FIELDS
+        .into_iter()
+        .map(db_priv_field_human_readable_name)
+        .collect();
+
+    // Pad the first two columns with spaces to align the privileges.
+    header[0] = format!("{:width$}", header[0], width = longest_database_name);
+    header[1] = format!("{:width$}", header[1], width = longest_username);
+
+    let example_line = format_privileges_line(
+        &DatabasePrivilegeRow {
+            db: example_db,
+            user: example_user,
+            select_priv: true,
+            insert_priv: true,
+            update_priv: true,
+            delete_priv: true,
+            create_priv: false,
+            drop_priv: false,
+            alter_priv: false,
+            index_priv: false,
+            create_tmp_table_priv: false,
+            lock_tables_priv: false,
+            references_priv: false,
+        },
+        longest_username,
+        longest_database_name,
+    );
+
+    format!(
+        "{}\n{}\n{}",
+        EDITOR_COMMENT,
+        header.join(" "),
+        if privilege_data.is_empty() {
+            format!("# {}", example_line)
+        } else {
+            privilege_data
+                .iter()
+                .map(|privs| format_privileges_line(privs, longest_username, longest_database_name))
+                .join("\n")
+        }
+    )
+}
+
+/*****************************/
+/* CALCULATE PRIVILEGE DIFFS */
+/*****************************/
 
 /// This struct represents encapsulates the differences between two
 /// instances of privilege sets for a single user on a single database.
@@ -206,7 +447,7 @@ pub struct DatabasePrivilegeRowDiff {
     pub diff: Vec<DatabasePrivilegeChange>,
 }
 
-/// This enum represents a change in a single privilege.
+/// This enum represents a change for a single privilege.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum DatabasePrivilegeChange {
     YesToNo(String),
@@ -223,6 +464,7 @@ impl DatabasePrivilegeChange {
     }
 }
 
+/// This enum encapsulates whether a [`DatabasePrivilegeRow`] was intrduced, modified or deleted.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum DatabasePrivilegesDiff {
     New(DatabasePrivilegeRow),
@@ -230,7 +472,7 @@ pub enum DatabasePrivilegesDiff {
     Deleted(DatabasePrivilegeRow),
 }
 
-pub async fn diff_privileges(
+pub fn diff_privileges(
     from: Vec<DatabasePrivilegeRow>,
     to: &[DatabasePrivilegeRow],
 ) -> Vec<DatabasePrivilegesDiff> {
@@ -268,6 +510,7 @@ pub async fn diff_privileges(
     result
 }
 
+/// Uses the resulting diffs to make modifications to the database.
 pub async fn apply_privilege_diffs(
     diffs: Vec<DatabasePrivilegesDiff>,
     connection: &mut MySqlConnection,
@@ -333,6 +576,10 @@ pub async fn apply_privilege_diffs(
     Ok(())
 }
 
+/*********/
+/* TESTS */
+/*********/
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -351,8 +598,8 @@ mod tests {
         assert_eq!(DatabasePrivilegeChange::new(false, false, "test"), None);
     }
 
-    #[tokio::test]
-    async fn test_diff_privileges() {
+    #[test]
+    fn test_diff_privileges() {
         let from = vec![DatabasePrivilegeRow {
             db: "db".to_owned(),
             user: "user".to_owned(),
@@ -363,39 +610,74 @@ mod tests {
             create_priv: true,
             drop_priv: true,
             alter_priv: true,
-            index_priv: true,
+            index_priv: false,
             create_tmp_table_priv: true,
             lock_tables_priv: true,
-            references_priv: true,
+            references_priv: false,
         }];
 
-        let to = vec![DatabasePrivilegeRow {
-            db: "db".to_owned(),
-            user: "user".to_owned(),
-            select_priv: false,
-            insert_priv: true,
-            update_priv: true,
-            delete_priv: true,
-            create_priv: true,
-            drop_priv: true,
-            alter_priv: true,
-            index_priv: true,
-            create_tmp_table_priv: true,
-            lock_tables_priv: true,
-            references_priv: true,
-        }];
+        let mut to = from.clone();
+        to[0].select_priv = false;
+        to[0].insert_priv = false;
+        to[0].index_priv = true;
 
-        let diffs = diff_privileges(from, &to).await;
+        let diffs = diff_privileges(from, &to);
 
         assert_eq!(
             diffs,
             vec![DatabasePrivilegesDiff::Modified(DatabasePrivilegeRowDiff {
                 db: "db".to_owned(),
                 user: "user".to_owned(),
-                diff: vec![DatabasePrivilegeChange::YesToNo("select_priv".to_owned())],
+                diff: vec![
+                    DatabasePrivilegeChange::YesToNo("select_priv".to_owned()),
+                    DatabasePrivilegeChange::YesToNo("insert_priv".to_owned()),
+                    DatabasePrivilegeChange::NoToYes("index_priv".to_owned()),
+                ],
             })]
         );
 
         assert!(matches!(&diffs[0], DatabasePrivilegesDiff::Modified(_)));
+    }
+
+    #[test]
+    fn ensure_generated_and_parsed_editor_content_is_equal() {
+        let permissions = vec![
+            DatabasePrivilegeRow {
+                db: "db".to_owned(),
+                user: "user".to_owned(),
+                select_priv: true,
+                insert_priv: true,
+                update_priv: true,
+                delete_priv: true,
+                create_priv: true,
+                drop_priv: true,
+                alter_priv: true,
+                index_priv: true,
+                create_tmp_table_priv: true,
+                lock_tables_priv: true,
+                references_priv: true,
+            },
+            DatabasePrivilegeRow {
+                db: "db2".to_owned(),
+                user: "user2".to_owned(),
+                select_priv: false,
+                insert_priv: false,
+                update_priv: false,
+                delete_priv: false,
+                create_priv: false,
+                drop_priv: false,
+                alter_priv: false,
+                index_priv: false,
+                create_tmp_table_priv: false,
+                lock_tables_priv: false,
+                references_priv: false,
+            },
+        ];
+
+        let content = generate_editor_content_from_privilege_data(&permissions, "user");
+
+        let parsed_permissions = parse_privilege_data_from_editor_content(content).unwrap();
+
+        assert_eq!(permissions, parsed_permissions);
     }
 }
