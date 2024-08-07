@@ -2,9 +2,9 @@ use std::vec;
 
 use anyhow::Context;
 use clap::Parser;
-use sqlx::{Connection, MySqlConnection};
+use sqlx::MySqlConnection;
 
-use crate::core::user_operations::validate_user_name;
+use crate::core::{common::close_database_connection, user_operations::validate_user_name};
 
 #[derive(Parser)]
 pub struct UserArgs {
@@ -67,7 +67,7 @@ pub async fn handle_command(command: UserCommand, mut conn: MySqlConnection) -> 
         UserCommand::ShowUser(args) => show_users(args, &mut conn).await,
     };
 
-    conn.close().await?;
+    close_database_connection(conn).await;
 
     result
 }

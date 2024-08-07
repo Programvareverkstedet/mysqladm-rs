@@ -3,11 +3,11 @@ use clap::Parser;
 use indoc::indoc;
 use itertools::Itertools;
 use prettytable::{Cell, Row, Table};
-use sqlx::{Connection, MySqlConnection};
+use sqlx::MySqlConnection;
 
 use crate::core::{
     self,
-    common::get_current_unix_user,
+    common::{close_database_connection, get_current_unix_user},
     database_operations::{
         apply_permission_diffs, db_priv_field_human_readable_name, diff_permissions, yn,
         DatabasePrivileges, DATABASE_PRIVILEGE_FIELDS,
@@ -155,7 +155,7 @@ pub async fn handle_command(
         DatabaseCommand::EditDbPerm(args) => edit_permissions(args, &mut conn).await,
     };
 
-    conn.close().await?;
+    close_database_connection(conn).await;
 
     result
 }

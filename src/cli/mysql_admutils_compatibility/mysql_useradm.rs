@@ -7,7 +7,7 @@ use crate::{
         user_command,
     },
     core::{
-        common::get_current_unix_user,
+        common::{close_database_connection, get_current_unix_user},
         config::{get_config, mysql_connection_from_config, GlobalConfigArgs},
         user_operations::{
             create_database_user, delete_database_user, get_all_database_users_for_unix_user,
@@ -107,14 +107,16 @@ pub async fn main() -> anyhow::Result<()> {
                 delete_database_user(&name, &mut connection).await?;
             }
         }
-        Command::Passwd(args) => passwd(args, connection).await?,
-        Command::Show(args) => show(args, connection).await?,
+        Command::Passwd(args) => passwd(args, &mut connection).await?,
+        Command::Show(args) => show(args, &mut connection).await?,
     }
+
+    close_database_connection(connection).await;
 
     Ok(())
 }
 
-async fn passwd(args: PasswdArgs, mut connection: MySqlConnection) -> anyhow::Result<()> {
+async fn passwd(args: PasswdArgs, connection: &mut MySqlConnection) -> anyhow::Result<()> {
     let filtered_names = filter_db_or_user_names(args.name, DbOrUser::User)?;
 
     // NOTE: this gets doubly checked during the call to `set_password_for_database_user`.
@@ -123,7 +125,7 @@ async fn passwd(args: PasswdArgs, mut connection: MySqlConnection) -> anyhow::Re
     //       have entered the password twice.
     let mut better_filtered_names = Vec::with_capacity(filtered_names.len());
     for name in filtered_names.into_iter() {
-        if !user_exists(&name, &mut connection).await? {
+        if !user_exists(&name, connection).await? {
             println!(
                 "{}: User '{}' does not exist. You must create it first.",
                 std::env::args()
@@ -138,17 +140,17 @@ async fn passwd(args: PasswdArgs, mut connection: MySqlConnection) -> anyhow::Re
 
     for name in better_filtered_names {
         let password = user_command::read_password_from_stdin_with_double_check(&name)?;
-        set_password_for_database_user(&name, &password, &mut connection).await?;
+        set_password_for_database_user(&name, &password, connection).await?;
         println!("Password updated for user '{}'.", name);
     }
 
     Ok(())
 }
 
-async fn show(args: ShowArgs, mut connection: MySqlConnection) -> anyhow::Result<()> {
+async fn show(args: ShowArgs, connection: &mut MySqlConnection) -> anyhow::Result<()> {
     let users = if args.name.is_empty() {
         let unix_user = get_current_unix_user()?;
-        get_all_database_users_for_unix_user(&unix_user, &mut connection)
+        get_all_database_users_for_unix_user(&unix_user, connection)
             .await?
             .into_iter()
             .map(|u| u.user)
@@ -158,7 +160,7 @@ async fn show(args: ShowArgs, mut connection: MySqlConnection) -> anyhow::Result
     };
 
     for user in users {
-        let password_is_set = password_is_set_for_database_user(&user, &mut connection).await?;
+        let password_is_set = password_is_set_for_database_user(&user, connection).await?;
 
         match password_is_set {
             Some(true) => println!("User '{}': password set.", user),

@@ -2,6 +2,7 @@ use anyhow::Context;
 use indoc::indoc;
 use itertools::Itertools;
 use nix::unistd::{getuid, Group, User};
+use sqlx::{Connection, MySqlConnection};
 
 #[cfg(not(target_os = "macos"))]
 use std::ffi::CString;
@@ -138,6 +139,13 @@ pub fn validate_ownership_by_user_prefix<'a>(
     }
 
     Ok(prefix)
+}
+
+pub async fn close_database_connection(conn: MySqlConnection) {
+    if let Err(e) = conn.close().await.context("Failed to close connection properly") {
+        eprintln!("{}", e);
+        eprintln!("Ignoring...");
+    }
 }
 
 pub fn quote_literal(s: &str) -> String {
