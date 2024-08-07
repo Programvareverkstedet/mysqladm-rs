@@ -16,9 +16,6 @@ use crate::core::{
     user_operations::user_exists,
 };
 
-// TODO: Support batch creation/dropping,showing of databases,
-//       using a comma-separated list of database names.
-
 #[derive(Parser)]
 // #[command(next_help_heading = Some(DATABASE_COMMAND_HEADER))]
 pub enum DatabaseCommand {
