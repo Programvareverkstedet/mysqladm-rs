@@ -1,5 +1,6 @@
 use anyhow::{anyhow, Context};
 use clap::Parser;
+use dialoguer::Editor;
 use indoc::indoc;
 use itertools::Itertools;
 use prettytable::{Cell, Row, Table};
@@ -494,27 +495,32 @@ pub async fn edit_permissions(
             longest_database_name,
         );
 
-        let result = edit::edit_with_builder(
-            format!(
-                "{}\n{}\n{}",
-                comment,
-                header.join(" "),
-                if permission_data.is_empty() {
-                    format!("# {}", example_line)
-                } else {
-                    permission_data
-                        .iter()
-                        .map(|perm| {
-                            format_privileges_line(perm, longest_username, longest_database_name)
-                        })
-                        .join("\n")
-                }
-            ),
-            edit::Builder::new()
-                .prefix("database-permissions")
-                .suffix(".tsv")
-                .rand_bytes(10),
-        )?;
+        // TODO: handle errors better here
+        let result = Editor::new()
+            .extension("tsv")
+            .edit(
+                format!(
+                    "{}\n{}\n{}",
+                    comment,
+                    header.join(" "),
+                    if permission_data.is_empty() {
+                        format!("# {}", example_line)
+                    } else {
+                        permission_data
+                            .iter()
+                            .map(|perm| {
+                                format_privileges_line(
+                                    perm,
+                                    longest_username,
+                                    longest_database_name,
+                                )
+                            })
+                            .join("\n")
+                    }
+                )
+                .as_str(),
+            )?
+            .unwrap();
 
         parse_permission_data_from_editor(result)
             .context("Could not parse permission data from editor")?

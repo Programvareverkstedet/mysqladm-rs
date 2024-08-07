@@ -2,6 +2,7 @@ use std::vec;
 
 use anyhow::Context;
 use clap::Parser;
+use dialoguer::{Confirm, Password};
 use sqlx::MySqlConnection;
 
 use crate::core::{common::close_database_connection, user_operations::validate_user_name};
@@ -101,20 +102,14 @@ async fn drop_users(args: UserDeleteArgs, conn: &mut MySqlConnection) -> anyhow:
 }
 
 pub fn read_password_from_stdin_with_double_check(username: &str) -> anyhow::Result<String> {
-    let pass1 = rpassword::prompt_password(format!("New MySQL password for user '{}': ", username))
-        .context("Failed to read password")?;
-
-    let pass2 = rpassword::prompt_password(format!(
-        "Retype new MySQL password for user '{}': ",
-        username
-    ))
-    .context("Failed to read password")?;
-
-    if pass1 != pass2 {
-        anyhow::bail!("Passwords do not match");
-    }
-
-    Ok(pass1)
+    Password::new()
+        .with_prompt(format!("New MySQL password for user '{}'", username))
+        .with_confirmation(
+            format!("Retype new MySQL password for user '{}'", username),
+            "Passwords do not match",
+        )
+        .interact()
+        .map_err(Into::into)
 }
 
 async fn change_password_for_user(
