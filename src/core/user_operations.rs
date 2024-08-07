@@ -93,30 +93,6 @@ pub async fn set_password_for_database_user(
     Ok(())
 }
 
-/// Helper struct to deserialize the query made in `password_is_set_for_database_user`.
-#[derive(sqlx::FromRow)]
-#[sqlx(transparent)]
-struct PasswordIsSet(bool);
-
-/// This function checks if a database user has a password set.
-/// It returns `Ok(None)` if the user does not exist.
-pub async fn password_is_set_for_database_user(
-    db_user: &str,
-    conn: &mut MySqlConnection,
-) -> anyhow::Result<Option<bool>> {
-    let unix_user = crate::core::common::get_current_unix_user()?;
-    validate_user_name(db_user, &unix_user)?;
-
-    let user_has_password = sqlx::query_as::<_, PasswordIsSet>(
-        "SELECT authentication_string != '' FROM mysql.user WHERE User = ?",
-    )
-    .bind(db_user)
-    .fetch_optional(conn)
-    .await?;
-
-    Ok(user_has_password.map(|PasswordIsSet(is_set)| is_set))
-}
-
 /// This struct contains information about a database user.
 /// This can be extended if we need more information in the future.
 #[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
@@ -127,10 +103,8 @@ pub struct DatabaseUser {
     #[sqlx(rename = "Host")]
     pub host: String,
 
-    #[sqlx(rename = "Password")]
-    pub password: String,
-
-    pub authentication_string: String,
+    #[sqlx(rename = "`Password` != '' OR `authentication_string` != ''")]
+    pub has_password: bool,
 }
 
 /// This function fetches all database users that have a prefix matching the
@@ -141,7 +115,10 @@ pub async fn get_all_database_users_for_unix_user(
 ) -> anyhow::Result<Vec<DatabaseUser>> {
     let users = sqlx::query_as::<_, DatabaseUser>(
         r#"
-          SELECT `User`, `Host`, `Password`, `authentication_string`
+          SELECT
+            `User`,
+            `Host`,
+            `Password` != '' OR `authentication_string` != ''
           FROM `mysql`.`user`
           WHERE `User` REGEXP ?
         "#,
@@ -160,7 +137,10 @@ pub async fn get_database_user_for_user(
 ) -> anyhow::Result<Option<DatabaseUser>> {
     let user = sqlx::query_as::<_, DatabaseUser>(
         r#"
-          SELECT `User`, `Host`, `Password`, `authentication_string`
+          SELECT
+            `User`,
+            `Host`,
+            `Password` != '' OR `authentication_string` != ''
           FROM `mysql`.`user`
           WHERE `User` = ?
         "#,

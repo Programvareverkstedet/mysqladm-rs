@@ -197,7 +197,7 @@ async fn show_users(args: UserShowArgs, conn: &mut MySqlConnection) -> anyhow::R
         println!(
             "User '{}': {}",
             &user.user,
-            if !(user.authentication_string.is_empty() && user.password.is_empty()) {
+            if user.has_password {
                 "password set."
             } else {
                 "no password set."

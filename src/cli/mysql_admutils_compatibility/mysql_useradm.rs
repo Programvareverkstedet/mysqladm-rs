@@ -11,7 +11,7 @@ use crate::{
         config::{get_config, mysql_connection_from_config, GlobalConfigArgs},
         user_operations::{
             create_database_user, delete_database_user, get_all_database_users_for_unix_user,
-            password_is_set_for_database_user, set_password_for_database_user, user_exists,
+            get_database_user_for_user, set_password_for_database_user, user_exists,
         },
     },
 };
@@ -150,22 +150,24 @@ async fn passwd(args: PasswdArgs, connection: &mut MySqlConnection) -> anyhow::R
 async fn show(args: ShowArgs, connection: &mut MySqlConnection) -> anyhow::Result<()> {
     let users = if args.name.is_empty() {
         let unix_user = get_current_unix_user()?;
-        get_all_database_users_for_unix_user(&unix_user, connection)
-            .await?
-            .into_iter()
-            .map(|u| u.user)
-            .collect()
+        get_all_database_users_for_unix_user(&unix_user, connection).await?
     } else {
-        filter_db_or_user_names(args.name, DbOrUser::User)?
+        let filtered_usernames = filter_db_or_user_names(args.name, DbOrUser::User)?;
+        let mut result = Vec::with_capacity(filtered_usernames.len());
+        for username in filtered_usernames.iter() {
+            // TODO: fetch all users in one query
+            get_database_user_for_user(username, connection)
+                .await?
+                .map(|user| result.push(user));
+        }
+        result
     };
 
     for user in users {
-        let password_is_set = password_is_set_for_database_user(&user, connection).await?;
-
-        match password_is_set {
-            Some(true) => println!("User '{}': password set.", user),
-            Some(false) => println!("User '{}': no password set.", user),
-            None => {}
+        if user.has_password {
+            println!("User '{}': password set.", user.user);
+        } else {
+            println!("User '{}': no password set.", user.user);
         }
     }
 
