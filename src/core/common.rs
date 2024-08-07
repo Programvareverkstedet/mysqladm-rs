@@ -148,10 +148,12 @@ pub async fn close_database_connection(conn: MySqlConnection) {
     }
 }
 
+#[inline]
 pub fn quote_literal(s: &str) -> String {
     format!("'{}'", s.replace('\'', r"\'"))
 }
 
+#[inline]
 pub fn quote_identifier(s: &str) -> String {
     format!("`{}`", s.replace('`', r"\`"))
 }
