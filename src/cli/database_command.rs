@@ -178,6 +178,8 @@ async fn create_databases(
             eprintln!("Failed to create database '{}': {}", name, e);
             eprintln!("Skipping...");
             result = CommandStatus::PartiallySuccessfullyModified;
+        } else {
+            println!("Database '{}' created.", name);
         }
     }
 
@@ -200,6 +202,8 @@ async fn drop_databases(
             eprintln!("Failed to drop database '{}': {}", name, e);
             eprintln!("Skipping...");
             result = CommandStatus::PartiallySuccessfullyModified;
+        } else {
+            println!("Database '{}' dropped.", name);
         }
     }
 

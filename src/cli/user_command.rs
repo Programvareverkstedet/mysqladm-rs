@@ -176,6 +176,8 @@ async fn drop_users(
             eprintln!("{}", e);
             eprintln!("Skipping...");
             result = CommandStatus::PartiallySuccessfullyModified;
+        } else {
+            println!("User '{}' dropped.", username);
         }
     }
 
