@@ -156,9 +156,9 @@ async fn show(args: ShowArgs, connection: &mut MySqlConnection) -> anyhow::Resul
         let mut result = Vec::with_capacity(filtered_usernames.len());
         for username in filtered_usernames.iter() {
             // TODO: fetch all users in one query
-            get_database_user_for_user(username, connection)
-                .await?
-                .map(|user| result.push(user));
+            if let Some(user) = get_database_user_for_user(username, connection).await? {
+                result.push(user)
+            }
         }
         result
     };
