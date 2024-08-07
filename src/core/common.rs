@@ -142,7 +142,11 @@ pub fn validate_ownership_by_user_prefix<'a>(
 }
 
 pub async fn close_database_connection(conn: MySqlConnection) {
-    if let Err(e) = conn.close().await.context("Failed to close connection properly") {
+    if let Err(e) = conn
+        .close()
+        .await
+        .context("Failed to close connection properly")
+    {
         eprintln!("{}", e);
         eprintln!("Ignoring...");
     }

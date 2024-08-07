@@ -149,14 +149,14 @@ pub async fn handle_command(
     mut conn: MySqlConnection,
 ) -> anyhow::Result<()> {
     let result = conn
-        .transaction(|mut txn| {
+        .transaction(|txn| {
             Box::pin(async move {
                 match command {
-                    DatabaseCommand::CreateDb(args) => create_databases(args, &mut txn).await,
-                    DatabaseCommand::DropDb(args) => drop_databases(args, &mut txn).await,
-                    DatabaseCommand::ListDb(args) => list_databases(args, &mut txn).await,
-                    DatabaseCommand::ShowDbPerm(args) => show_databases(args, &mut txn).await,
-                    DatabaseCommand::EditDbPerm(args) => edit_permissions(args, &mut txn).await,
+                    DatabaseCommand::CreateDb(args) => create_databases(args, txn).await,
+                    DatabaseCommand::DropDb(args) => drop_databases(args, txn).await,
+                    DatabaseCommand::ListDb(args) => list_databases(args, txn).await,
+                    DatabaseCommand::ShowDbPerm(args) => show_databases(args, txn).await,
+                    DatabaseCommand::EditDbPerm(args) => edit_permissions(args, txn).await,
                 }
             })
         })

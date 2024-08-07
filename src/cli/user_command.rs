@@ -66,13 +66,13 @@ pub struct UserShowArgs {
 
 pub async fn handle_command(command: UserCommand, mut conn: MySqlConnection) -> anyhow::Result<()> {
     let result = conn
-        .transaction(|mut txn| {
+        .transaction(|txn| {
             Box::pin(async move {
                 match command {
-                    UserCommand::CreateUser(args) => create_users(args, &mut txn).await,
-                    UserCommand::DropUser(args) => drop_users(args, &mut txn).await,
-                    UserCommand::PasswdUser(args) => change_password_for_user(args, &mut txn).await,
-                    UserCommand::ShowUser(args) => show_users(args, &mut txn).await,
+                    UserCommand::CreateUser(args) => create_users(args, txn).await,
+                    UserCommand::DropUser(args) => drop_users(args, txn).await,
+                    UserCommand::PasswdUser(args) => change_password_for_user(args, txn).await,
+                    UserCommand::ShowUser(args) => show_users(args, txn).await,
                 }
             })
         })
@@ -114,7 +114,7 @@ async fn create_users(args: UserCreateArgs, conn: &mut MySqlConnection) -> anyho
             )
             .await?;
         }
-        println!("");
+        println!();
     }
     Ok(())
 }
