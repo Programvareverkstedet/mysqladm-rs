@@ -3,11 +3,9 @@ use nix::unistd::User;
 use serde::{Deserialize, Serialize};
 use sqlx::{prelude::*, MySqlConnection};
 
-use crate::core::common::quote_literal;
-
-use super::common::{
-    create_user_group_matching_regex, get_current_unix_user, validate_name_token,
-    validate_ownership_by_user_prefix,
+use crate::core::common::{
+    create_user_group_matching_regex, get_current_unix_user, quote_literal, validate_name_or_error,
+    validate_ownership_or_error, DbOrUser,
 };
 
 pub async fn user_exists(db_user: &str, connection: &mut MySqlConnection) -> anyhow::Result<bool> {
@@ -242,8 +240,9 @@ pub async fn get_database_user_for_user(
 ///       the database name as a parameter to the query. This means that we have
 ///       to validate the database name ourselves to prevent SQL injection.
 pub fn validate_user_name(name: &str, user: &User) -> anyhow::Result<()> {
-    validate_name_token(name).context(format!("Invalid username: '{}'", name))?;
-    validate_ownership_by_user_prefix(name, user)
+    validate_name_or_error(name, DbOrUser::User)
+        .context(format!("Invalid username: '{}'", name))?;
+    validate_ownership_or_error(name, user, DbOrUser::User)
         .context(format!("Invalid username: '{}'", name))?;
 
     Ok(())

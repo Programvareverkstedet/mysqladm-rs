@@ -8,7 +8,7 @@ use sqlx::{prelude::*, MySqlConnection};
 use crate::core::{
     common::{
         create_user_group_matching_regex, get_current_unix_user, quote_identifier,
-        validate_name_token, validate_ownership_by_user_prefix,
+        validate_name_or_error, validate_ownership_or_error, DbOrUser,
     },
     database_privilege_operations::DATABASE_PRIVILEGE_FIELDS,
 };
@@ -112,8 +112,10 @@ pub async fn get_databases_where_user_has_privileges(
 ///       the database name as a parameter to the query. This means that we have
 ///       to validate the database name ourselves to prevent SQL injection.
 pub fn validate_database_name(name: &str, user: &User) -> anyhow::Result<()> {
-    validate_name_token(name).context("Invalid database name")?;
-    validate_ownership_by_user_prefix(name, user).context("Invalid database name")?;
+    validate_name_or_error(name, DbOrUser::Database)
+        .context(format!("Invalid database name: '{}'", name))?;
+    validate_ownership_or_error(name, user, DbOrUser::Database)
+        .context(format!("Invalid database name: '{}'", name))?;
 
     Ok(())
 }

@@ -1,29 +1,6 @@
 use crate::core::common::{
-    get_current_unix_user, validate_name_token, validate_ownership_by_user_prefix,
+    get_current_unix_user, validate_name_or_error, validate_ownership_or_error, DbOrUser,
 };
-
-/// This enum is used to differentiate between database and user operations.
-/// Their output are very similar, but there are slight differences in the words used.
-pub enum DbOrUser {
-    Database,
-    User,
-}
-
-impl DbOrUser {
-    pub fn lowercased(&self) -> String {
-        match self {
-            DbOrUser::Database => "database".to_string(),
-            DbOrUser::User => "user".to_string(),
-        }
-    }
-
-    pub fn capitalized(&self) -> String {
-        match self {
-            DbOrUser::Database => "Database".to_string(),
-            DbOrUser::User => "User".to_string(),
-        }
-    }
-}
 
 /// In contrast to the new implementation which reports errors on any invalid name
 /// for any reason, mysql-admutils would only log the error and skip that particular
@@ -45,7 +22,7 @@ pub fn filter_db_or_user_names(
         //       here.
         .map(|name| name.chars().take(32).collect::<String>())
         .filter(|name| {
-            if let Err(_err) = validate_ownership_by_user_prefix(name, &unix_user) {
+            if let Err(_err) = validate_ownership_or_error(name, &unix_user, db_or_user) {
                 println!(
                     "You are not in charge of mysql-{}: '{}'.  Skipping.",
                     db_or_user.lowercased(),
@@ -60,7 +37,7 @@ pub fn filter_db_or_user_names(
             //       the name is already truncated to 32 characters. So
             //       if there is an error, it's guaranteed to be due to
             //       invalid characters.
-            if let Err(_err) = validate_name_token(name) {
+            if let Err(_err) = validate_name_or_error(name, db_or_user) {
                 println!(
                     concat!(
                         "{}: {} name '{}' contains invalid characters.\n",

@@ -2,12 +2,9 @@ use clap::Parser;
 use sqlx::MySqlConnection;
 
 use crate::{
-    cli::{
-        database_command,
-        mysql_admutils_compatibility::common::{filter_db_or_user_names, DbOrUser},
-    },
+    cli::{database_command, mysql_admutils_compatibility::common::filter_db_or_user_names},
     core::{
-        common::yn,
+        common::{yn, DbOrUser},
         config::{get_config, mysql_connection_from_config, GlobalConfigArgs},
         database_operations::{create_database, drop_database, get_database_list},
         database_privilege_operations,
