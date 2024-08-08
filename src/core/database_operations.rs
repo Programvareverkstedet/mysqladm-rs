@@ -2,7 +2,6 @@ use anyhow::Context;
 use indoc::formatdoc;
 use itertools::Itertools;
 use nix::unistd::User;
-use serde::{Deserialize, Serialize};
 use sqlx::{prelude::*, MySqlConnection};
 
 use crate::core::{
@@ -51,15 +50,10 @@ pub async fn drop_database(name: &str, connection: &mut MySqlConnection) -> anyh
     Ok(())
 }
 
-#[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
-struct DatabaseName {
-    database: String,
-}
-
 pub async fn get_database_list(connection: &mut MySqlConnection) -> anyhow::Result<Vec<String>> {
     let unix_user = get_current_unix_user()?;
 
-    let databases = sqlx::query_as::<_, DatabaseName>(
+    let databases: Vec<String> = sqlx::query(
         r#"
           SELECT `SCHEMA_NAME` AS `database`
           FROM `information_schema`.`SCHEMATA`
@@ -70,12 +64,17 @@ pub async fn get_database_list(connection: &mut MySqlConnection) -> anyhow::Resu
     .bind(create_user_group_matching_regex(&unix_user))
     .fetch_all(connection)
     .await
+    .and_then(|row| {
+        row.into_iter()
+            .map(|row| row.try_get::<String, _>("database"))
+            .collect::<Result<_, _>>()
+    })
     .context(format!(
         "Failed to get databases for user '{}'",
         unix_user.name
     ))?;
 
-    Ok(databases.into_iter().map(|d| d.database).collect())
+    Ok(databases)
 }
 
 pub async fn get_databases_where_user_has_privileges(
