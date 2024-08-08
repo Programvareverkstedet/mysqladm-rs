@@ -18,6 +18,7 @@ use std::collections::{BTreeSet, HashMap};
 use anyhow::{anyhow, Context};
 use indoc::indoc;
 use itertools::Itertools;
+use prettytable::Table;
 use serde::{Deserialize, Serialize};
 use sqlx::{mysql::MySqlRow, prelude::*, MySqlConnection};
 
@@ -85,6 +86,24 @@ pub struct DatabasePrivilegeRow {
 }
 
 impl DatabasePrivilegeRow {
+    pub fn empty(db: &str, user: &str) -> Self {
+        Self {
+            db: db.to_owned(),
+            user: user.to_owned(),
+            select_priv: false,
+            insert_priv: false,
+            update_priv: false,
+            delete_priv: false,
+            create_priv: false,
+            drop_priv: false,
+            alter_priv: false,
+            index_priv: false,
+            create_tmp_table_priv: false,
+            lock_tables_priv: false,
+            references_priv: false,
+        }
+    }
+
     pub fn get_privilege_by_name(&self, name: &str) -> bool {
         match name {
             "select_priv" => self.select_priv,
@@ -271,163 +290,15 @@ pub fn parse_privilege_table_cli_arg(arg: &str) -> anyhow::Result<DatabasePrivil
 }
 
 /**********************************/
-/* EDITOR CONTENT PARSING/DISPLAY */
+/* EDITOR CONTENT DISPLAY/DISPLAY */
 /**********************************/
 
-#[inline]
-fn parse_privilege(yn: &str, name: &str) -> anyhow::Result<bool> {
-    rev_yn(yn)
-        .ok_or_else(|| anyhow!("Expected Y or N, found {}", yn))
-        .context(format!("Could not parse {} privilege", name))
-}
-
-#[derive(Debug)]
-enum PrivilegeRowParseResult {
-    PrivilegeRow(DatabasePrivilegeRow),
-    ParserError(anyhow::Error),
-    TooFewFields(usize),
-    TooManyFields(usize),
-    Header,
-    Comment,
-    Empty,
-}
-
-#[inline]
-fn row_is_header(row: &str) -> bool {
-    row.split_ascii_whitespace()
-        .zip(DATABASE_PRIVILEGE_FIELDS.iter())
-        .map(|(field, priv_name)| (field, db_priv_field_human_readable_name(priv_name)))
-        .all(|(field, header_field)| field == header_field)
-}
-
-/// Parse a single row of the privileges table from the editor.
-fn parse_privilege_row_from_editor(row: &str) -> PrivilegeRowParseResult {
-    if row.starts_with('#') || row.starts_with("//") {
-        return PrivilegeRowParseResult::Comment;
-    }
-
-    if row.trim().is_empty() {
-        return PrivilegeRowParseResult::Empty;
-    }
-
-    let parts: Vec<&str> = row.trim().split_ascii_whitespace().collect();
-
-    match parts.len() {
-        n if (n < DATABASE_PRIVILEGE_FIELDS.len()) => {
-            return PrivilegeRowParseResult::TooFewFields(n)
-        }
-        n if (n > DATABASE_PRIVILEGE_FIELDS.len()) => {
-            return PrivilegeRowParseResult::TooManyFields(n)
-        }
-        _ => {}
-    }
-
-    if row_is_header(row) {
-        return PrivilegeRowParseResult::Header;
-    }
-
-    let row = DatabasePrivilegeRow {
-        db: (*parts.first().unwrap()).to_owned(),
-        user: (*parts.get(1).unwrap()).to_owned(),
-        select_priv: match parse_privilege(parts.get(2).unwrap(), DATABASE_PRIVILEGE_FIELDS[2]) {
-            Ok(p) => p,
-            Err(e) => return PrivilegeRowParseResult::ParserError(e),
-        },
-        insert_priv: match parse_privilege(parts.get(3).unwrap(), DATABASE_PRIVILEGE_FIELDS[3]) {
-            Ok(p) => p,
-            Err(e) => return PrivilegeRowParseResult::ParserError(e),
-        },
-        update_priv: match parse_privilege(parts.get(4).unwrap(), DATABASE_PRIVILEGE_FIELDS[4]) {
-            Ok(p) => p,
-            Err(e) => return PrivilegeRowParseResult::ParserError(e),
-        },
-        delete_priv: match parse_privilege(parts.get(5).unwrap(), DATABASE_PRIVILEGE_FIELDS[5]) {
-            Ok(p) => p,
-            Err(e) => return PrivilegeRowParseResult::ParserError(e),
-        },
-        create_priv: match parse_privilege(parts.get(6).unwrap(), DATABASE_PRIVILEGE_FIELDS[6]) {
-            Ok(p) => p,
-            Err(e) => return PrivilegeRowParseResult::ParserError(e),
-        },
-        drop_priv: match parse_privilege(parts.get(7).unwrap(), DATABASE_PRIVILEGE_FIELDS[7]) {
-            Ok(p) => p,
-            Err(e) => return PrivilegeRowParseResult::ParserError(e),
-        },
-        alter_priv: match parse_privilege(parts.get(8).unwrap(), DATABASE_PRIVILEGE_FIELDS[8]) {
-            Ok(p) => p,
-            Err(e) => return PrivilegeRowParseResult::ParserError(e),
-        },
-        index_priv: match parse_privilege(parts.get(9).unwrap(), DATABASE_PRIVILEGE_FIELDS[9]) {
-            Ok(p) => p,
-            Err(e) => return PrivilegeRowParseResult::ParserError(e),
-        },
-        create_tmp_table_priv: match parse_privilege(
-            parts.get(10).unwrap(),
-            DATABASE_PRIVILEGE_FIELDS[10],
-        ) {
-            Ok(p) => p,
-            Err(e) => return PrivilegeRowParseResult::ParserError(e),
-        },
-        lock_tables_priv: match parse_privilege(
-            parts.get(11).unwrap(),
-            DATABASE_PRIVILEGE_FIELDS[11],
-        ) {
-            Ok(p) => p,
-            Err(e) => return PrivilegeRowParseResult::ParserError(e),
-        },
-        references_priv: match parse_privilege(
-            parts.get(12).unwrap(),
-            DATABASE_PRIVILEGE_FIELDS[12],
-        ) {
-            Ok(p) => p,
-            Err(e) => return PrivilegeRowParseResult::ParserError(e),
-        },
-    };
-
-    PrivilegeRowParseResult::PrivilegeRow(row)
-}
-
-// TODO: return better errors
-
-pub fn parse_privilege_data_from_editor_content(
-    content: String,
-) -> anyhow::Result<Vec<DatabasePrivilegeRow>> {
-    content
-        .trim()
-        .split('\n')
-        .map(|line| line.trim())
-        .map(parse_privilege_row_from_editor)
-        .map(|result| match result {
-            PrivilegeRowParseResult::PrivilegeRow(row) => Ok(Some(row)),
-            PrivilegeRowParseResult::ParserError(e) => Err(e),
-            PrivilegeRowParseResult::TooFewFields(n) => Err(anyhow!(
-                "Too few fields in line. Expected to find {} fields, found {}",
-                DATABASE_PRIVILEGE_FIELDS.len(),
-                n
-            )),
-            PrivilegeRowParseResult::TooManyFields(n) => Err(anyhow!(
-                "Too many fields in line. Expected to find {} fields, found {}",
-                DATABASE_PRIVILEGE_FIELDS.len(),
-                n
-            )),
-            PrivilegeRowParseResult::Header => Ok(None),
-            PrivilegeRowParseResult::Comment => Ok(None),
-            PrivilegeRowParseResult::Empty => Ok(None),
-        })
-        .filter_map(|result| result.transpose())
-        .collect::<anyhow::Result<Vec<DatabasePrivilegeRow>>>()
-}
-
 /// Generates a single row of the privileges table for the editor.
-pub fn format_privileges_line(
+pub fn format_privileges_line_for_editor(
     privs: &DatabasePrivilegeRow,
     username_len: usize,
     database_name_len: usize,
 ) -> String {
-    // Format a privileges line by padding each value with spaces
-    // The first two fields are padded to the length of the longest username and database name
-    // The remaining fields are padded to the length of the corresponding field name
-
     DATABASE_PRIVILEGE_FIELDS
         .into_iter()
         .map(|field| match field {
@@ -490,7 +361,7 @@ pub fn generate_editor_content_from_privilege_data(
     header[0] = format!("{:width$}", header[0], width = longest_database_name);
     header[1] = format!("{:width$}", header[1], width = longest_username);
 
-    let example_line = format_privileges_line(
+    let example_line = format_privileges_line_for_editor(
         &DatabasePrivilegeRow {
             db: example_db,
             user: example_user,
@@ -519,10 +390,184 @@ pub fn generate_editor_content_from_privilege_data(
         } else {
             privilege_data
                 .iter()
-                .map(|privs| format_privileges_line(privs, longest_username, longest_database_name))
+                .map(|privs| {
+                    format_privileges_line_for_editor(
+                        privs,
+                        longest_username,
+                        longest_database_name,
+                    )
+                })
                 .join("\n")
         }
     )
+}
+
+#[derive(Debug)]
+enum PrivilegeRowParseResult {
+    PrivilegeRow(DatabasePrivilegeRow),
+    ParserError(anyhow::Error),
+    TooFewFields(usize),
+    TooManyFields(usize),
+    Header,
+    Comment,
+    Empty,
+}
+
+#[inline]
+fn parse_privilege_cell_from_editor(yn: &str, name: &str) -> anyhow::Result<bool> {
+    rev_yn(yn)
+        .ok_or_else(|| anyhow!("Expected Y or N, found {}", yn))
+        .context(format!("Could not parse {} privilege", name))
+}
+
+#[inline]
+fn editor_row_is_header(row: &str) -> bool {
+    row.split_ascii_whitespace()
+        .zip(DATABASE_PRIVILEGE_FIELDS.iter())
+        .map(|(field, priv_name)| (field, db_priv_field_human_readable_name(priv_name)))
+        .all(|(field, header_field)| field == header_field)
+}
+
+/// Parse a single row of the privileges table from the editor.
+fn parse_privilege_row_from_editor(row: &str) -> PrivilegeRowParseResult {
+    if row.starts_with('#') || row.starts_with("//") {
+        return PrivilegeRowParseResult::Comment;
+    }
+
+    if row.trim().is_empty() {
+        return PrivilegeRowParseResult::Empty;
+    }
+
+    let parts: Vec<&str> = row.trim().split_ascii_whitespace().collect();
+
+    match parts.len() {
+        n if (n < DATABASE_PRIVILEGE_FIELDS.len()) => {
+            return PrivilegeRowParseResult::TooFewFields(n)
+        }
+        n if (n > DATABASE_PRIVILEGE_FIELDS.len()) => {
+            return PrivilegeRowParseResult::TooManyFields(n)
+        }
+        _ => {}
+    }
+
+    if editor_row_is_header(row) {
+        return PrivilegeRowParseResult::Header;
+    }
+
+    let row = DatabasePrivilegeRow {
+        db: (*parts.first().unwrap()).to_owned(),
+        user: (*parts.get(1).unwrap()).to_owned(),
+        select_priv: match parse_privilege_cell_from_editor(
+            parts.get(2).unwrap(),
+            DATABASE_PRIVILEGE_FIELDS[2],
+        ) {
+            Ok(p) => p,
+            Err(e) => return PrivilegeRowParseResult::ParserError(e),
+        },
+        insert_priv: match parse_privilege_cell_from_editor(
+            parts.get(3).unwrap(),
+            DATABASE_PRIVILEGE_FIELDS[3],
+        ) {
+            Ok(p) => p,
+            Err(e) => return PrivilegeRowParseResult::ParserError(e),
+        },
+        update_priv: match parse_privilege_cell_from_editor(
+            parts.get(4).unwrap(),
+            DATABASE_PRIVILEGE_FIELDS[4],
+        ) {
+            Ok(p) => p,
+            Err(e) => return PrivilegeRowParseResult::ParserError(e),
+        },
+        delete_priv: match parse_privilege_cell_from_editor(
+            parts.get(5).unwrap(),
+            DATABASE_PRIVILEGE_FIELDS[5],
+        ) {
+            Ok(p) => p,
+            Err(e) => return PrivilegeRowParseResult::ParserError(e),
+        },
+        create_priv: match parse_privilege_cell_from_editor(
+            parts.get(6).unwrap(),
+            DATABASE_PRIVILEGE_FIELDS[6],
+        ) {
+            Ok(p) => p,
+            Err(e) => return PrivilegeRowParseResult::ParserError(e),
+        },
+        drop_priv: match parse_privilege_cell_from_editor(
+            parts.get(7).unwrap(),
+            DATABASE_PRIVILEGE_FIELDS[7],
+        ) {
+            Ok(p) => p,
+            Err(e) => return PrivilegeRowParseResult::ParserError(e),
+        },
+        alter_priv: match parse_privilege_cell_from_editor(
+            parts.get(8).unwrap(),
+            DATABASE_PRIVILEGE_FIELDS[8],
+        ) {
+            Ok(p) => p,
+            Err(e) => return PrivilegeRowParseResult::ParserError(e),
+        },
+        index_priv: match parse_privilege_cell_from_editor(
+            parts.get(9).unwrap(),
+            DATABASE_PRIVILEGE_FIELDS[9],
+        ) {
+            Ok(p) => p,
+            Err(e) => return PrivilegeRowParseResult::ParserError(e),
+        },
+        create_tmp_table_priv: match parse_privilege_cell_from_editor(
+            parts.get(10).unwrap(),
+            DATABASE_PRIVILEGE_FIELDS[10],
+        ) {
+            Ok(p) => p,
+            Err(e) => return PrivilegeRowParseResult::ParserError(e),
+        },
+        lock_tables_priv: match parse_privilege_cell_from_editor(
+            parts.get(11).unwrap(),
+            DATABASE_PRIVILEGE_FIELDS[11],
+        ) {
+            Ok(p) => p,
+            Err(e) => return PrivilegeRowParseResult::ParserError(e),
+        },
+        references_priv: match parse_privilege_cell_from_editor(
+            parts.get(12).unwrap(),
+            DATABASE_PRIVILEGE_FIELDS[12],
+        ) {
+            Ok(p) => p,
+            Err(e) => return PrivilegeRowParseResult::ParserError(e),
+        },
+    };
+
+    PrivilegeRowParseResult::PrivilegeRow(row)
+}
+
+// TODO: return better errors
+
+pub fn parse_privilege_data_from_editor_content(
+    content: String,
+) -> anyhow::Result<Vec<DatabasePrivilegeRow>> {
+    content
+        .trim()
+        .split('\n')
+        .map(|line| line.trim())
+        .map(parse_privilege_row_from_editor)
+        .map(|result| match result {
+            PrivilegeRowParseResult::PrivilegeRow(row) => Ok(Some(row)),
+            PrivilegeRowParseResult::ParserError(e) => Err(e),
+            PrivilegeRowParseResult::TooFewFields(n) => Err(anyhow!(
+                "Too few fields in line. Expected to find {} fields, found {}",
+                DATABASE_PRIVILEGE_FIELDS.len(),
+                n
+            )),
+            PrivilegeRowParseResult::TooManyFields(n) => Err(anyhow!(
+                "Too many fields in line. Expected to find {} fields, found {}",
+                DATABASE_PRIVILEGE_FIELDS.len(),
+                n
+            )),
+            PrivilegeRowParseResult::Header => Ok(None),
+            PrivilegeRowParseResult::Comment => Ok(None),
+            PrivilegeRowParseResult::Empty => Ok(None),
+        })
+        .filter_map(|result| result.transpose())
+        .collect::<anyhow::Result<Vec<DatabasePrivilegeRow>>>()
 }
 
 /*****************************/
@@ -565,7 +610,9 @@ pub enum DatabasePrivilegesDiff {
     Deleted(DatabasePrivilegeRow),
 }
 
-/// T
+/// This function calculates the differences between two sets of database privileges.
+/// It returns a set of [`DatabasePrivilegesDiff`] that can be used to display or
+/// apply a set of privilege modifications to the database.
 pub fn diff_privileges(
     from: &[DatabasePrivilegeRow],
     to: &[DatabasePrivilegeRow],
@@ -604,7 +651,7 @@ pub fn diff_privileges(
     result
 }
 
-/// Uses the resulting diffs to make modifications to the database.
+/// Uses the result of [`diff_privileges`] to modify privileges in the database.
 pub async fn apply_privilege_diffs(
     diffs: BTreeSet<DatabasePrivilegesDiff>,
     connection: &mut MySqlConnection,
@@ -668,6 +715,55 @@ pub async fn apply_privilege_diffs(
         }
     }
     Ok(())
+}
+
+fn display_privilege_cell(diff: &DatabasePrivilegeRowDiff) -> String {
+    diff.diff
+        .iter()
+        .map(|change| match change {
+            DatabasePrivilegeChange::YesToNo(name) => {
+                format!("{}: Y -> N", db_priv_field_human_readable_name(name))
+            }
+            DatabasePrivilegeChange::NoToYes(name) => {
+                format!("{}: N -> Y", db_priv_field_human_readable_name(name))
+            }
+        })
+        .join("\n")
+}
+
+/// Displays the difference between two sets of database privileges.
+pub fn display_privilege_diffs(diffs: &BTreeSet<DatabasePrivilegesDiff>) -> String {
+    let mut table = Table::new();
+    table.set_titles(row!["Database", "User", "Privilege diff",]);
+    for row in diffs {
+        match row {
+            DatabasePrivilegesDiff::New(p) => {
+                table.add_row(row![
+                    p.db,
+                    p.user,
+                    "(New user)\n".to_string()
+                        + &display_privilege_cell(
+                            &DatabasePrivilegeRow::empty(&p.db, &p.user).diff(p)
+                        )
+                ]);
+            }
+            DatabasePrivilegesDiff::Modified(p) => {
+                table.add_row(row![p.db, p.user, display_privilege_cell(p),]);
+            }
+            DatabasePrivilegesDiff::Deleted(p) => {
+                table.add_row(row![
+                    p.db,
+                    p.user,
+                    "(All privileges removed)\n".to_string()
+                        + &display_privilege_cell(
+                            &p.diff(&DatabasePrivilegeRow::empty(&p.db, &p.user))
+                        )
+                ]);
+            }
+        }
+    }
+
+    table.to_string()
 }
 
 /*********/

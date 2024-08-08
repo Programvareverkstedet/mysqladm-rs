@@ -1,6 +1,6 @@
 use anyhow::Context;
 use clap::Parser;
-use dialoguer::Editor;
+use dialoguer::{Confirm, Editor};
 use prettytable::{Cell, Row, Table};
 use sqlx::{Connection, MySqlConnection};
 
@@ -330,7 +330,17 @@ pub async fn edit_privileges(
         return Ok(CommandStatus::NoModificationsNeeded);
     }
 
-    // TODO: Add confirmation prompt.
+    println!("The following changes will be made:\n");
+    println!("{}", display_privilege_diffs(&diffs));
+    if !args.yes
+        && !Confirm::new()
+            .with_prompt("Do you want to apply these changes?")
+            .default(false)
+            .show_default(true)
+            .interact()?
+    {
+        return Ok(CommandStatus::Cancelled);
+    }
 
     apply_privilege_diffs(diffs, connection).await?;
 
