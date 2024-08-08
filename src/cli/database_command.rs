@@ -323,7 +323,7 @@ pub async fn edit_privileges(
         }
     }
 
-    let diffs = diff_privileges(privilege_data, &privileges_to_change);
+    let diffs = diff_privileges(&privilege_data, &privileges_to_change);
 
     if diffs.is_empty() {
         println!("No changes to make.");
