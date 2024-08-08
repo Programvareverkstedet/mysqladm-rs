@@ -5,6 +5,9 @@ use clap::Parser;
 use serde::{Deserialize, Serialize};
 use sqlx::{mysql::MySqlConnectOptions, ConnectOptions, MySqlConnection};
 
+// NOTE: this might look empty now, and the extra wrapping for the mysql
+//       config seems unnecessary, but it will be useful later when we
+//       add more configuration options.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Config {
     pub mysql: MysqlConfig,
@@ -57,6 +60,8 @@ pub struct GlobalConfigArgs {
     mysql_connect_timeout: Option<u64>,
 }
 
+/// Use the arguments and whichever configuration file which might or might not
+/// be found and default values to determine the configuration for the program.
 pub fn get_config(args: GlobalConfigArgs) -> anyhow::Result<Config> {
     let config_path = PathBuf::from(args.config_file);
 
@@ -94,14 +99,17 @@ pub fn get_config(args: GlobalConfigArgs) -> anyhow::Result<Config> {
     })
 }
 
-pub async fn mysql_connection_from_config(config: Config) -> anyhow::Result<MySqlConnection> {
+/// Use the provided configuration to establish a connection to a MySQL server.
+pub async fn create_mysql_connection_from_config(
+    config: MysqlConfig,
+) -> anyhow::Result<MySqlConnection> {
     match tokio::time::timeout(
-        Duration::from_secs(config.mysql.timeout.unwrap_or(DEFAULT_TIMEOUT)),
+        Duration::from_secs(config.timeout.unwrap_or(DEFAULT_TIMEOUT)),
         MySqlConnectOptions::new()
-            .host(&config.mysql.host)
-            .username(&config.mysql.username)
-            .password(&config.mysql.password)
-            .port(config.mysql.port.unwrap_or(DEFAULT_PORT))
+            .host(&config.host)
+            .username(&config.username)
+            .password(&config.password)
+            .port(config.port.unwrap_or(DEFAULT_PORT))
             .database("mysql")
             .connect(),
     )

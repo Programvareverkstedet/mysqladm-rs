@@ -66,7 +66,7 @@ async fn main() -> anyhow::Result<()> {
 
     let args: Args = Args::parse();
     let config = core::config::get_config(args.config_overrides)?;
-    let connection = core::config::mysql_connection_from_config(config).await?;
+    let connection = core::config::create_mysql_connection_from_config(config.mysql).await?;
 
     let result = match args.command {
         Command::Db(command) => cli::database_command::handle_command(command, connection).await,

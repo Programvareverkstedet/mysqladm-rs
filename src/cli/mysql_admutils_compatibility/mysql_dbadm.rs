@@ -5,7 +5,7 @@ use crate::{
     cli::{database_command, mysql_admutils_compatibility::common::filter_db_or_user_names},
     core::{
         common::{yn, DbOrUser},
-        config::{get_config, mysql_connection_from_config, GlobalConfigArgs},
+        config::{create_mysql_connection_from_config, get_config, GlobalConfigArgs},
         database_operations::{create_database, drop_database, get_database_list},
         database_privilege_operations,
     },
@@ -126,7 +126,7 @@ pub async fn main() -> anyhow::Result<()> {
     };
 
     let config = get_config(args.config_overrides)?;
-    let mut connection = mysql_connection_from_config(config).await?;
+    let mut connection = create_mysql_connection_from_config(config.mysql).await?;
 
     match command {
         Command::Create(args) => {
