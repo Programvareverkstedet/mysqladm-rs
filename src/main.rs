@@ -10,6 +10,7 @@ use crate::cli::mysql_admutils_compatibility::{mysql_dbadm, mysql_useradm};
 
 use clap::Parser;
 
+mod authenticated_unix_socket;
 mod cli;
 mod core;
 
