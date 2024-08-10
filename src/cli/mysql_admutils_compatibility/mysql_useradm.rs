@@ -1,13 +1,28 @@
 use clap::Parser;
-use sqlx::MySqlConnection;
+use futures_util::{SinkExt, StreamExt};
+use std::path::PathBuf;
+
+use std::os::unix::net::UnixStream as StdUnixStream;
+use tokio::net::UnixStream as TokioUnixStream;
 
 use crate::{
-    cli::{mysql_admutils_compatibility::common::filter_db_or_user_names, user_command},
-    core::{
-        common::{close_database_connection, get_current_unix_user, DbOrUser},
-        config::{create_mysql_connection_from_config, get_config, GlobalConfigArgs},
-        user_operations::*,
+    cli::{
+        common::erroneous_server_response,
+        mysql_admutils_compatibility::{
+            common::trim_to_32_chars,
+            error_messages::{
+                handle_create_user_error, handle_drop_user_error, handle_list_users_error,
+            },
+        },
+        user_command::read_password_from_stdin_with_double_check,
     },
+    core::{
+        bootstrap::bootstrap_server_connection_and_drop_privileges,
+        protocol::{
+            create_client_to_server_message_stream, ClientToServerMessageStream, Request, Response,
+        },
+    },
+    server::sql::user_operations::DatabaseUser,
 };
 
 #[derive(Parser)]
@@ -15,8 +30,25 @@ pub struct Args {
     #[command(subcommand)]
     pub command: Option<Command>,
 
-    #[command(flatten)]
-    config_overrides: GlobalConfigArgs,
+    /// Path to the socket of the server, if it already exists.
+    #[arg(
+        short,
+        long,
+        value_name = "PATH",
+        global = true,
+        hide_short_help = true
+    )]
+    server_socket_path: Option<PathBuf>,
+
+    /// Config file to use for the server.
+    #[arg(
+        short,
+        long,
+        value_name = "PATH",
+        global = true,
+        hide_short_help = true
+    )]
+    config: Option<PathBuf>,
 }
 
 /// Create, delete or change password for the USER(s),
@@ -69,7 +101,7 @@ pub struct ShowArgs {
     name: Vec<String>,
 }
 
-pub async fn main() -> anyhow::Result<()> {
+pub fn main() -> anyhow::Result<()> {
     let args: Args = Args::parse();
 
     let command = match args.command {
@@ -85,77 +117,184 @@ pub async fn main() -> anyhow::Result<()> {
         }
     };
 
-    let config = get_config(args.config_overrides)?;
-    let mut connection = create_mysql_connection_from_config(config.mysql).await?;
+    let server_connection =
+        bootstrap_server_connection_and_drop_privileges(args.server_socket_path, args.config)?;
 
-    match command {
-        Command::Create(args) => {
-            let filtered_names = filter_db_or_user_names(args.name, DbOrUser::User)?;
-            for name in filtered_names {
-                create_database_user(&name, &mut connection).await?;
-            }
-        }
-        Command::Delete(args) => {
-            let filtered_names = filter_db_or_user_names(args.name, DbOrUser::User)?;
-            for name in filtered_names {
-                delete_database_user(&name, &mut connection).await?;
-            }
-        }
-        Command::Passwd(args) => passwd(args, &mut connection).await?,
-        Command::Show(args) => show(args, &mut connection).await?,
-    }
-
-    close_database_connection(connection).await;
+    tokio_run_command(command, server_connection)?;
 
     Ok(())
 }
 
-async fn passwd(args: PasswdArgs, connection: &mut MySqlConnection) -> anyhow::Result<()> {
-    let filtered_names = filter_db_or_user_names(args.name, DbOrUser::User)?;
-
-    // NOTE: this gets doubly checked during the call to `set_password_for_database_user`.
-    //       This is moving the check before asking the user for the password,
-    //       to avoid having them figure out that the user does not exist after they
-    //       have entered the password twice.
-    let mut better_filtered_names = Vec::with_capacity(filtered_names.len());
-    for name in filtered_names.into_iter() {
-        if !user_exists(&name, connection).await? {
-            println!(
-                "{}: User '{}' does not exist. You must create it first.",
-                std::env::args()
-                    .next()
-                    .unwrap_or("mysql-useradm".to_string()),
-                name,
-            );
-        } else {
-            better_filtered_names.push(name);
-        }
-    }
-
-    for name in better_filtered_names {
-        let password = user_command::read_password_from_stdin_with_double_check(&name)?;
-        set_password_for_database_user(&name, &password, connection).await?;
-        println!("Password updated for user '{}'.", name);
-    }
-
-    Ok(())
+fn tokio_run_command(command: Command, server_connection: StdUnixStream) -> anyhow::Result<()> {
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(async {
+            let tokio_socket = TokioUnixStream::from_std(server_connection)?;
+            let message_stream = create_client_to_server_message_stream(tokio_socket);
+            match command {
+                Command::Create(args) => create_user(args, message_stream).await,
+                Command::Delete(args) => drop_users(args, message_stream).await,
+                Command::Passwd(args) => passwd_users(args, message_stream).await,
+                Command::Show(args) => show_users(args, message_stream).await,
+            }
+        })
 }
 
-async fn show(args: ShowArgs, connection: &mut MySqlConnection) -> anyhow::Result<()> {
-    let users = if args.name.is_empty() {
-        let unix_user = get_current_unix_user()?;
-        get_all_database_users_for_unix_user(&unix_user, connection).await?
-    } else {
-        let filtered_usernames = filter_db_or_user_names(args.name, DbOrUser::User)?;
-        let mut result = Vec::with_capacity(filtered_usernames.len());
-        for username in filtered_usernames.iter() {
-            // TODO: fetch all users in one query
-            if let Some(user) = get_database_user_for_user(username, connection).await? {
-                result.push(user)
-            }
-        }
-        result
+async fn create_user(
+    args: CreateArgs,
+    mut server_connection: ClientToServerMessageStream,
+) -> anyhow::Result<()> {
+    let usernames = args
+        .name
+        .iter()
+        .map(|name| trim_to_32_chars(name))
+        .collect();
+
+    let message = Request::CreateUsers(usernames);
+    server_connection.send(message).await?;
+
+    let result = match server_connection.next().await {
+        Some(Ok(Response::CreateUsers(result))) => result,
+        response => return erroneous_server_response(response),
     };
+
+    server_connection.send(Request::Exit).await?;
+
+    for (name, result) in result {
+        match result {
+            Ok(()) => println!("User '{}' created.", name),
+            Err(err) => handle_create_user_error(err, &name),
+        }
+    }
+
+    Ok(())
+}
+
+async fn drop_users(
+    args: DeleteArgs,
+    mut server_connection: ClientToServerMessageStream,
+) -> anyhow::Result<()> {
+    let usernames = args
+        .name
+        .iter()
+        .map(|name| trim_to_32_chars(name))
+        .collect();
+
+    let message = Request::DropUsers(usernames);
+    server_connection.send(message).await?;
+
+    let result = match server_connection.next().await {
+        Some(Ok(Response::DropUsers(result))) => result,
+        response => return erroneous_server_response(response),
+    };
+
+    server_connection.send(Request::Exit).await?;
+
+    for (name, result) in result {
+        match result {
+            Ok(()) => println!("User '{}' deleted.", name),
+            Err(err) => handle_drop_user_error(err, &name),
+        }
+    }
+
+    Ok(())
+}
+
+async fn passwd_users(
+    args: PasswdArgs,
+    mut server_connection: ClientToServerMessageStream,
+) -> anyhow::Result<()> {
+    let usernames = args
+        .name
+        .iter()
+        .map(|name| trim_to_32_chars(name))
+        .collect();
+
+    let message = Request::ListUsers(Some(usernames));
+    server_connection.send(message).await?;
+
+    let response = match server_connection.next().await {
+        Some(Ok(Response::ListUsers(result))) => result,
+        response => return erroneous_server_response(response),
+    };
+
+    let argv0 = std::env::args()
+        .next()
+        .unwrap_or("mysql-useradm".to_string());
+
+    let users = response
+        .into_iter()
+        .filter_map(|(name, result)| match result {
+            Ok(user) => Some(user),
+            Err(err) => {
+                handle_list_users_error(err, &name);
+                None
+            }
+        })
+        .collect::<Vec<_>>();
+
+    for user in users {
+        let password = read_password_from_stdin_with_double_check(&user.user)?;
+        let message = Request::PasswdUser(user.user.clone(), password);
+        server_connection.send(message).await?;
+        match server_connection.next().await {
+            Some(Ok(Response::PasswdUser(result))) => match result {
+                Ok(()) => println!("Password updated for user '{}'.", user.user),
+                Err(_) => eprintln!(
+                    "{}: Failed to update password for user '{}'.",
+                    argv0, user.user,
+                ),
+            },
+            response => return erroneous_server_response(response),
+        }
+    }
+
+    server_connection.send(Request::Exit).await?;
+
+    Ok(())
+}
+
+async fn show_users(
+    args: ShowArgs,
+    mut server_connection: ClientToServerMessageStream,
+) -> anyhow::Result<()> {
+    let usernames: Vec<_> = args
+        .name
+        .iter()
+        .map(|name| trim_to_32_chars(name))
+        .collect();
+
+    let message = if usernames.is_empty() {
+        Request::ListUsers(None)
+    } else {
+        Request::ListUsers(Some(usernames))
+    };
+    server_connection.send(message).await?;
+
+    let users: Vec<DatabaseUser> = match server_connection.next().await {
+        Some(Ok(Response::ListAllUsers(result))) => match result {
+            Ok(users) => users,
+            Err(err) => {
+                println!("Failed to list users: {:?}", err);
+                return Ok(());
+            }
+        },
+        Some(Ok(Response::ListUsers(result))) => result
+            .into_iter()
+            .filter_map(|(name, result)| match result {
+                Ok(user) => Some(user),
+                Err(err) => {
+                    handle_list_users_error(err, &name);
+                    None
+                }
+            })
+            .collect(),
+        response => return erroneous_server_response(response),
+    };
+
+    server_connection.send(Request::Exit).await?;
 
     for user in users {
         if user.has_password {

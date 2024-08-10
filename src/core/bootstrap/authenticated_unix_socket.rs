@@ -30,10 +30,13 @@
 //! Also note that it is essential that the client does not send any sensitive information
 //! over it's authentication socket, since it is readable by any user on the system.
 
+// TODO: rewrite this so that it can be used with a normal std::os::unix::net::UnixStream
+
 use std::os::unix::io::AsRawFd;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use async_bincode::{tokio::AsyncBincodeStream, AsyncDestination};
+use derive_more::derive::{Display, Error};
 use futures::{SinkExt, StreamExt};
 use nix::{sys::stat, unistd::Uid};
 use rand::distributions::Alphanumeric;
@@ -52,7 +55,7 @@ pub enum ClientRequest {
     Cancel,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Display, Error)]
 pub enum ServerResponse {
     Authenticated,
     ChallengeDidNotMatch,
@@ -61,7 +64,7 @@ pub enum ServerResponse {
 
 // TODO: wrap more data into the errors
 
-#[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
+#[derive(Debug, Display, PartialEq, Serialize, Deserialize, Clone, Error)]
 pub enum ServerError {
     InvalidRequest,
     UnableToReadPermissionsFromAuthSocket,
@@ -72,7 +75,7 @@ pub enum ServerError {
     InvalidChallenge,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Display, Error)]
 pub enum ClientError {
     UnableToConnectToServer,
     UnableToOpenAuthSocket,
@@ -80,13 +83,12 @@ pub enum ClientError {
     AuthSocketClosedEarly,
     UnableToCloseAuthSocket,
     AuthenticationError,
-    InvalidServerResponse(ServerResponse),
     UnableToParseServerResponse,
     NoServerResponse,
     ServerError(ServerError),
 }
 
-async fn create_auth_socket(socket_addr: &str) -> Result<UnixListener, ClientError> {
+async fn create_auth_socket(socket_addr: &PathBuf) -> Result<UnixListener, ClientError> {
     let auth_socket =
         UnixListener::bind(socket_addr).map_err(|_err| ClientError::UnableToOpenAuthSocket)?;
 
@@ -109,11 +111,13 @@ type AuthStream<'a> = AsyncBincodeStream<&'a mut UnixStream, u64, u64, AsyncDest
 
 // TODO: add timeout
 
+// TODO: respect $XDG_RUNTIME_DIR and $TMPDIR
+
 const AUTH_SOCKET_NAME: &str = "mysqladm-rs-cli-auth.sock";
+
 pub async fn client_authenticate(
     normal_socket: &mut UnixStream,
-    #[cfg(not(test))] auth_socket_dir: Option<PathBuf>,
-    #[cfg(test)] auth_socket_file: Option<PathBuf>,
+    auth_socket_dir: Option<PathBuf>,
 ) -> Result<(), ClientError> {
     let random_prefix: String = rand::thread_rng()
         .sample_iter(&Alphanumeric)
@@ -123,32 +127,16 @@ pub async fn client_authenticate(
 
     let socket_name = format!("{}-{}", random_prefix, AUTH_SOCKET_NAME);
 
-    #[cfg(not(test))]
-    let auth_socket_address = match auth_socket_dir {
-        Some(dir) => dir.join(socket_name).to_str().unwrap().to_string(),
-        None => std::env::temp_dir()
-            .join(socket_name)
-            .to_str()
-            .unwrap()
-            .to_string(),
-    };
-
-    #[cfg(test)]
-    let auth_socket_address = match auth_socket_file {
-        Some(file) => file.to_str().unwrap().to_string(),
-        None => std::env::temp_dir()
-            .join(socket_name)
-            .to_str()
-            .unwrap()
-            .to_string(),
-    };
+    let auth_socket_address = auth_socket_dir
+        .unwrap_or(std::env::temp_dir())
+        .join(socket_name);
 
     client_authenticate_with_auth_socket_address(normal_socket, &auth_socket_address).await
 }
 
 async fn client_authenticate_with_auth_socket_address(
     normal_socket: &mut UnixStream,
-    auth_socket_address: &str,
+    auth_socket_address: &PathBuf,
 ) -> Result<(), ClientError> {
     let auth_socket = create_auth_socket(auth_socket_address).await?;
 
@@ -164,7 +152,7 @@ async fn client_authenticate_with_auth_socket_address(
 async fn client_authenticate_with_auth_socket(
     normal_socket: &mut UnixStream,
     auth_socket: UnixListener,
-    auth_socket_address: &str,
+    auth_socket_address: &Path,
 ) -> Result<(), ClientError> {
     let challenge = rand::random::<u64>();
     let uid = nix::unistd::getuid();
@@ -199,7 +187,10 @@ async fn client_authenticate_with_auth_socket(
     let client_hello = ClientRequest::Initialize {
         uid: uid.into(),
         challenge,
-        auth_socket: auth_socket_address.to_string(),
+        auth_socket: auth_socket_address
+            .to_str()
+            .ok_or(ClientError::UnableToConfigureAuthSocket)?
+            .to_owned(),
     };
 
     normal_socket
@@ -239,9 +230,13 @@ macro_rules! report_server_error_and_return {
     }};
 }
 
-async fn server_authenticate(
+pub async fn server_authenticate(normal_socket: &mut UnixStream) -> Result<Uid, ServerError> {
+    _server_authenticate(normal_socket, None).await
+}
+
+pub async fn _server_authenticate(
     normal_socket: &mut UnixStream,
-    #[cfg(test)] unix_user_uid: Option<u32>,
+    unix_user_uid: Option<u32>,
 ) -> Result<Uid, ServerError> {
     let mut normal_socket: ServerToClientStream =
         AsyncBincodeStream::from(normal_socket).for_async();
@@ -256,22 +251,15 @@ async fn server_authenticate(
         _ => report_server_error_and_return!(normal_socket, ServerError::InvalidRequest),
     };
 
-    #[cfg(test)]
     let auth_socket_uid = match unix_user_uid {
         Some(uid) => uid,
-        None => report_server_error_and_return!(
-            normal_socket,
-            ServerError::UnableToReadPermissionsFromAuthSocket
-        ),
-    };
-
-    #[cfg(not(test))]
-    let auth_socket_uid = match stat::stat(auth_socket.as_str()) {
-        Ok(stat) => stat.st_uid,
-        Err(_err) => report_server_error_and_return!(
-            normal_socket,
-            ServerError::UnableToReadPermissionsFromAuthSocket
-        ),
+        None => match stat::stat(auth_socket.as_str()) {
+            Ok(stat) => stat.st_uid,
+            Err(_err) => report_server_error_and_return!(
+                normal_socket,
+                ServerError::UnableToReadPermissionsFromAuthSocket
+            ),
+        },
     };
 
     if uid != auth_socket_uid {
@@ -324,10 +312,7 @@ mod test {
         let client_handle =
             tokio::spawn(async move { client_authenticate(&mut client, None).await });
 
-        let server_handle = tokio::spawn(async move {
-            let uid = nix::unistd::getuid().into();
-            server_authenticate(&mut server, Some(uid)).await
-        });
+        let server_handle = tokio::spawn(async move { server_authenticate(&mut server).await });
 
         client_handle.await.unwrap().unwrap();
         server_handle.await.unwrap().unwrap();
@@ -340,15 +325,12 @@ mod test {
         let client_handle = tokio::spawn(async move {
             client_authenticate_with_auth_socket_address(
                 &mut client,
-                "/tmp/test_auth_socket_does_not_exist.sock",
+                &PathBuf::from("/tmp/test_auth_socket_does_not_exist.sock"),
             )
             .await
         });
 
-        let server_handle = tokio::spawn(async move {
-            let uid = nix::unistd::getuid().into();
-            server_authenticate(&mut server, Some(uid)).await
-        });
+        let server_handle = tokio::spawn(async move { server_authenticate(&mut server).await });
 
         client_handle.await.unwrap().unwrap();
         server_handle.await.unwrap().unwrap();
@@ -365,7 +347,7 @@ mod test {
 
         let server_handle = tokio::spawn(async move {
             let uid: u32 = nix::unistd::getuid().into();
-            let err = server_authenticate(&mut server, Some(uid + 1)).await;
+            let err = _server_authenticate(&mut server, Some(uid + 1)).await;
             assert_eq!(err, Err(ServerError::UidMismatch));
         });
 
@@ -379,13 +361,19 @@ mod test {
 
         let socket_path = std::env::temp_dir().join("socket_to_snoop.sock");
         let socket_path_clone = socket_path.clone();
-        let client_handle =
-            tokio::spawn(
-                async move { client_authenticate(&mut client, Some(socket_path_clone)).await },
-            );
+        let client_handle = tokio::spawn(async move {
+            client_authenticate_with_auth_socket_address(&mut client, &socket_path_clone).await
+        });
 
-        while !socket_path.exists() {
-            sleep(std::time::Duration::from_millis(10)).await;
+        for i in 0..100 {
+            if socket_path.exists() {
+                break;
+            }
+            sleep(Duration::from_millis(10)).await;
+
+            if i == 99 {
+                panic!("Socket not created after 1 second, assuming test failure");
+            }
         }
 
         let mut snooper = UnixStream::connect(socket_path.clone()).await.unwrap();
@@ -409,10 +397,7 @@ mod test {
 
         sleep(Duration::from_millis(10)).await;
 
-        let server_handle = tokio::spawn(async move {
-            let uid: u32 = nix::unistd::getuid().into();
-            server_authenticate(&mut server, Some(uid)).await
-        });
+        let server_handle = tokio::spawn(async move { server_authenticate(&mut server).await });
 
         client_handle.await.unwrap().unwrap();
         server_handle.await.unwrap().unwrap();

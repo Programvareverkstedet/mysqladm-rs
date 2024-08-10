@@ -1,5 +1,4 @@
+pub mod bootstrap;
 pub mod common;
-pub mod config;
-pub mod database_operations;
-pub mod database_privilege_operations;
-pub mod user_operations;
+pub mod database_privileges;
+pub mod protocol;

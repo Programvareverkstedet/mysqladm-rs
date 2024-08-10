@@ -1,27 +1,24 @@
-use std::collections::BTreeMap;
-use std::vec;
-
 use anyhow::Context;
 use clap::Parser;
 use dialoguer::{Confirm, Password};
-use prettytable::Table;
-use serde_json::json;
-use sqlx::{Connection, MySqlConnection};
+use futures_util::{SinkExt, StreamExt};
 
-use crate::core::{
-    common::{close_database_connection, get_current_unix_user, CommandStatus},
-    database_operations::*,
-    user_operations::*,
+use crate::core::protocol::{
+    print_create_users_output_status, print_drop_users_output_status,
+    print_lock_users_output_status, print_set_password_output_status,
+    print_unlock_users_output_status, ClientToServerMessageStream, Request, Response,
 };
 
-#[derive(Parser)]
+use super::common::erroneous_server_response;
+
+#[derive(Parser, Debug, Clone)]
 pub struct UserArgs {
     #[clap(subcommand)]
     subcmd: UserCommand,
 }
 
 #[allow(clippy::enum_variant_names)]
-#[derive(Parser)]
+#[derive(Parser, Debug, Clone)]
 pub enum UserCommand {
     /// Create one or more users
     #[command()]
@@ -50,7 +47,7 @@ pub enum UserCommand {
     UnlockUser(UserUnlockArgs),
 }
 
-#[derive(Parser)]
+#[derive(Parser, Debug, Clone)]
 pub struct UserCreateArgs {
     #[arg(num_args = 1..)]
     username: Vec<String>,
@@ -60,13 +57,13 @@ pub struct UserCreateArgs {
     no_password: bool,
 }
 
-#[derive(Parser)]
+#[derive(Parser, Debug, Clone)]
 pub struct UserDeleteArgs {
     #[arg(num_args = 1..)]
     username: Vec<String>,
 }
 
-#[derive(Parser)]
+#[derive(Parser, Debug, Clone)]
 pub struct UserPasswdArgs {
     username: String,
 
@@ -74,7 +71,7 @@ pub struct UserPasswdArgs {
     password_file: Option<String>,
 }
 
-#[derive(Parser)]
+#[derive(Parser, Debug, Clone)]
 pub struct UserShowArgs {
     #[arg(num_args = 0..)]
     username: Vec<String>,
@@ -83,13 +80,13 @@ pub struct UserShowArgs {
     json: bool,
 }
 
-#[derive(Parser)]
+#[derive(Parser, Debug, Clone)]
 pub struct UserLockArgs {
     #[arg(num_args = 1..)]
     username: Vec<String>,
 }
 
-#[derive(Parser)]
+#[derive(Parser, Debug, Clone)]
 pub struct UserUnlockArgs {
     #[arg(num_args = 1..)]
     username: Vec<String>,
@@ -97,48 +94,45 @@ pub struct UserUnlockArgs {
 
 pub async fn handle_command(
     command: UserCommand,
-    mut connection: MySqlConnection,
-) -> anyhow::Result<CommandStatus> {
-    let result = connection
-        .transaction(|txn| {
-            Box::pin(async move {
-                match command {
-                    UserCommand::CreateUser(args) => create_users(args, txn).await,
-                    UserCommand::DropUser(args) => drop_users(args, txn).await,
-                    UserCommand::PasswdUser(args) => change_password_for_user(args, txn).await,
-                    UserCommand::ShowUser(args) => show_users(args, txn).await,
-                    UserCommand::LockUser(args) => lock_users(args, txn).await,
-                    UserCommand::UnlockUser(args) => unlock_users(args, txn).await,
-                }
-            })
-        })
-        .await;
-
-    close_database_connection(connection).await;
-
-    result
+    server_connection: ClientToServerMessageStream,
+) -> anyhow::Result<()> {
+    match command {
+        UserCommand::CreateUser(args) => create_users(args, server_connection).await,
+        UserCommand::DropUser(args) => drop_users(args, server_connection).await,
+        UserCommand::PasswdUser(args) => passwd_user(args, server_connection).await,
+        UserCommand::ShowUser(args) => show_users(args, server_connection).await,
+        UserCommand::LockUser(args) => lock_users(args, server_connection).await,
+        UserCommand::UnlockUser(args) => unlock_users(args, server_connection).await,
+    }
 }
 
 async fn create_users(
     args: UserCreateArgs,
-    connection: &mut MySqlConnection,
-) -> anyhow::Result<CommandStatus> {
+    mut server_connection: ClientToServerMessageStream,
+) -> anyhow::Result<()> {
     if args.username.is_empty() {
         anyhow::bail!("No usernames provided");
     }
 
-    let mut result = CommandStatus::SuccessfullyModified;
+    let message = Request::CreateUsers(args.username.clone());
+    if let Err(err) = server_connection.send(message).await {
+        server_connection.close().await.ok();
+        anyhow::bail!(anyhow::Error::from(err).context("Failed to communicate with server"));
+    }
 
-    for username in args.username {
-        if let Err(e) = create_database_user(&username, connection).await {
-            eprintln!("{}", e);
-            eprintln!("Skipping...\n");
-            result = CommandStatus::PartiallySuccessfullyModified;
-            continue;
-        } else {
-            println!("User '{}' created.", username);
-        }
+    let result = match server_connection.next().await {
+        Some(Ok(Response::CreateUsers(result))) => result,
+        response => return erroneous_server_response(response),
+    };
 
+    print_create_users_output_status(&result);
+
+    let successfully_created_users = result
+        .iter()
+        .filter_map(|(username, result)| result.as_ref().ok().map(|_| username))
+        .collect::<Vec<_>>();
+
+    for username in successfully_created_users {
         if !args.no_password
             && Confirm::new()
                 .with_prompt(format!(
@@ -147,41 +141,55 @@ async fn create_users(
                 ))
                 .interact()?
         {
-            change_password_for_user(
-                UserPasswdArgs {
-                    username,
-                    password_file: None,
-                },
-                connection,
-            )
-            .await?;
+            let password = read_password_from_stdin_with_double_check(username)?;
+            let message = Request::PasswdUser(username.clone(), password);
+
+            if let Err(err) = server_connection.send(message).await {
+                server_connection.close().await.ok();
+                anyhow::bail!(err);
+            }
+
+            match server_connection.next().await {
+                Some(Ok(Response::PasswdUser(result))) => {
+                    print_set_password_output_status(&result, username)
+                }
+                response => return erroneous_server_response(response),
+            }
+
+            println!();
         }
-        println!();
     }
-    Ok(result)
+
+    server_connection.send(Request::Exit).await?;
+
+    Ok(())
 }
 
 async fn drop_users(
     args: UserDeleteArgs,
-    connection: &mut MySqlConnection,
-) -> anyhow::Result<CommandStatus> {
+    mut server_connection: ClientToServerMessageStream,
+) -> anyhow::Result<()> {
     if args.username.is_empty() {
         anyhow::bail!("No usernames provided");
     }
 
-    let mut result = CommandStatus::SuccessfullyModified;
+    let message = Request::DropUsers(args.username.clone());
 
-    for username in args.username {
-        if let Err(e) = delete_database_user(&username, connection).await {
-            eprintln!("{}", e);
-            eprintln!("Skipping...");
-            result = CommandStatus::PartiallySuccessfullyModified;
-        } else {
-            println!("User '{}' dropped.", username);
-        }
+    if let Err(err) = server_connection.send(message).await {
+        server_connection.close().await.ok();
+        anyhow::bail!(err);
     }
 
-    Ok(result)
+    let result = match server_connection.next().await {
+        Some(Ok(Response::DropUsers(result))) => result,
+        response => return erroneous_server_response(response),
+    };
+
+    server_connection.send(Request::Exit).await?;
+
+    print_drop_users_output_status(&result);
+
+    Ok(())
 }
 
 pub fn read_password_from_stdin_with_double_check(username: &str) -> anyhow::Result<String> {
@@ -195,15 +203,10 @@ pub fn read_password_from_stdin_with_double_check(username: &str) -> anyhow::Res
         .map_err(Into::into)
 }
 
-async fn change_password_for_user(
+async fn passwd_user(
     args: UserPasswdArgs,
-    connection: &mut MySqlConnection,
-) -> anyhow::Result<CommandStatus> {
-    // NOTE: although this also is checked in `set_password_for_database_user`, we check it here
-    //       to provide a more natural order of error messages.
-    let unix_user = get_current_unix_user()?;
-    validate_user_name(&args.username, &unix_user)?;
-
+    mut server_connection: ClientToServerMessageStream,
+) -> anyhow::Result<()> {
     let password = if let Some(password_file) = args.password_file {
         std::fs::read_to_string(password_file)
             .context("Failed to read password file")?
@@ -213,129 +216,146 @@ async fn change_password_for_user(
         read_password_from_stdin_with_double_check(&args.username)?
     };
 
-    set_password_for_database_user(&args.username, &password, connection).await?;
+    let message = Request::PasswdUser(args.username.clone(), password);
 
-    Ok(CommandStatus::SuccessfullyModified)
+    if let Err(err) = server_connection.send(message).await {
+        server_connection.close().await.ok();
+        anyhow::bail!(err);
+    }
+
+    let result = match server_connection.next().await {
+        Some(Ok(Response::PasswdUser(result))) => result,
+        response => return erroneous_server_response(response),
+    };
+
+    server_connection.send(Request::Exit).await?;
+
+    print_set_password_output_status(&result, &args.username);
+
+    Ok(())
 }
 
 async fn show_users(
     args: UserShowArgs,
-    connection: &mut MySqlConnection,
-) -> anyhow::Result<CommandStatus> {
-    let unix_user = get_current_unix_user()?;
-
-    let users = if args.username.is_empty() {
-        get_all_database_users_for_unix_user(&unix_user, connection).await?
+    mut server_connection: ClientToServerMessageStream,
+) -> anyhow::Result<()> {
+    let message = if args.username.is_empty() {
+        Request::ListUsers(None)
     } else {
-        let mut result = vec![];
-        for username in args.username {
-            if let Err(e) = validate_user_name(&username, &unix_user) {
-                eprintln!("{}", e);
-                eprintln!("Skipping...");
-                continue;
-            }
-
-            let user = get_database_user_for_user(&username, connection).await?;
-            if let Some(user) = user {
-                result.push(user);
-            } else {
-                eprintln!("User not found: {}", username);
-            }
-        }
-        result
+        Request::ListUsers(Some(args.username.clone()))
     };
 
-    let mut user_databases: BTreeMap<String, Vec<String>> = BTreeMap::new();
-    for user in users.iter() {
-        user_databases.insert(
-            user.user.clone(),
-            get_databases_where_user_has_privileges(&user.user, connection).await?,
-        );
+    if let Err(err) = server_connection.send(message).await {
+        server_connection.close().await.ok();
+        anyhow::bail!(err);
     }
 
-    if args.json {
-        let users_json = users
+    let users = match server_connection.next().await {
+        Some(Ok(Response::ListUsers(users))) => users
             .into_iter()
-            .map(|user| {
-                json!({
-                    "user": user.user,
-                    "has_password": user.has_password,
-                    "is_locked": user.is_locked,
-                    "databases": user_databases.get(&user.user).unwrap_or(&vec![]),
-                })
+            .filter_map(|(username, result)| match result {
+                Ok(user) => Some(user),
+                Err(err) => {
+                    eprintln!("{}", err.to_error_message(&username));
+                    eprintln!("Skipping...");
+                    None
+                }
             })
-            .collect::<serde_json::Value>();
+            .collect::<Vec<_>>(),
+        Some(Ok(Response::ListAllUsers(users))) => match users {
+            Ok(users) => users,
+            Err(err) => {
+                server_connection.send(Request::Exit).await?;
+                return Err(
+                    anyhow::anyhow!(err.to_error_message()).context("Failed to list all users")
+                );
+            }
+        },
+        response => return erroneous_server_response(response),
+    };
+
+    server_connection.send(Request::Exit).await?;
+
+    // TODO: print databases where user has privileges
+    if args.json {
         println!(
             "{}",
-            serde_json::to_string_pretty(&users_json)
-                .context("Failed to serialize users to JSON")?
+            serde_json::to_string_pretty(&users).context("Failed to serialize users to JSON")?
         );
     } else if users.is_empty() {
-        println!("No users found.");
+        println!("No users to show.");
     } else {
-        let mut table = Table::new();
+        let mut table = prettytable::Table::new();
         table.add_row(row![
             "User",
             "Password is set",
             "Locked",
-            "Databases where user has privileges"
+            // "Databases where user has privileges"
         ]);
         for user in users {
             table.add_row(row![
                 user.user,
                 user.has_password,
                 user.is_locked,
-                user_databases.get(&user.user).unwrap_or(&vec![]).join("\n")
+                // user.databases.join("\n")
             ]);
         }
         table.printstd();
     }
 
-    Ok(CommandStatus::NoModificationsIntended)
+    Ok(())
 }
 
 async fn lock_users(
     args: UserLockArgs,
-    connection: &mut MySqlConnection,
-) -> anyhow::Result<CommandStatus> {
+    mut server_connection: ClientToServerMessageStream,
+) -> anyhow::Result<()> {
     if args.username.is_empty() {
         anyhow::bail!("No usernames provided");
     }
 
-    let mut result = CommandStatus::SuccessfullyModified;
+    let message = Request::LockUsers(args.username.clone());
 
-    for username in args.username {
-        if let Err(e) = lock_database_user(&username, connection).await {
-            eprintln!("{}", e);
-            eprintln!("Skipping...");
-            result = CommandStatus::PartiallySuccessfullyModified;
-        } else {
-            println!("User '{}' locked.", username);
-        }
+    if let Err(err) = server_connection.send(message).await {
+        server_connection.close().await.ok();
+        anyhow::bail!(err);
     }
 
-    Ok(result)
+    let result = match server_connection.next().await {
+        Some(Ok(Response::LockUsers(result))) => result,
+        response => return erroneous_server_response(response),
+    };
+
+    server_connection.send(Request::Exit).await?;
+
+    print_lock_users_output_status(&result);
+
+    Ok(())
 }
 
 async fn unlock_users(
     args: UserUnlockArgs,
-    connection: &mut MySqlConnection,
-) -> anyhow::Result<CommandStatus> {
+    mut server_connection: ClientToServerMessageStream,
+) -> anyhow::Result<()> {
     if args.username.is_empty() {
         anyhow::bail!("No usernames provided");
     }
 
-    let mut result = CommandStatus::SuccessfullyModified;
+    let message = Request::UnlockUsers(args.username.clone());
 
-    for username in args.username {
-        if let Err(e) = unlock_database_user(&username, connection).await {
-            eprintln!("{}", e);
-            eprintln!("Skipping...");
-            result = CommandStatus::PartiallySuccessfullyModified;
-        } else {
-            println!("User '{}' unlocked.", username);
-        }
+    if let Err(err) = server_connection.send(message).await {
+        server_connection.close().await.ok();
+        anyhow::bail!(err);
     }
 
-    Ok(result)
+    let result = match server_connection.next().await {
+        Some(Ok(Response::UnlockUsers(result))) => result,
+        response => return erroneous_server_response(response),
+    };
+
+    server_connection.send(Request::Exit).await?;
+
+    print_unlock_users_output_status(&result);
+
+    Ok(())
 }

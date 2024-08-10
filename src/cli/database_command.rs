@@ -1,17 +1,29 @@
 use anyhow::Context;
 use clap::Parser;
 use dialoguer::{Confirm, Editor};
+use futures_util::{SinkExt, StreamExt};
+use nix::unistd::{getuid, User};
 use prettytable::{Cell, Row, Table};
-use sqlx::{Connection, MySqlConnection};
 
-use crate::core::{
-    common::{close_database_connection, get_current_unix_user, yn, CommandStatus},
-    database_operations::*,
-    database_privilege_operations::*,
-    user_operations::user_exists,
+use crate::{
+    cli::common::erroneous_server_response,
+    core::{
+        common::yn,
+        database_privileges::{
+            db_priv_field_human_readable_name, diff_privileges, display_privilege_diffs,
+            generate_editor_content_from_privilege_data, parse_privilege_data_from_editor_content,
+            parse_privilege_table_cli_arg,
+        },
+        protocol::{
+            print_create_databases_output_status, print_drop_databases_output_status,
+            print_modify_database_privileges_output_status, ClientToServerMessageStream, Request,
+            Response,
+        },
+    },
+    server::sql::database_privilege_operations::{DatabasePrivilegeRow, DATABASE_PRIVILEGE_FIELDS},
 };
 
-#[derive(Parser)]
+#[derive(Parser, Debug, Clone)]
 // #[command(next_help_heading = Some(DATABASE_COMMAND_HEADER))]
 pub enum DatabaseCommand {
     /// Create one or more databases
@@ -86,28 +98,28 @@ pub enum DatabaseCommand {
     EditDbPrivs(DatabaseEditPrivsArgs),
 }
 
-#[derive(Parser)]
+#[derive(Parser, Debug, Clone)]
 pub struct DatabaseCreateArgs {
     /// The name of the database(s) to create.
     #[arg(num_args = 1..)]
     name: Vec<String>,
 }
 
-#[derive(Parser)]
+#[derive(Parser, Debug, Clone)]
 pub struct DatabaseDropArgs {
     /// The name of the database(s) to drop.
     #[arg(num_args = 1..)]
     name: Vec<String>,
 }
 
-#[derive(Parser)]
+#[derive(Parser, Debug, Clone)]
 pub struct DatabaseListArgs {
     /// Whether to output the information in JSON format.
     #[arg(short, long)]
     json: bool,
 }
 
-#[derive(Parser)]
+#[derive(Parser, Debug, Clone)]
 pub struct DatabaseShowPrivsArgs {
     /// The name of the database(s) to show.
     #[arg(num_args = 0..)]
@@ -118,7 +130,7 @@ pub struct DatabaseShowPrivsArgs {
     json: bool,
 }
 
-#[derive(Parser)]
+#[derive(Parser, Debug, Clone)]
 pub struct DatabaseEditPrivsArgs {
     /// The name of the database to edit privileges for.
     pub name: Option<String>,
@@ -141,125 +153,143 @@ pub struct DatabaseEditPrivsArgs {
 
 pub async fn handle_command(
     command: DatabaseCommand,
-    mut connection: MySqlConnection,
-) -> anyhow::Result<CommandStatus> {
-    let result = connection
-        .transaction(|txn| {
-            Box::pin(async move {
-                match command {
-                    DatabaseCommand::CreateDb(args) => create_databases(args, txn).await,
-                    DatabaseCommand::DropDb(args) => drop_databases(args, txn).await,
-                    DatabaseCommand::ListDb(args) => list_databases(args, txn).await,
-                    DatabaseCommand::ShowDbPrivs(args) => show_database_privileges(args, txn).await,
-                    DatabaseCommand::EditDbPrivs(args) => edit_privileges(args, txn).await,
-                }
-            })
-        })
-        .await;
-
-    close_database_connection(connection).await;
-
-    result
+    server_connection: ClientToServerMessageStream,
+) -> anyhow::Result<()> {
+    match command {
+        DatabaseCommand::CreateDb(args) => create_databases(args, server_connection).await,
+        DatabaseCommand::DropDb(args) => drop_databases(args, server_connection).await,
+        DatabaseCommand::ListDb(args) => list_databases(args, server_connection).await,
+        DatabaseCommand::ShowDbPrivs(args) => {
+            show_database_privileges(args, server_connection).await
+        }
+        DatabaseCommand::EditDbPrivs(args) => {
+            edit_database_privileges(args, server_connection).await
+        }
+    }
 }
 
 async fn create_databases(
     args: DatabaseCreateArgs,
-    connection: &mut MySqlConnection,
-) -> anyhow::Result<CommandStatus> {
+    mut server_connection: ClientToServerMessageStream,
+) -> anyhow::Result<()> {
     if args.name.is_empty() {
         anyhow::bail!("No database names provided");
     }
 
-    let mut result = CommandStatus::SuccessfullyModified;
+    let message = Request::CreateDatabases(args.name.clone());
+    server_connection.send(message).await?;
 
-    for name in args.name {
-        // TODO: This can be optimized by fetching all the database privileges in one query.
-        if let Err(e) = create_database(&name, connection).await {
-            eprintln!("Failed to create database '{}': {}", name, e);
-            eprintln!("Skipping...");
-            result = CommandStatus::PartiallySuccessfullyModified;
-        } else {
-            println!("Database '{}' created.", name);
-        }
-    }
+    let result = match server_connection.next().await {
+        Some(Ok(Response::CreateDatabases(result))) => result,
+        response => return erroneous_server_response(response),
+    };
 
-    Ok(result)
+    server_connection.send(Request::Exit).await?;
+
+    print_create_databases_output_status(&result);
+
+    Ok(())
 }
 
 async fn drop_databases(
     args: DatabaseDropArgs,
-    connection: &mut MySqlConnection,
-) -> anyhow::Result<CommandStatus> {
+    mut server_connection: ClientToServerMessageStream,
+) -> anyhow::Result<()> {
     if args.name.is_empty() {
         anyhow::bail!("No database names provided");
     }
 
-    let mut result = CommandStatus::SuccessfullyModified;
+    let message = Request::DropDatabases(args.name.clone());
+    server_connection.send(message).await?;
 
-    for name in args.name {
-        // TODO: This can be optimized by fetching all the database privileges in one query.
-        if let Err(e) = drop_database(&name, connection).await {
-            eprintln!("Failed to drop database '{}': {}", name, e);
-            eprintln!("Skipping...");
-            result = CommandStatus::PartiallySuccessfullyModified;
-        } else {
-            println!("Database '{}' dropped.", name);
-        }
-    }
+    let result = match server_connection.next().await {
+        Some(Ok(Response::DropDatabases(result))) => result,
+        response => return erroneous_server_response(response),
+    };
 
-    Ok(result)
+    server_connection.send(Request::Exit).await?;
+
+    print_drop_databases_output_status(&result);
+
+    Ok(())
 }
 
 async fn list_databases(
     args: DatabaseListArgs,
-    connection: &mut MySqlConnection,
-) -> anyhow::Result<CommandStatus> {
-    let databases = get_database_list(connection).await?;
+    mut server_connection: ClientToServerMessageStream,
+) -> anyhow::Result<()> {
+    let message = Request::ListDatabases;
+    server_connection.send(message).await?;
+
+    let result = match server_connection.next().await {
+        Some(Ok(Response::ListAllDatabases(result))) => result,
+        response => return erroneous_server_response(response),
+    };
+
+    server_connection.send(Request::Exit).await?;
+
+    let database_list = match result {
+        Ok(list) => list,
+        Err(err) => {
+            return Err(anyhow::anyhow!(err.to_error_message()).context("Failed to list databases"))
+        }
+    };
 
     if args.json {
-        println!("{}", serde_json::to_string_pretty(&databases)?);
-        return Ok(CommandStatus::NoModificationsIntended);
-    }
-
-    if databases.is_empty() {
+        println!("{}", serde_json::to_string_pretty(&database_list)?);
+    } else if database_list.is_empty() {
         println!("No databases to show.");
     } else {
-        for db in databases {
+        for db in database_list {
             println!("{}", db);
         }
     }
 
-    Ok(CommandStatus::NoModificationsIntended)
+    Ok(())
 }
 
 async fn show_database_privileges(
     args: DatabaseShowPrivsArgs,
-    connection: &mut MySqlConnection,
-) -> anyhow::Result<CommandStatus> {
-    let database_users_to_show = if args.name.is_empty() {
-        get_all_database_privileges(connection).await?
+    mut server_connection: ClientToServerMessageStream,
+) -> anyhow::Result<()> {
+    let message = if args.name.is_empty() {
+        Request::ListPrivileges(None)
     } else {
-        // TODO: This can be optimized by fetching all the database privileges in one query.
-        let mut result = Vec::with_capacity(args.name.len());
-        for name in args.name {
-            match get_database_privileges(&name, connection).await {
-                Ok(db) => result.extend(db),
-                Err(e) => {
-                    eprintln!("Failed to show database '{}': {}", name, e);
+        Request::ListPrivileges(Some(args.name.clone()))
+    };
+    server_connection.send(message).await?;
+
+    let privilege_data = match server_connection.next().await {
+        Some(Ok(Response::ListPrivileges(databases))) => databases
+            .into_iter()
+            .filter_map(|(database_name, result)| match result {
+                Ok(privileges) => Some(privileges),
+                Err(err) => {
+                    eprintln!("{}", err.to_error_message(&database_name));
                     eprintln!("Skipping...");
+                    println!();
+                    None
                 }
+            })
+            .flatten()
+            .collect::<Vec<_>>(),
+        Some(Ok(Response::ListAllPrivileges(privilege_rows))) => match privilege_rows {
+            Ok(list) => list,
+            Err(err) => {
+                server_connection.send(Request::Exit).await?;
+                return Err(anyhow::anyhow!(err.to_error_message())
+                    .context("Failed to list database privileges"));
             }
-        }
-        result
+        },
+        response => return erroneous_server_response(response),
     };
 
-    if args.json {
-        println!("{}", serde_json::to_string_pretty(&database_users_to_show)?);
-        return Ok(CommandStatus::NoModificationsIntended);
-    }
+    server_connection.send(Request::Exit).await?;
 
-    if database_users_to_show.is_empty() {
-        println!("No database users to show.");
+    if args.json {
+        println!("{}", serde_json::to_string_pretty(&privilege_data)?);
+    } else if privilege_data.is_empty() {
+        println!("No database privileges to show.");
     } else {
         let mut table = Table::new();
         table.add_row(Row::new(
@@ -270,7 +300,7 @@ async fn show_database_privileges(
                 .collect(),
         ));
 
-        for row in database_users_to_show {
+        for row in privilege_data {
             table.add_row(row![
                 row.db,
                 row.user,
@@ -290,17 +320,40 @@ async fn show_database_privileges(
         table.printstd();
     }
 
-    Ok(CommandStatus::NoModificationsIntended)
+    Ok(())
 }
 
-pub async fn edit_privileges(
+pub async fn edit_database_privileges(
     args: DatabaseEditPrivsArgs,
-    connection: &mut MySqlConnection,
-) -> anyhow::Result<CommandStatus> {
-    let privilege_data = if let Some(name) = &args.name {
-        get_database_privileges(name, connection).await?
-    } else {
-        get_all_database_privileges(connection).await?
+    mut server_connection: ClientToServerMessageStream,
+) -> anyhow::Result<()> {
+    let message = Request::ListPrivileges(args.name.clone().map(|name| vec![name]));
+
+    server_connection.send(message).await?;
+
+    let privilege_data = match server_connection.next().await {
+        Some(Ok(Response::ListPrivileges(databases))) => databases
+            .into_iter()
+            .filter_map(|(database_name, result)| match result {
+                Ok(privileges) => Some(privileges),
+                Err(err) => {
+                    eprintln!("{}", err.to_error_message(&database_name));
+                    eprintln!("Skipping...");
+                    println!();
+                    None
+                }
+            })
+            .flatten()
+            .collect::<Vec<_>>(),
+        Some(Ok(Response::ListAllPrivileges(privilege_rows))) => match privilege_rows {
+            Ok(list) => list,
+            Err(err) => {
+                server_connection.send(Request::Exit).await?;
+                return Err(anyhow::anyhow!(err.to_error_message())
+                    .context("Failed to list database privileges"));
+            }
+        },
+        response => return erroneous_server_response(response),
     };
 
     // TODO: The data from args should not be absolute.
@@ -316,22 +369,16 @@ pub async fn edit_privileges(
         edit_privileges_with_editor(&privilege_data)?
     };
 
-    for row in privileges_to_change.iter() {
-        if !user_exists(&row.user, connection).await? {
-            // TODO: allow user to return and correct their mistake
-            anyhow::bail!("User {} does not exist", row.user);
-        }
-    }
-
     let diffs = diff_privileges(&privilege_data, &privileges_to_change);
 
     if diffs.is_empty() {
         println!("No changes to make.");
-        return Ok(CommandStatus::NoModificationsNeeded);
+        return Ok(());
     }
 
     println!("The following changes will be made:\n");
     println!("{}", display_privilege_diffs(&diffs));
+
     if !args.yes
         && !Confirm::new()
             .with_prompt("Do you want to apply these changes?")
@@ -339,15 +386,27 @@ pub async fn edit_privileges(
             .show_default(true)
             .interact()?
     {
-        return Ok(CommandStatus::Cancelled);
+        server_connection.send(Request::Exit).await?;
+        return Ok(());
     }
 
-    apply_privilege_diffs(diffs, connection).await?;
+    let message = Request::ModifyPrivileges(diffs);
+    server_connection.send(message).await?;
 
-    Ok(CommandStatus::SuccessfullyModified)
+    let result = match server_connection.next().await {
+        Some(Ok(Response::ModifyPrivileges(result))) => result,
+        response => return erroneous_server_response(response),
+    };
+
+    // TODO: allow user to return and correct their mistake
+    print_modify_database_privileges_output_status(&result);
+
+    server_connection.send(Request::Exit).await?;
+
+    Ok(())
 }
 
-pub fn parse_privilege_tables_from_args(
+fn parse_privilege_tables_from_args(
     args: &DatabaseEditPrivsArgs,
 ) -> anyhow::Result<Vec<DatabasePrivilegeRow>> {
     debug_assert!(!args.privs.is_empty());
@@ -371,20 +430,22 @@ pub fn parse_privilege_tables_from_args(
     Ok(result)
 }
 
-pub fn edit_privileges_with_editor(
+fn edit_privileges_with_editor(
     privilege_data: &[DatabasePrivilegeRow],
 ) -> anyhow::Result<Vec<DatabasePrivilegeRow>> {
-    let unix_user = get_current_unix_user()?;
+    let unix_user = User::from_uid(getuid())
+        .context("Failed to look up your UNIX username")
+        .and_then(|u| u.ok_or(anyhow::anyhow!("Failed to look up your UNIX username")))?;
 
     let editor_content =
         generate_editor_content_from_privilege_data(privilege_data, &unix_user.name);
 
     // TODO: handle errors better here
-    let result = Editor::new()
-        .extension("tsv")
-        .edit(&editor_content)?
-        .unwrap();
+    let result = Editor::new().extension("tsv").edit(&editor_content)?;
 
-    parse_privilege_data_from_editor_content(result)
-        .context("Could not parse privilege data from editor")
+    match result {
+        None => Ok(privilege_data.to_vec()),
+        Some(result) => parse_privilege_data_from_editor_content(result)
+            .context("Could not parse privilege data from editor"),
+    }
 }

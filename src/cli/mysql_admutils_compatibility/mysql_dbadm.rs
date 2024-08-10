@@ -1,14 +1,29 @@
 use clap::Parser;
-use sqlx::MySqlConnection;
+use futures_util::{SinkExt, StreamExt};
+use std::os::unix::net::UnixStream as StdUnixStream;
+use std::path::PathBuf;
+use tokio::net::UnixStream as TokioUnixStream;
 
 use crate::{
-    cli::{database_command, mysql_admutils_compatibility::common::filter_db_or_user_names},
-    core::{
-        common::{yn, DbOrUser},
-        config::{create_mysql_connection_from_config, get_config, GlobalConfigArgs},
-        database_operations::{create_database, drop_database, get_database_list},
-        database_privilege_operations,
+    cli::{
+        common::erroneous_server_response,
+        database_command,
+        mysql_admutils_compatibility::{
+            common::trim_to_32_chars,
+            error_messages::{
+                format_show_database_error_message, handle_create_database_error,
+                handle_drop_database_error,
+            },
+        },
     },
+    core::{
+        bootstrap::bootstrap_server_connection_and_drop_privileges,
+        protocol::{
+            create_client_to_server_message_stream, ClientToServerMessageStream,
+            GetDatabasesPrivilegeDataError, Request, Response,
+        },
+    },
+    server::sql::database_privilege_operations::DatabasePrivilegeRow,
 };
 
 const HELP_DB_PERM: &str = r#"
@@ -39,8 +54,25 @@ pub struct Args {
     #[command(subcommand)]
     pub command: Option<Command>,
 
-    #[command(flatten)]
-    config_overrides: GlobalConfigArgs,
+    /// Path to the socket of the server, if it already exists.
+    #[arg(
+        short,
+        long,
+        value_name = "PATH",
+        global = true,
+        hide_short_help = true
+    )]
+    server_socket_path: Option<PathBuf>,
+
+    /// Config file to use for the server.
+    #[arg(
+        short,
+        long,
+        value_name = "PATH",
+        global = true,
+        hide_short_help = true
+    )]
+    config: Option<PathBuf>,
 
     /// Print help for the 'editperm' subcommand.
     #[arg(long, global = true)]
@@ -76,7 +108,7 @@ pub enum Command {
     /// to make changes to the permission table.
     /// Run 'mysql-dbadm --help-editperm' for more
     /// information.
-    EditPerm(EditPermArgs),
+    Editperm(EditPermArgs),
 }
 
 #[derive(Parser)]
@@ -106,13 +138,16 @@ pub struct EditPermArgs {
     pub database: String,
 }
 
-pub async fn main() -> anyhow::Result<()> {
+pub fn main() -> anyhow::Result<()> {
     let args: Args = Args::parse();
 
     if args.help_editperm {
         println!("{}", HELP_DB_PERM);
         return Ok(());
     }
+
+    let server_connection =
+        bootstrap_server_connection_and_drop_privileges(args.server_socket_path, args.config)?;
 
     let command = match args.command {
         Some(command) => command,
@@ -125,64 +160,164 @@ pub async fn main() -> anyhow::Result<()> {
         }
     };
 
-    let config = get_config(args.config_overrides)?;
-    let mut connection = create_mysql_connection_from_config(config.mysql).await?;
+    tokio_run_command(command, server_connection)?;
 
-    match command {
-        Command::Create(args) => {
-            let filtered_names = filter_db_or_user_names(args.name, DbOrUser::Database)?;
-            for name in filtered_names {
-                create_database(&name, &mut connection).await?;
-                println!("Database {} created.", name);
-            }
-        }
-        Command::Drop(args) => {
-            let filtered_names = filter_db_or_user_names(args.name, DbOrUser::Database)?;
-            for name in filtered_names {
-                drop_database(&name, &mut connection).await?;
-                println!("Database {} dropped.", name);
-            }
-        }
-        Command::Show(args) => {
-            let names = if args.name.is_empty() {
-                get_database_list(&mut connection).await?
-            } else {
-                filter_db_or_user_names(args.name, DbOrUser::Database)?
-            };
+    Ok(())
+}
 
-            for name in names {
-                show_db(&name, &mut connection).await?;
-            }
-        }
-        Command::EditPerm(args) => {
-            // TODO: This does not accurately replicate the behavior of the old implementation.
-            //       Hopefully, not many people rely on this in an automated fashion, as it
-            //       is made to be interactive in nature. However, we should still try to
-            //        replicate the old behavior as closely as possible.
-            let edit_privileges_args = database_command::DatabaseEditPrivsArgs {
-                name: Some(args.database),
-                privs: vec![],
-                json: false,
-                editor: None,
-                yes: false,
-            };
+fn tokio_run_command(command: Command, server_connection: StdUnixStream) -> anyhow::Result<()> {
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(async {
+            let tokio_socket = TokioUnixStream::from_std(server_connection)?;
+            let message_stream = create_client_to_server_message_stream(tokio_socket);
+            match command {
+                Command::Create(args) => create_databases(args, message_stream).await,
+                Command::Drop(args) => drop_databases(args, message_stream).await,
+                Command::Show(args) => show_databases(args, message_stream).await,
+                Command::Editperm(args) => {
+                    let edit_privileges_args = database_command::DatabaseEditPrivsArgs {
+                        name: Some(args.database),
+                        privs: vec![],
+                        json: false,
+                        // TODO: use this to mimic the old editor-finding logic
+                        editor: None,
+                        yes: false,
+                    };
 
-            database_command::edit_privileges(edit_privileges_args, &mut connection).await?;
+                    database_command::edit_database_privileges(edit_privileges_args, message_stream)
+                        .await
+                }
+            }
+        })
+}
+
+async fn create_databases(
+    args: CreateArgs,
+    mut server_connection: ClientToServerMessageStream,
+) -> anyhow::Result<()> {
+    let database_names = args
+        .name
+        .iter()
+        .map(|name| trim_to_32_chars(name))
+        .collect();
+
+    let message = Request::CreateDatabases(database_names);
+    server_connection.send(message).await?;
+
+    let result = match server_connection.next().await {
+        Some(Ok(Response::CreateDatabases(result))) => result,
+        response => return erroneous_server_response(response),
+    };
+
+    server_connection.send(Request::Exit).await?;
+
+    for (name, result) in result {
+        match result {
+            Ok(()) => println!("Database {} created.", name),
+            Err(err) => handle_create_database_error(err, &name),
         }
     }
 
     Ok(())
 }
 
-async fn show_db(name: &str, connection: &mut MySqlConnection) -> anyhow::Result<()> {
+async fn drop_databases(
+    args: DatabaseDropArgs,
+    mut server_connection: ClientToServerMessageStream,
+) -> anyhow::Result<()> {
+    let database_names = args
+        .name
+        .iter()
+        .map(|name| trim_to_32_chars(name))
+        .collect();
+
+    let message = Request::DropDatabases(database_names);
+    server_connection.send(message).await?;
+
+    let result = match server_connection.next().await {
+        Some(Ok(Response::DropDatabases(result))) => result,
+        response => return erroneous_server_response(response),
+    };
+
+    server_connection.send(Request::Exit).await?;
+
+    for (name, result) in result {
+        match result {
+            Ok(()) => println!("Database {} dropped.", name),
+            Err(err) => handle_drop_database_error(err, &name),
+        }
+    }
+
+    Ok(())
+}
+
+async fn show_databases(
+    args: DatabaseShowArgs,
+    mut server_connection: ClientToServerMessageStream,
+) -> anyhow::Result<()> {
+    let database_names: Vec<String> = args
+        .name
+        .iter()
+        .map(|name| trim_to_32_chars(name))
+        .collect();
+
+    let message = if database_names.is_empty() {
+        let message = Request::ListDatabases;
+        server_connection.send(message).await?;
+        let response = server_connection.next().await;
+        let databases = match response {
+            Some(Ok(Response::ListAllDatabases(databases))) => databases.unwrap_or(vec![]),
+            response => return erroneous_server_response(response),
+        };
+
+        Request::ListPrivileges(Some(databases))
+    } else {
+        Request::ListPrivileges(Some(database_names))
+    };
+    server_connection.send(message).await?;
+
+    let response = server_connection.next().await;
+
+    server_connection.send(Request::Exit).await?;
+
     // NOTE: mysql-dbadm show has a quirk where valid database names
     //       for non-existent databases will report with no users.
-    //       This function should *not* check for db existence, only
-    //       validate the names.
-    let privileges = database_privilege_operations::get_database_privileges(name, connection)
-        .await
-        .unwrap_or(vec![]);
+    let results: Vec<Result<(String, Vec<DatabasePrivilegeRow>), String>> = match response {
+        Some(Ok(Response::ListPrivileges(result))) => result
+            .into_iter()
+            .map(|(name, rows)| match rows.map(|rows| (name.clone(), rows)) {
+                Ok(rows) => Ok(rows),
+                Err(GetDatabasesPrivilegeDataError::DatabaseDoesNotExist) => Ok((name, vec![])),
+                Err(err) => Err(format_show_database_error_message(err, &name)),
+            })
+            .collect(),
+        response => return erroneous_server_response(response),
+    };
 
+    results.into_iter().try_for_each(|result| match result {
+        Ok((name, rows)) => print_db_privs(&name, rows),
+        Err(err) => {
+            eprintln!("{}", err);
+            Ok(())
+        }
+    })?;
+
+    Ok(())
+}
+
+#[inline]
+fn yn(value: bool) -> &'static str {
+    if value {
+        "Y"
+    } else {
+        "N"
+    }
+}
+
+fn print_db_privs(name: &str, rows: Vec<DatabasePrivilegeRow>) -> anyhow::Result<()> {
     println!(
         concat!(
             "Database '{}':\n",
@@ -191,10 +326,10 @@ async fn show_db(name: &str, connection: &mut MySqlConnection) -> anyhow::Result
         ),
         name,
     );
-    if privileges.is_empty() {
+    if rows.is_empty() {
         println!("# (no permissions currently granted to any users)");
     } else {
-        for privilege in privileges {
+        for privilege in rows {
             println!(
                 "  {:<16}      {:<7} {:<7} {:<7} {:<7} {:<7} {:<7} {:<7} {:<7} {:<7} {:<7} {}",
                 privilege.user,

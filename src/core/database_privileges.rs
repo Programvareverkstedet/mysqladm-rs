@@ -1,52 +1,16 @@
-//! Database privilege operations
-//!
-//! This module contains functions for querying, modifying,
-//! displaying and comparing database privileges.
-//!
-//! A lot of the complexity comes from two core components:
-//!
-//! - The privilege editor that needs to be able to print
-//!   an editable table of privileges and reparse the content
-//!   after the user has made manual changes.
-//!
-//! - The comparison functionality that tells the user what
-//!   changes will be made when applying a set of changes
-//!   to the list of database privileges.
-
-use std::collections::{BTreeSet, HashMap};
-
 use anyhow::{anyhow, Context};
-use indoc::indoc;
 use itertools::Itertools;
 use prettytable::Table;
 use serde::{Deserialize, Serialize};
-use sqlx::{mysql::MySqlRow, prelude::*, MySqlConnection};
-
-use crate::core::{
-    common::{
-        create_user_group_matching_regex, get_current_unix_user, quote_identifier, rev_yn, yn,
-    },
-    database_operations::validate_database_name,
+use std::{
+    cmp::max,
+    collections::{BTreeSet, HashMap},
 };
 
-/// This is the list of fields that are used to fetch the db + user + privileges
-/// from the `db` table in the database. If you need to add or remove privilege
-/// fields, this is a good place to start.
-pub const DATABASE_PRIVILEGE_FIELDS: [&str; 13] = [
-    "db",
-    "user",
-    "select_priv",
-    "insert_priv",
-    "update_priv",
-    "delete_priv",
-    "create_priv",
-    "drop_priv",
-    "alter_priv",
-    "index_priv",
-    "create_tmp_table_priv",
-    "lock_tables_priv",
-    "references_priv",
-];
+use super::common::{rev_yn, yn};
+use crate::server::sql::database_privilege_operations::{
+    DatabasePrivilegeRow, DATABASE_PRIVILEGE_FIELDS,
+};
 
 pub fn db_priv_field_human_readable_name(name: &str) -> String {
     match name {
@@ -67,162 +31,24 @@ pub fn db_priv_field_human_readable_name(name: &str) -> String {
     }
 }
 
-/// This struct represents the set of privileges for a single user on a single database.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord)]
-pub struct DatabasePrivilegeRow {
-    pub db: String,
-    pub user: String,
-    pub select_priv: bool,
-    pub insert_priv: bool,
-    pub update_priv: bool,
-    pub delete_priv: bool,
-    pub create_priv: bool,
-    pub drop_priv: bool,
-    pub alter_priv: bool,
-    pub index_priv: bool,
-    pub create_tmp_table_priv: bool,
-    pub lock_tables_priv: bool,
-    pub references_priv: bool,
-}
+pub fn diff(row1: &DatabasePrivilegeRow, row2: &DatabasePrivilegeRow) -> DatabasePrivilegeRowDiff {
+    debug_assert!(row1.db == row2.db && row1.user == row2.user);
 
-impl DatabasePrivilegeRow {
-    pub fn empty(db: &str, user: &str) -> Self {
-        Self {
-            db: db.to_owned(),
-            user: user.to_owned(),
-            select_priv: false,
-            insert_priv: false,
-            update_priv: false,
-            delete_priv: false,
-            create_priv: false,
-            drop_priv: false,
-            alter_priv: false,
-            index_priv: false,
-            create_tmp_table_priv: false,
-            lock_tables_priv: false,
-            references_priv: false,
-        }
+    DatabasePrivilegeRowDiff {
+        db: row1.db.clone(),
+        user: row1.user.clone(),
+        diff: DATABASE_PRIVILEGE_FIELDS
+            .into_iter()
+            .skip(2)
+            .filter_map(|field| {
+                DatabasePrivilegeChange::new(
+                    row1.get_privilege_by_name(field),
+                    row2.get_privilege_by_name(field),
+                    field,
+                )
+            })
+            .collect(),
     }
-
-    pub fn get_privilege_by_name(&self, name: &str) -> bool {
-        match name {
-            "select_priv" => self.select_priv,
-            "insert_priv" => self.insert_priv,
-            "update_priv" => self.update_priv,
-            "delete_priv" => self.delete_priv,
-            "create_priv" => self.create_priv,
-            "drop_priv" => self.drop_priv,
-            "alter_priv" => self.alter_priv,
-            "index_priv" => self.index_priv,
-            "create_tmp_table_priv" => self.create_tmp_table_priv,
-            "lock_tables_priv" => self.lock_tables_priv,
-            "references_priv" => self.references_priv,
-            _ => false,
-        }
-    }
-
-    pub fn diff(&self, other: &DatabasePrivilegeRow) -> DatabasePrivilegeRowDiff {
-        debug_assert!(self.db == other.db && self.user == other.user);
-
-        DatabasePrivilegeRowDiff {
-            db: self.db.clone(),
-            user: self.user.clone(),
-            diff: DATABASE_PRIVILEGE_FIELDS
-                .into_iter()
-                .skip(2)
-                .filter_map(|field| {
-                    DatabasePrivilegeChange::new(
-                        self.get_privilege_by_name(field),
-                        other.get_privilege_by_name(field),
-                        field,
-                    )
-                })
-                .collect(),
-        }
-    }
-}
-
-#[inline]
-fn get_mysql_row_priv_field(row: &MySqlRow, position: usize) -> Result<bool, sqlx::Error> {
-    let field = DATABASE_PRIVILEGE_FIELDS[position];
-    let value = row.try_get(position)?;
-    match rev_yn(value) {
-        Some(val) => Ok(val),
-        _ => {
-            log::warn!(r#"Invalid value for privilege "{}": '{}'"#, field, value);
-            Ok(false)
-        }
-    }
-}
-
-impl FromRow<'_, MySqlRow> for DatabasePrivilegeRow {
-    fn from_row(row: &MySqlRow) -> Result<Self, sqlx::Error> {
-        Ok(Self {
-            db: row.try_get("db")?,
-            user: row.try_get("user")?,
-            select_priv: get_mysql_row_priv_field(row, 2)?,
-            insert_priv: get_mysql_row_priv_field(row, 3)?,
-            update_priv: get_mysql_row_priv_field(row, 4)?,
-            delete_priv: get_mysql_row_priv_field(row, 5)?,
-            create_priv: get_mysql_row_priv_field(row, 6)?,
-            drop_priv: get_mysql_row_priv_field(row, 7)?,
-            alter_priv: get_mysql_row_priv_field(row, 8)?,
-            index_priv: get_mysql_row_priv_field(row, 9)?,
-            create_tmp_table_priv: get_mysql_row_priv_field(row, 10)?,
-            lock_tables_priv: get_mysql_row_priv_field(row, 11)?,
-            references_priv: get_mysql_row_priv_field(row, 12)?,
-        })
-    }
-}
-
-/// Get all users + privileges for a single database.
-pub async fn get_database_privileges(
-    database_name: &str,
-    connection: &mut MySqlConnection,
-) -> anyhow::Result<Vec<DatabasePrivilegeRow>> {
-    let unix_user = get_current_unix_user()?;
-    validate_database_name(database_name, &unix_user)?;
-
-    let result = sqlx::query_as::<_, DatabasePrivilegeRow>(&format!(
-        "SELECT {} FROM `db` WHERE `db` = ?",
-        DATABASE_PRIVILEGE_FIELDS
-            .iter()
-            .map(|field| quote_identifier(field))
-            .join(","),
-    ))
-    .bind(database_name)
-    .fetch_all(connection)
-    .await
-    .context("Failed to show database")?;
-
-    Ok(result)
-}
-
-/// Get all database + user + privileges pairs that are owned by the current user.
-pub async fn get_all_database_privileges(
-    connection: &mut MySqlConnection,
-) -> anyhow::Result<Vec<DatabasePrivilegeRow>> {
-    let unix_user = get_current_unix_user()?;
-
-    let result = sqlx::query_as::<_, DatabasePrivilegeRow>(&format!(
-        indoc! {r#"
-          SELECT {} FROM `db` WHERE `db` IN
-          (SELECT DISTINCT `SCHEMA_NAME` AS `database`
-            FROM `information_schema`.`SCHEMATA`
-            WHERE `SCHEMA_NAME` NOT IN ('information_schema', 'performance_schema', 'mysql', 'sys')
-              AND `SCHEMA_NAME` REGEXP ?)
-        "#},
-        DATABASE_PRIVILEGE_FIELDS
-            .iter()
-            .map(|field| format!("`{field}`"))
-            .join(","),
-    ))
-    .bind(create_user_group_matching_regex(&unix_user))
-    .fetch_all(connection)
-    .await
-    .context("Failed to show databases")?;
-
-    Ok(result)
 }
 
 /*************************/
@@ -340,17 +166,23 @@ pub fn generate_editor_content_from_privilege_data(
     //       editor will be the example user and example db name.
     //       Hence, it's put as the fallback value, despite not really
     //       being a "fallback" in the normal sense.
-    let longest_username = privilege_data
-        .iter()
-        .map(|p| p.user.len())
-        .max()
-        .unwrap_or(example_user.len());
+    let longest_username = max(
+        privilege_data
+            .iter()
+            .map(|p| p.user.len())
+            .max()
+            .unwrap_or(example_user.len()),
+        "User".len(),
+    );
 
-    let longest_database_name = privilege_data
-        .iter()
-        .map(|p| p.db.len())
-        .max()
-        .unwrap_or(example_db.len());
+    let longest_database_name = max(
+        privilege_data
+            .iter()
+            .map(|p| p.db.len())
+            .max()
+            .unwrap_or(example_db.len()),
+        "Database".len(),
+    );
 
     let mut header: Vec<_> = DATABASE_PRIVILEGE_FIELDS
         .into_iter()
@@ -578,7 +410,7 @@ pub fn parse_privilege_data_from_editor_content(
 /// instances of privilege sets for a single user on a single database.
 ///
 /// The `User` and `Database` are the same for both instances.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord)]
 pub struct DatabasePrivilegeRowDiff {
     pub db: String,
     pub user: String,
@@ -586,7 +418,7 @@ pub struct DatabasePrivilegeRowDiff {
 }
 
 /// This enum represents a change for a single privilege.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord)]
 pub enum DatabasePrivilegeChange {
     YesToNo(String),
     NoToYes(String),
@@ -603,11 +435,29 @@ impl DatabasePrivilegeChange {
 }
 
 /// This enum encapsulates whether a [`DatabasePrivilegeRow`] was intrduced, modified or deleted.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord)]
 pub enum DatabasePrivilegesDiff {
     New(DatabasePrivilegeRow),
     Modified(DatabasePrivilegeRowDiff),
     Deleted(DatabasePrivilegeRow),
+}
+
+impl DatabasePrivilegesDiff {
+    pub fn get_database_name(&self) -> &str {
+        match self {
+            DatabasePrivilegesDiff::New(p) => &p.db,
+            DatabasePrivilegesDiff::Modified(p) => &p.db,
+            DatabasePrivilegesDiff::Deleted(p) => &p.db,
+        }
+    }
+
+    pub fn get_user_name(&self) -> &str {
+        match self {
+            DatabasePrivilegesDiff::New(p) => &p.user,
+            DatabasePrivilegesDiff::Modified(p) => &p.user,
+            DatabasePrivilegesDiff::Deleted(p) => &p.user,
+        }
+    }
 }
 
 /// This function calculates the differences between two sets of database privileges.
@@ -633,7 +483,7 @@ pub fn diff_privileges(
 
     for p in to {
         if let Some(old_p) = from_lookup_table.get(&(p.db.clone(), p.user.clone())) {
-            let diff = old_p.diff(p);
+            let diff = diff(old_p, p);
             if !diff.diff.is_empty() {
                 result.insert(DatabasePrivilegesDiff::Modified(diff));
             }
@@ -651,72 +501,6 @@ pub fn diff_privileges(
     result
 }
 
-/// Uses the result of [`diff_privileges`] to modify privileges in the database.
-pub async fn apply_privilege_diffs(
-    diffs: BTreeSet<DatabasePrivilegesDiff>,
-    connection: &mut MySqlConnection,
-) -> anyhow::Result<()> {
-    for diff in diffs {
-        match diff {
-            DatabasePrivilegesDiff::New(p) => {
-                let tables = DATABASE_PRIVILEGE_FIELDS
-                    .iter()
-                    .map(|field| format!("`{field}`"))
-                    .join(",");
-
-                let question_marks = std::iter::repeat("?")
-                    .take(DATABASE_PRIVILEGE_FIELDS.len())
-                    .join(",");
-
-                sqlx::query(
-                    format!("INSERT INTO `db` ({}) VALUES ({})", tables, question_marks).as_str(),
-                )
-                .bind(p.db)
-                .bind(p.user)
-                .bind(yn(p.select_priv))
-                .bind(yn(p.insert_priv))
-                .bind(yn(p.update_priv))
-                .bind(yn(p.delete_priv))
-                .bind(yn(p.create_priv))
-                .bind(yn(p.drop_priv))
-                .bind(yn(p.alter_priv))
-                .bind(yn(p.index_priv))
-                .bind(yn(p.create_tmp_table_priv))
-                .bind(yn(p.lock_tables_priv))
-                .bind(yn(p.references_priv))
-                .execute(&mut *connection)
-                .await?;
-            }
-            DatabasePrivilegesDiff::Modified(p) => {
-                let tables = p
-                    .diff
-                    .iter()
-                    .map(|diff| match diff {
-                        DatabasePrivilegeChange::YesToNo(name) => format!("`{}` = 'N'", name),
-                        DatabasePrivilegeChange::NoToYes(name) => format!("`{}` = 'Y'", name),
-                    })
-                    .join(",");
-
-                sqlx::query(
-                    format!("UPDATE `db` SET {} WHERE `db` = ? AND `user` = ?", tables).as_str(),
-                )
-                .bind(p.db)
-                .bind(p.user)
-                .execute(&mut *connection)
-                .await?;
-            }
-            DatabasePrivilegesDiff::Deleted(p) => {
-                sqlx::query("DELETE FROM `db` WHERE `db` = ? AND `user` = ?")
-                    .bind(p.db)
-                    .bind(p.user)
-                    .execute(&mut *connection)
-                    .await?;
-            }
-        }
-    }
-    Ok(())
-}
-
 fn display_privilege_cell(diff: &DatabasePrivilegeRowDiff) -> String {
     diff.diff
         .iter()
@@ -726,6 +510,20 @@ fn display_privilege_cell(diff: &DatabasePrivilegeRowDiff) -> String {
             }
             DatabasePrivilegeChange::NoToYes(name) => {
                 format!("{}: N -> Y", db_priv_field_human_readable_name(name))
+            }
+        })
+        .join("\n")
+}
+
+fn display_new_privileges_list(row: &DatabasePrivilegeRow) -> String {
+    DATABASE_PRIVILEGE_FIELDS
+        .into_iter()
+        .skip(2)
+        .map(|field| {
+            if row.get_privilege_by_name(field) {
+                format!("{}: Y", db_priv_field_human_readable_name(field))
+            } else {
+                format!("{}: N", db_priv_field_human_readable_name(field))
             }
         })
         .join("\n")
@@ -741,24 +539,14 @@ pub fn display_privilege_diffs(diffs: &BTreeSet<DatabasePrivilegesDiff>) -> Stri
                 table.add_row(row![
                     p.db,
                     p.user,
-                    "(New user)\n".to_string()
-                        + &display_privilege_cell(
-                            &DatabasePrivilegeRow::empty(&p.db, &p.user).diff(p)
-                        )
+                    "(New user)\n".to_string() + &display_new_privileges_list(p)
                 ]);
             }
             DatabasePrivilegesDiff::Modified(p) => {
                 table.add_row(row![p.db, p.user, display_privilege_cell(p),]);
             }
             DatabasePrivilegesDiff::Deleted(p) => {
-                table.add_row(row![
-                    p.db,
-                    p.user,
-                    "(All privileges removed)\n".to_string()
-                        + &display_privilege_cell(
-                            &p.diff(&DatabasePrivilegeRow::empty(&p.db, &p.user))
-                        )
-                ]);
+                table.add_row(row![p.db, p.user, "Removed".to_string()]);
             }
         }
     }
