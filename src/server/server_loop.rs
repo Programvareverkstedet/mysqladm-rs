@@ -1,7 +1,5 @@
 use std::{collections::BTreeSet, fs, path::PathBuf};
 
-use anyhow::Context;
-
 use futures_util::{SinkExt, StreamExt};
 use tokio::io::AsyncWriteExt;
 use tokio::net::{UnixListener, UnixStream};
@@ -102,11 +100,8 @@ pub async fn handle_requests_for_single_session(
     )
     .await;
 
-    if let Err(e) = db_connection
-        .close()
-        .await
-        .context("Failed to close connection properly")
-    {
+    if let Err(e) = db_connection.close().await {
+        eprintln!("Failed to close database connection: {}", e);
         eprintln!("{}", e);
         eprintln!("Ignoring...");
     }
