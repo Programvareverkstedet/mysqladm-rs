@@ -1,4 +1,6 @@
+use itertools::Itertools;
 use std::collections::BTreeMap;
+use indoc::formatdoc;
 
 use serde::{Deserialize, Serialize};
 
@@ -19,6 +21,8 @@ use crate::{
         input_sanitization::{quote_literal, validate_name, validate_ownership_by_unix_user},
     },
 };
+
+use super::database_privilege_operations::DATABASE_PRIVILEGE_FIELDS;
 
 // NOTE: this function is unsafe because it does no input validation.
 async fn unsafe_user_exists(
@@ -309,6 +313,9 @@ pub struct DatabaseUser {
 
     #[sqlx(rename = "is_locked")]
     pub is_locked: bool,
+
+    #[sqlx(skip)]
+    pub databases: Vec<String>,
 }
 
 const DB_USER_SELECT_STATEMENT: &str = r#"
@@ -344,12 +351,16 @@ pub async fn list_database_users(
             continue;
         }
 
-        let result = sqlx::query_as::<_, DatabaseUser>(
+        let mut result = sqlx::query_as::<_, DatabaseUser>(
             &(DB_USER_SELECT_STATEMENT.to_string() + "WHERE `mysql`.`user`.`User` = ?"),
         )
         .bind(&db_user)
         .fetch_optional(&mut *connection)
         .await;
+
+        if let Ok(Some(user)) = result.as_mut() {
+            append_databases_where_user_has_privileges(user, &mut *connection).await;
+        }
 
         match result {
             Ok(Some(user)) => results.insert(db_user, Ok(user)),
@@ -365,11 +376,50 @@ pub async fn list_all_database_users_for_unix_user(
     unix_user: &UnixUser,
     connection: &mut MySqlConnection,
 ) -> ListAllUsersOutput {
-    sqlx::query_as::<_, DatabaseUser>(
+    let mut result = sqlx::query_as::<_, DatabaseUser>(
         &(DB_USER_SELECT_STATEMENT.to_string() + "WHERE `mysql`.`user`.`User` REGEXP ?"),
     )
     .bind(create_user_group_matching_regex(unix_user))
-    .fetch_all(connection)
+    .fetch_all(&mut *connection)
     .await
-    .map_err(|err| ListAllUsersError::MySqlError(err.to_string()))
+    .map_err(|err| ListAllUsersError::MySqlError(err.to_string()));
+
+    if let Ok(users) = result.as_mut() {
+        for user in users {
+            append_databases_where_user_has_privileges(user, &mut *connection).await;
+        }
+    }
+
+    result
+}
+
+pub async fn append_databases_where_user_has_privileges(
+    database_user: &mut DatabaseUser,
+    connection: &mut MySqlConnection,
+) {
+    let database_list = sqlx::query(
+        formatdoc!(
+            r#"
+                SELECT `db` AS `database`
+                FROM `db`
+                WHERE `user` = ? AND ({})
+            "#,
+            DATABASE_PRIVILEGE_FIELDS
+                .iter()
+                .map(|field| format!("`{}` = 'Y'", field))
+                .join(" OR "),
+        )
+        .as_str(),
+    )
+    .bind(database_user.user.clone())
+    .fetch_all(&mut *connection)
+    .await;
+
+    database_user.databases = database_list
+        .map(|rows| {
+            rows.into_iter()
+                .map(|row| row.get::<String, _>("database"))
+                .collect()
+        })
+        .unwrap_or_default();
 }

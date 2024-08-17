@@ -290,14 +290,14 @@ async fn show_users(
             "User",
             "Password is set",
             "Locked",
-            // "Databases where user has privileges"
+            "Databases where user has privileges"
         ]);
         for user in users {
             table.add_row(row![
                 user.user,
                 user.has_password,
                 user.is_locked,
-                // user.databases.join("\n")
+                user.databases.join("\n")
             ]);
         }
         table.printstd();
