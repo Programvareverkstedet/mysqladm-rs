@@ -43,18 +43,14 @@ pub fn validate_ownership_by_prefixes(
         return Err(OwnerValidationError::StringEmpty);
     }
 
-    if name.starts_with('_') {
-        return Err(OwnerValidationError::MissingPrefix);
-    }
-
-    let (prefix, _) = match name.split_once('_') {
-        Some(pair) => pair,
-        None => return Err(OwnerValidationError::MissingPostfix),
-    };
-
-    if !prefixes.iter().any(|g| g == prefix) {
+    if prefixes
+        .iter()
+        .filter(|p| name.starts_with(*p))
+        .collect::<Vec<_>>()
+        .is_empty()
+    {
         return Err(OwnerValidationError::NoMatch);
-    }
+    };
 
     Ok(())
 }
@@ -113,24 +109,6 @@ mod tests {
         assert_eq!(
             validate_ownership_by_prefixes("", &prefixes),
             Err(OwnerValidationError::StringEmpty)
-        );
-
-        assert_eq!(
-            validate_ownership_by_prefixes("user", &prefixes),
-            Err(OwnerValidationError::MissingPostfix)
-        );
-        assert_eq!(
-            validate_ownership_by_prefixes("something", &prefixes),
-            Err(OwnerValidationError::MissingPostfix)
-        );
-        assert_eq!(
-            validate_ownership_by_prefixes("user-testdb", &prefixes),
-            Err(OwnerValidationError::MissingPostfix)
-        );
-
-        assert_eq!(
-            validate_ownership_by_prefixes("_testdb", &prefixes),
-            Err(OwnerValidationError::MissingPrefix)
         );
 
         assert_eq!(

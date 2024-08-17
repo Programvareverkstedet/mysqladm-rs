@@ -95,8 +95,7 @@ impl OwnerValidationError {
                     .join("\n"),
             )
             .to_owned(),
-
-            _ => format!(
+            OwnerValidationError::StringEmpty => format!(
                 "'{}' is not a valid {} name.",
                 name,
                 db_or_user.lowercased()
@@ -113,12 +112,6 @@ pub enum OwnerValidationError {
 
     // The name is empty, which is invalid
     StringEmpty,
-
-    // The name is in the format "_<postfix>", which is invalid
-    MissingPrefix,
-
-    // The name is in the format "<prefix>_", which is invalid
-    MissingPostfix,
 }
 
 pub type CreateDatabasesOutput = BTreeMap<String, Result<(), CreateDatabaseError>>;
