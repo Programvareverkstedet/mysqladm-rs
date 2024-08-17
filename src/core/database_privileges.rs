@@ -157,9 +157,10 @@ const EDITOR_COMMENT: &str = r#"
 pub fn generate_editor_content_from_privilege_data(
     privilege_data: &[DatabasePrivilegeRow],
     unix_user: &str,
+    database_name: Option<&str>,
 ) -> String {
     let example_user = format!("{}_user", unix_user);
-    let example_db = format!("{}_db", unix_user);
+    let example_db = database_name.unwrap_or(&format!("{}_db", unix_user)).to_string();
 
     // NOTE: `.max()`` fails when the iterator is empty.
     //       In this case, we know that the only fields in the
@@ -664,7 +665,7 @@ mod tests {
             },
         ];
 
-        let content = generate_editor_content_from_privilege_data(&permissions, "user");
+        let content = generate_editor_content_from_privilege_data(&permissions, "user", None);
 
         let parsed_permissions = parse_privilege_data_from_editor_content(content).unwrap();
 

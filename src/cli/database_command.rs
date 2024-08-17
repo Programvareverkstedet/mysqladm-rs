@@ -366,7 +366,7 @@ pub async fn edit_database_privileges(
     let privileges_to_change = if !args.privs.is_empty() {
         parse_privilege_tables_from_args(&args)?
     } else {
-        edit_privileges_with_editor(&privilege_data)?
+        edit_privileges_with_editor(&privilege_data, args.name.as_deref())?
     };
 
     let diffs = diff_privileges(&privilege_data, &privileges_to_change);
@@ -432,13 +432,14 @@ fn parse_privilege_tables_from_args(
 
 fn edit_privileges_with_editor(
     privilege_data: &[DatabasePrivilegeRow],
+    database_name: Option<&str>,
 ) -> anyhow::Result<Vec<DatabasePrivilegeRow>> {
     let unix_user = User::from_uid(getuid())
         .context("Failed to look up your UNIX username")
         .and_then(|u| u.ok_or(anyhow::anyhow!("Failed to look up your UNIX username")))?;
 
     let editor_content =
-        generate_editor_content_from_privilege_data(privilege_data, &unix_user.name);
+        generate_editor_content_from_privilege_data(privilege_data, &unix_user.name, database_name);
 
     // TODO: handle errors better here
     let result = Editor::new().extension("tsv").edit(&editor_content)?;
