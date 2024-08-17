@@ -540,7 +540,7 @@ pub fn display_privilege_diffs(diffs: &BTreeSet<DatabasePrivilegesDiff>) -> Stri
                 table.add_row(row![
                     p.db,
                     p.user,
-                    "(New user)\n".to_string() + &display_new_privileges_list(p)
+                    "(Previously unprivileged)\n".to_string() + &display_new_privileges_list(p)
                 ]);
             }
             DatabasePrivilegesDiff::Modified(p) => {
