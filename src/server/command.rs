@@ -40,10 +40,6 @@ pub async fn handle_command(
 ) -> anyhow::Result<()> {
     let config = read_config_from_path_with_arg_overrides(config_path, args.config_overrides)?;
 
-    // if let Err(e) = &result {
-    //     eprintln!("{}", e);
-    // }
-
     match args.subcmd {
         ServerCommand::Listen => listen_for_incoming_connections(socket_path, config).await,
         ServerCommand::SocketActivate => socket_activate(config).await,
@@ -61,14 +57,12 @@ async fn socket_activate(config: ServerConfig) -> anyhow::Result<()> {
 }
 
 async fn get_socket_from_systemd() -> anyhow::Result<TokioUnixStream> {
-    let fd = std::env::var("LISTEN_FDS")
-        .context("LISTEN_FDS not set, not running under systemd?")?
-        .parse::<i32>()
-        .context("Failed to parse LISTEN_FDS")?;
+    let fd = sd_notify::listen_fds()
+        .context("Failed to get file descriptors from systemd")?
+        .next()
+        .context("No file descriptors received from systemd")?;
 
-    if fd != 1 {
-        return Err(anyhow::anyhow!("Unexpected LISTEN_FDS value: {}", fd));
-    }
+    log::debug!("Received file descriptor from systemd: {}", fd);
 
     let std_unix_stream = unsafe { StdUnixStream::from_raw_fd(fd) };
     let socket = TokioUnixStream::from_std(std_unix_stream)?;
