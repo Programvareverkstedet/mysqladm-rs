@@ -298,39 +298,55 @@ pub async fn unlock_database_users(
 
 /// This struct contains information about a database user.
 /// This can be extended if we need more information in the future.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, FromRow)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DatabaseUser {
-    #[sqlx(rename = "User")]
     pub user: String,
-
-    #[allow(dead_code)]
     #[serde(skip)]
-    #[sqlx(rename = "Host")]
     pub host: String,
-
-    #[sqlx(rename = "has_password")]
     pub has_password: bool,
-
-    #[sqlx(rename = "is_locked")]
     pub is_locked: bool,
-
-    #[sqlx(skip)]
     pub databases: Vec<String>,
+}
+
+/// Some mysql versions with some collations mark some columns as binary fields,
+/// which in the current version of sqlx is not parsable as string.
+/// See: https://github.com/launchbadge/sqlx/issues/3387
+#[inline]
+fn try_get_with_binary_fallback(
+    row: &sqlx::mysql::MySqlRow,
+    column: &str,
+) -> Result<String, sqlx::Error> {
+    row.try_get(column).or_else(|_| {
+        row.try_get::<Vec<u8>, _>(column)
+            .map(|v| String::from_utf8_lossy(&v).to_string())
+    })
+}
+
+impl FromRow<'_, sqlx::mysql::MySqlRow> for DatabaseUser {
+    fn from_row(row: &sqlx::mysql::MySqlRow) -> Result<Self, sqlx::Error> {
+        Ok(Self {
+            user: try_get_with_binary_fallback(row, "User")?,
+            host: try_get_with_binary_fallback(row, "Host")?,
+            has_password: row.try_get("has_password")?,
+            is_locked: row.try_get("is_locked")?,
+            databases: Vec::new(),
+        })
+    }
 }
 
 const DB_USER_SELECT_STATEMENT: &str = r#"
 SELECT
-  `mysql`.`user`.`User`,
-  `mysql`.`user`.`Host`,
-  `mysql`.`user`.`Password` != '' OR `mysql`.`user`.`authentication_string` != '' AS `has_password`,
+  `user`.`User`,
+  `user`.`Host`,
+  `user`.`Password` != '' OR `user`.`authentication_string` != '' AS `has_password`,
   COALESCE(
-    JSON_EXTRACT(`mysql`.`global_priv`.`priv`, "$.account_locked"),
+    JSON_EXTRACT(`global_priv`.`priv`, "$.account_locked"),
     'false'
   ) != 'false' AS `is_locked`
-FROM `mysql`.`user`
-JOIN `mysql`.`global_priv` ON
-  `mysql`.`user`.`User` = `mysql`.`global_priv`.`User`
-  AND `mysql`.`user`.`Host` = `mysql`.`global_priv`.`Host`
+FROM `user`
+JOIN `global_priv` ON
+  `user`.`User` = `global_priv`.`User`
+  AND `user`.`Host` = `global_priv`.`Host`
 "#;
 
 pub async fn list_database_users(
@@ -377,7 +393,7 @@ pub async fn list_all_database_users_for_unix_user(
     connection: &mut MySqlConnection,
 ) -> ListAllUsersOutput {
     let mut result = sqlx::query_as::<_, DatabaseUser>(
-        &(DB_USER_SELECT_STATEMENT.to_string() + "WHERE `mysql`.`user`.`User` REGEXP ?"),
+        &(DB_USER_SELECT_STATEMENT.to_string() + "WHERE `user`.`User` REGEXP ?"),
     )
     .bind(create_user_group_matching_regex(unix_user))
     .fetch_all(&mut *connection)
@@ -418,7 +434,7 @@ pub async fn append_databases_where_user_has_privileges(
     database_user.databases = database_list
         .map(|rows| {
             rows.into_iter()
-                .map(|row| row.get::<String, _>("database"))
+                .map(|row| try_get_with_binary_fallback(&row, "database").unwrap())
                 .collect()
         })
         .unwrap_or_default();
