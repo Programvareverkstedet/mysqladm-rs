@@ -6,7 +6,8 @@ use futures_util::{SinkExt, StreamExt};
 use crate::core::protocol::{
     print_create_users_output_status, print_drop_users_output_status,
     print_lock_users_output_status, print_set_password_output_status,
-    print_unlock_users_output_status, ClientToServerMessageStream, Request, Response,
+    print_unlock_users_output_status, ClientToServerMessageStream, ListUsersError, Request,
+    Response,
 };
 
 use super::common::erroneous_server_response;
@@ -207,6 +208,28 @@ async fn passwd_user(
     args: UserPasswdArgs,
     mut server_connection: ClientToServerMessageStream,
 ) -> anyhow::Result<()> {
+    // TODO: create a "user" exists check" command
+    let message = Request::ListUsers(Some(vec![args.username.clone()]));
+    if let Err(err) = server_connection.send(message).await {
+        server_connection.close().await.ok();
+        anyhow::bail!(err);
+    }
+    let response = match server_connection.next().await {
+        Some(Ok(Response::ListUsers(users))) => users,
+        response => return erroneous_server_response(response),
+    };
+    match response
+        .get(&args.username)
+        .unwrap_or(&Err(ListUsersError::UserDoesNotExist))
+    {
+        Ok(_) => {}
+        Err(err) => {
+            server_connection.send(Request::Exit).await?;
+            server_connection.close().await.ok();
+            anyhow::bail!("{}", err.to_error_message(&args.username));
+        }
+    }
+
     let password = if let Some(password_file) = args.password_file {
         std::fs::read_to_string(password_file)
             .context("Failed to read password file")?
