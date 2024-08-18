@@ -136,7 +136,7 @@ async fn unsafe_get_database_privileges(
     database_name: &str,
     connection: &mut MySqlConnection,
 ) -> Result<Vec<DatabasePrivilegeRow>, sqlx::Error> {
-    sqlx::query_as::<_, DatabasePrivilegeRow>(&format!(
+    let result = sqlx::query_as::<_, DatabasePrivilegeRow>(&format!(
         "SELECT {} FROM `db` WHERE `db` = ?",
         DATABASE_PRIVILEGE_FIELDS
             .iter()
@@ -145,7 +145,17 @@ async fn unsafe_get_database_privileges(
     ))
     .bind(database_name)
     .fetch_all(connection)
-    .await
+    .await;
+
+    if let Err(e) = &result {
+        log::error!(
+            "Failed to get database privileges for '{}': {}",
+            &database_name,
+            e
+        );
+    }
+
+    result
 }
 
 // NOTE: this function is unsafe because it does no input validation.
@@ -155,7 +165,7 @@ pub async fn unsafe_get_database_privileges_for_db_user_pair(
     user_name: &str,
     connection: &mut MySqlConnection,
 ) -> Result<Option<DatabasePrivilegeRow>, sqlx::Error> {
-    sqlx::query_as::<_, DatabasePrivilegeRow>(&format!(
+    let result = sqlx::query_as::<_, DatabasePrivilegeRow>(&format!(
         "SELECT {} FROM `db` WHERE `db` = ? AND `user` = ?",
         DATABASE_PRIVILEGE_FIELDS
             .iter()
@@ -165,7 +175,18 @@ pub async fn unsafe_get_database_privileges_for_db_user_pair(
     .bind(database_name)
     .bind(user_name)
     .fetch_optional(connection)
-    .await
+    .await;
+
+    if let Err(e) = &result {
+        log::error!(
+            "Failed to get database privileges for '{}.{}': {}",
+            &database_name,
+            &user_name,
+            e
+        );
+    }
+
+    result
 }
 
 pub async fn get_databases_privilege_data(
@@ -220,7 +241,7 @@ pub async fn get_all_database_privileges(
     unix_user: &UnixUser,
     connection: &mut MySqlConnection,
 ) -> GetAllDatabasesPrivilegeData {
-    sqlx::query_as::<_, DatabasePrivilegeRow>(&format!(
+    let result = sqlx::query_as::<_, DatabasePrivilegeRow>(&format!(
         indoc! {r#"
           SELECT {} FROM `db` WHERE `db` IN
           (SELECT DISTINCT `SCHEMA_NAME` AS `database`
@@ -236,14 +257,20 @@ pub async fn get_all_database_privileges(
     .bind(create_user_group_matching_regex(unix_user))
     .fetch_all(connection)
     .await
-    .map_err(|e| GetAllDatabasesPrivilegeDataError::MySqlError(e.to_string()))
+    .map_err(|e| GetAllDatabasesPrivilegeDataError::MySqlError(e.to_string()));
+
+    if let Err(e) = &result {
+        log::error!("Failed to get all database privileges: {:?}", e);
+    }
+
+    result
 }
 
 async fn unsafe_apply_privilege_diff(
     database_privilege_diff: &DatabasePrivilegesDiff,
     connection: &mut MySqlConnection,
 ) -> Result<(), sqlx::Error> {
-    match database_privilege_diff {
+    let result = match database_privilege_diff {
         DatabasePrivilegesDiff::New(p) => {
             let tables = DATABASE_PRIVILEGE_FIELDS
                 .iter()
@@ -305,7 +332,13 @@ async fn unsafe_apply_privilege_diff(
                 .await
                 .map(|_| ())
         }
+    };
+
+    if let Err(e) = &result {
+        log::error!("Failed to apply database privilege diff: {}", e);
     }
+
+    result
 }
 
 async fn validate_diff(

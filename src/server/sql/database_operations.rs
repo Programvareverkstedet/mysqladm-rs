@@ -26,9 +26,17 @@ pub(super) async fn unsafe_database_exists(
         sqlx::query("SELECT SCHEMA_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = ?")
             .bind(database_name)
             .fetch_optional(connection)
-            .await?;
+            .await;
 
-    Ok(result.is_some())
+    if let Err(err) = &result {
+        log::error!(
+            "Failed to check if database '{}' exists: {:?}",
+            &database_name,
+            err
+        );
+    }
+
+    Ok(result?.is_some())
 }
 
 pub async fn create_databases(
@@ -79,6 +87,10 @@ pub async fn create_databases(
                 .await
                 .map(|_| ())
                 .map_err(|err| CreateDatabaseError::MySqlError(err.to_string()));
+
+        if let Err(err) = &result {
+            log::error!("Failed to create database '{}': {:?}", &database_name, err);
+        }
 
         results.insert(database_name, result);
     }
@@ -135,6 +147,10 @@ pub async fn drop_databases(
                 .map(|_| ())
                 .map_err(|err| DropDatabaseError::MySqlError(err.to_string()));
 
+        if let Err(err) = &result {
+            log::error!("Failed to drop database '{}': {:?}", &database_name, err);
+        }
+
         results.insert(database_name, result);
     }
 
@@ -145,7 +161,7 @@ pub async fn list_databases_for_user(
     unix_user: &UnixUser,
     connection: &mut MySqlConnection,
 ) -> Result<Vec<String>, ListDatabasesError> {
-    sqlx::query(
+    let result = sqlx::query(
         r#"
           SELECT `SCHEMA_NAME` AS `database`
           FROM `information_schema`.`SCHEMATA`
@@ -161,5 +177,15 @@ pub async fn list_databases_for_user(
             .map(|row| row.try_get::<String, _>("database"))
             .collect::<Result<Vec<String>, sqlx::Error>>()
     })
-    .map_err(|err| ListDatabasesError::MySqlError(err.to_string()))
+    .map_err(|err| ListDatabasesError::MySqlError(err.to_string()));
+
+    if let Err(err) = &result {
+        log::error!(
+            "Failed to list databases for user '{}': {:?}",
+            unix_user.username,
+            err
+        );
+    }
+
+    result
 }

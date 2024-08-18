@@ -102,8 +102,11 @@ pub async fn create_mysql_connection_from_config(
     config: &MysqlConfig,
 ) -> anyhow::Result<MySqlConnection> {
     let mut display_config = config.clone();
-    display_config.password = "<REDACTED>".to_owned();
-    log::debug!("Connecting to MySQL server with parameters: {:#?}", display_config);
+    "<REDACTED>".clone_into(&mut display_config.password);
+    log::debug!(
+        "Connecting to MySQL server with parameters: {:#?}",
+        display_config
+    );
 
     match tokio::time::timeout(
         Duration::from_secs(config.timeout.unwrap_or(DEFAULT_TIMEOUT)),

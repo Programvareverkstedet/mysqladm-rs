@@ -1,6 +1,6 @@
+use indoc::formatdoc;
 use itertools::Itertools;
 use std::collections::BTreeMap;
-use indoc::formatdoc;
 
 use serde::{Deserialize, Serialize};
 
@@ -29,7 +29,7 @@ async fn unsafe_user_exists(
     db_user: &str,
     connection: &mut MySqlConnection,
 ) -> Result<bool, sqlx::Error> {
-    sqlx::query(
+    let result = sqlx::query(
         r#"
           SELECT EXISTS(
             SELECT 1
@@ -41,7 +41,13 @@ async fn unsafe_user_exists(
     .bind(db_user)
     .fetch_one(connection)
     .await
-    .map(|row| row.get::<bool, _>(0))
+    .map(|row| row.get::<bool, _>(0));
+
+    if let Err(err) = &result {
+        log::error!("Failed to check if database user exists: {:?}", err);
+    }
+
+    result
 }
 
 pub async fn create_database_users(
@@ -79,6 +85,10 @@ pub async fn create_database_users(
             .await
             .map(|_| ())
             .map_err(|err| CreateUserError::MySqlError(err.to_string()));
+
+        if let Err(err) = &result {
+            log::error!("Failed to create database user '{}': {:?}", &db_user, err);
+        }
 
         results.insert(db_user, result);
     }
@@ -122,6 +132,10 @@ pub async fn drop_database_users(
             .map(|_| ())
             .map_err(|err| DropUserError::MySqlError(err.to_string()));
 
+        if let Err(err) = &result {
+            log::error!("Failed to drop database user '{}': {:?}", &db_user, err);
+        }
+
         results.insert(db_user, result);
     }
 
@@ -148,7 +162,7 @@ pub async fn set_password_for_database_user(
         _ => {}
     }
 
-    sqlx::query(
+    let result = sqlx::query(
         format!(
             "ALTER USER {}@'%' IDENTIFIED BY {}",
             quote_literal(db_user),
@@ -159,7 +173,17 @@ pub async fn set_password_for_database_user(
     .execute(&mut *connection)
     .await
     .map(|_| ())
-    .map_err(|err| SetPasswordError::MySqlError(err.to_string()))
+    .map_err(|err| SetPasswordError::MySqlError(err.to_string()));
+
+    if let Err(err) = &result {
+        log::error!(
+            "Failed to set password for database user '{}': {:?}",
+            &db_user,
+            err
+        );
+    }
+
+    result
 }
 
 // NOTE: this function is unsafe because it does no input validation.
@@ -167,7 +191,7 @@ async fn database_user_is_locked_unsafe(
     db_user: &str,
     connection: &mut MySqlConnection,
 ) -> Result<bool, sqlx::Error> {
-    sqlx::query(
+    let result = sqlx::query(
         r#"
           SELECT COALESCE(
             JSON_EXTRACT(`mysql`.`global_priv`.`priv`, "$.account_locked"),
@@ -181,7 +205,17 @@ async fn database_user_is_locked_unsafe(
     .bind(db_user)
     .fetch_one(connection)
     .await
-    .map(|row| row.get::<bool, _>(0))
+    .map(|row| row.get::<bool, _>(0));
+
+    if let Err(err) = &result {
+        log::error!(
+            "Failed to check if database user is locked '{}': {:?}",
+            &db_user,
+            err
+        );
+    }
+
+    result
 }
 
 pub async fn lock_database_users(
@@ -233,6 +267,10 @@ pub async fn lock_database_users(
         .await
         .map(|_| ())
         .map_err(|err| LockUserError::MySqlError(err.to_string()));
+
+        if let Err(err) = &result {
+            log::error!("Failed to lock database user '{}': {:?}", &db_user, err);
+        }
 
         results.insert(db_user, result);
     }
@@ -289,6 +327,10 @@ pub async fn unlock_database_users(
         .await
         .map(|_| ())
         .map_err(|err| UnlockUserError::MySqlError(err.to_string()));
+
+        if let Err(err) = &result {
+            log::error!("Failed to unlock database user '{}': {:?}", &db_user, err);
+        }
 
         results.insert(db_user, result);
     }
@@ -374,6 +416,10 @@ pub async fn list_database_users(
         .fetch_optional(&mut *connection)
         .await;
 
+        if let Err(err) = &result {
+            log::error!("Failed to list database user '{}': {:?}", &db_user, err);
+        }
+
         if let Ok(Some(user)) = result.as_mut() {
             append_databases_where_user_has_privileges(user, &mut *connection).await;
         }
@@ -400,6 +446,10 @@ pub async fn list_all_database_users_for_unix_user(
     .await
     .map_err(|err| ListAllUsersError::MySqlError(err.to_string()));
 
+    if let Err(err) = &result {
+        log::error!("Failed to list all database users: {:?}", err);
+    }
+
     if let Ok(users) = result.as_mut() {
         for user in users {
             append_databases_where_user_has_privileges(user, &mut *connection).await;
@@ -410,7 +460,7 @@ pub async fn list_all_database_users_for_unix_user(
 }
 
 pub async fn append_databases_where_user_has_privileges(
-    database_user: &mut DatabaseUser,
+    db_user: &mut DatabaseUser,
     connection: &mut MySqlConnection,
 ) {
     let database_list = sqlx::query(
@@ -427,11 +477,19 @@ pub async fn append_databases_where_user_has_privileges(
         )
         .as_str(),
     )
-    .bind(database_user.user.clone())
+    .bind(db_user.user.clone())
     .fetch_all(&mut *connection)
     .await;
 
-    database_user.databases = database_list
+    if let Err(err) = &database_list {
+        log::error!(
+            "Failed to list databases for user '{}': {:?}",
+            &db_user.user,
+            err
+        );
+    }
+
+    db_user.databases = database_list
         .map(|rows| {
             rows.into_iter()
                 .map(|row| try_get_with_binary_fallback(&row, "database").unwrap())
