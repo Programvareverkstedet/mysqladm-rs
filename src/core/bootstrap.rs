@@ -6,14 +6,9 @@ use std::os::unix::net::UnixStream as StdUnixStream;
 use tokio::net::UnixStream as TokioUnixStream;
 
 use crate::{
-    core::{
-        bootstrap::authenticated_unix_socket::client_authenticate,
-        common::{UnixUser, DEFAULT_CONFIG_PATH, DEFAULT_SOCKET_PATH},
-    },
+    core::common::{UnixUser, DEFAULT_CONFIG_PATH, DEFAULT_SOCKET_PATH},
     server::{config::read_config_form_path, server_loop::handle_requests_for_single_session},
 };
-
-pub mod authenticated_unix_socket;
 
 // TODO: this function is security critical, it should be integration tested
 //       in isolation.
@@ -57,25 +52,11 @@ pub fn bootstrap_server_connection_and_drop_privileges(
 
     log::debug!("Starting the server connection bootstrap process");
 
-    let (socket, do_authenticate) = bootstrap_server_connection(server_socket_path, config_path)?;
+    let socket = bootstrap_server_connection(server_socket_path, config_path)?;
 
     drop_privs()?;
 
-    let result: anyhow::Result<StdUnixStream> = if do_authenticate {
-        tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap()
-            .block_on(async {
-                let mut socket = TokioUnixStream::from_std(socket)?;
-                client_authenticate(&mut socket, None).await?;
-                Ok(socket.into_std()?)
-            })
-    } else {
-        Ok(socket)
-    };
-
-    result
+    Ok(socket)
 }
 
 /// Inner function for [`bootstrap_server_connection_and_drop_privileges`].
@@ -83,12 +64,12 @@ pub fn bootstrap_server_connection_and_drop_privileges(
 fn bootstrap_server_connection(
     socket_path: Option<PathBuf>,
     config_path: Option<PathBuf>,
-) -> anyhow::Result<(StdUnixStream, bool)> {
+) -> anyhow::Result<StdUnixStream> {
     // TODO: ensure this is both readable and writable
     if let Some(socket_path) = socket_path {
         log::debug!("Connecting to socket at {:?}", socket_path);
         return match StdUnixStream::connect(socket_path) {
-            Ok(socket) => Ok((socket, true)),
+            Ok(socket) => Ok(socket),
             Err(e) => match e.kind() {
                 std::io::ErrorKind::NotFound => Err(anyhow::anyhow!("Socket not found")),
                 std::io::ErrorKind::PermissionDenied => Err(anyhow::anyhow!("Permission denied")),
@@ -103,12 +84,12 @@ fn bootstrap_server_connection(
         }
 
         log::debug!("Starting server with config at {:?}", config_path);
-        return invoke_server_with_config(config_path).map(|socket| (socket, false));
+        return invoke_server_with_config(config_path);
     }
 
     if fs::metadata(DEFAULT_SOCKET_PATH).is_ok() {
         return match StdUnixStream::connect(DEFAULT_SOCKET_PATH) {
-            Ok(socket) => Ok((socket, true)),
+            Ok(socket) => Ok(socket),
             Err(e) => match e.kind() {
                 std::io::ErrorKind::NotFound => Err(anyhow::anyhow!("Socket not found")),
                 std::io::ErrorKind::PermissionDenied => Err(anyhow::anyhow!("Permission denied")),
@@ -119,7 +100,7 @@ fn bootstrap_server_connection(
 
     let config_path = PathBuf::from(DEFAULT_CONFIG_PATH);
     if fs::metadata(&config_path).is_ok() {
-        return invoke_server_with_config(config_path).map(|socket| (socket, false));
+        return invoke_server_with_config(config_path);
     }
 
     anyhow::bail!("No socket path or config path provided, and no default socket or config found");

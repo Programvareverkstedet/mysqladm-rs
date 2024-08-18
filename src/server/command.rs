@@ -7,7 +7,6 @@ use clap::Parser;
 use std::os::unix::net::UnixStream as StdUnixStream;
 use tokio::net::UnixStream as TokioUnixStream;
 
-use crate::core::bootstrap::authenticated_unix_socket;
 use crate::core::common::UnixUser;
 use crate::server::config::read_config_from_path_with_arg_overrides;
 use crate::server::server_loop::listen_for_incoming_connections;
@@ -53,8 +52,8 @@ pub async fn handle_command(
 
 async fn socket_activate(config: ServerConfig) -> anyhow::Result<()> {
     // TODO: allow getting socket path from other socket activation sources
-    let mut conn = get_socket_from_systemd().await?;
-    let uid = authenticated_unix_socket::server_authenticate(&mut conn).await?;
+    let conn = get_socket_from_systemd().await?;
+    let uid = conn.peer_cred()?.uid();
     let unix_user = UnixUser::from_uid(uid.into())?;
     handle_requests_for_single_session(conn, &unix_user, &config).await?;
 

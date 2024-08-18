@@ -9,7 +9,6 @@ use sqlx::MySqlConnection;
 
 use crate::{
     core::{
-        bootstrap::authenticated_unix_socket,
         common::{UnixUser, DEFAULT_SOCKET_PATH},
         protocol::request_response::{
             create_server_to_client_message_stream, Request, Response, ServerToClientMessageStream,
@@ -58,14 +57,9 @@ pub async fn listen_for_incoming_connections(
     let listener = UnixListener::bind(socket_path)?;
 
     while let Ok((mut conn, _addr)) = listener.accept().await {
-        let uid = match authenticated_unix_socket::server_authenticate(&mut conn).await {
-            Ok(uid) => uid,
-            Err(e) => {
-                eprintln!("Failed to authenticate client: {}", e);
-                conn.shutdown().await?;
-                continue;
-            }
-        };
+        let uid = conn.peer_cred()?.uid();
+        log::trace!("Accepted connection from uid {}", uid);
+
         let unix_user = match UnixUser::from_uid(uid.into()) {
             Ok(user) => user,
             Err(e) => {
