@@ -45,7 +45,7 @@ pub fn validate_ownership_by_prefixes(
 
     if prefixes
         .iter()
-        .filter(|p| name.starts_with(*p))
+        .filter(|p| name.starts_with(&(p.to_string() + "_")))
         .collect::<Vec<_>>()
         .is_empty()
     {

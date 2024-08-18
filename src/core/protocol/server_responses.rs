@@ -76,6 +76,7 @@ impl OwnerValidationError {
                 indoc! {r#"
                   Invalid {} name prefix: '{}' does not match your username or any of your groups.
                   Are you sure you are allowed to create {} names with this prefix?
+                  The format should be: <prefix>_<{} name>
 
                   Allowed prefixes:
                     - {}
@@ -83,6 +84,7 @@ impl OwnerValidationError {
                 "#},
                 db_or_user.lowercased(),
                 name,
+                db_or_user.lowercased(),
                 db_or_user.lowercased(),
                 user.as_ref()
                     .map(|u| u.username.clone())
