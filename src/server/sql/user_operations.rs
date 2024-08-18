@@ -400,9 +400,9 @@ pub async fn append_databases_where_user_has_privileges(
     let database_list = sqlx::query(
         formatdoc!(
             r#"
-                SELECT `db` AS `database`
+                SELECT `Db` AS `database`
                 FROM `db`
-                WHERE `user` = ? AND ({})
+                WHERE `User` = ? AND ({})
             "#,
             DATABASE_PRIVILEGE_FIELDS
                 .iter()
