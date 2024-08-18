@@ -50,9 +50,11 @@ async fn socket_activate(config: ServerConfig) -> anyhow::Result<()> {
     // TODO: allow getting socket path from other socket activation sources
     let conn = get_socket_from_systemd().await?;
     let uid = conn.peer_cred()?.uid();
-    let unix_user = UnixUser::from_uid(uid.into())?;
+    let unix_user = UnixUser::from_uid(uid)?;
 
     log::info!("Accepted connection from {}", unix_user.username);
+
+    sd_notify::notify(true, &[sd_notify::NotifyState::Ready]).ok();
 
     handle_requests_for_single_session(conn, &unix_user, &config).await?;
 

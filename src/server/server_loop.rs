@@ -57,11 +57,13 @@ pub async fn listen_for_incoming_connections(
 
     let listener = UnixListener::bind(socket_path)?;
 
+    sd_notify::notify(true, &[sd_notify::NotifyState::Ready]).ok();
+
     while let Ok((mut conn, _addr)) = listener.accept().await {
         let uid = conn.peer_cred()?.uid();
         log::trace!("Accepted connection from uid {}", uid);
 
-        let unix_user = match UnixUser::from_uid(uid.into()) {
+        let unix_user = match UnixUser::from_uid(uid) {
             Ok(user) => user,
             Err(e) => {
                 eprintln!("Failed to get UnixUser from uid: {}", e);
