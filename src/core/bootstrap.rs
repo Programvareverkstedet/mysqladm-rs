@@ -88,6 +88,7 @@ fn bootstrap_server_connection(
     }
 
     if fs::metadata(DEFAULT_SOCKET_PATH).is_ok() {
+        log::debug!("Connecting to default socket at {:?}", DEFAULT_SOCKET_PATH);
         return match StdUnixStream::connect(DEFAULT_SOCKET_PATH) {
             Ok(socket) => Ok(socket),
             Err(e) => match e.kind() {
@@ -100,6 +101,7 @@ fn bootstrap_server_connection(
 
     let config_path = PathBuf::from(DEFAULT_CONFIG_PATH);
     if fs::metadata(&config_path).is_ok() {
+        log::debug!("Starting server with default config at {:?}", config_path);
         return invoke_server_with_config(config_path);
     }
 

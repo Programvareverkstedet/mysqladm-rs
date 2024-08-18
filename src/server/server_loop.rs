@@ -43,11 +43,12 @@ pub async fn listen_for_incoming_connections(
 
     let parent_directory = socket_path.parent().unwrap();
     if !parent_directory.exists() {
-        println!("Creating directory {:?}", parent_directory);
+        log::debug!("Creating directory {:?}", parent_directory);
         fs::create_dir_all(parent_directory)?;
     }
 
-    println!("Listening on {:?}", socket_path);
+    log::info!("Listening on socket {:?}", socket_path);
+
     match fs::remove_file(socket_path.as_path()) {
         Ok(_) => {}
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
@@ -68,6 +69,9 @@ pub async fn listen_for_incoming_connections(
                 continue;
             }
         };
+
+        log::info!("Accepted connection from {}", unix_user.username);
+
         match handle_requests_for_single_session(conn, &unix_user, &config).await {
             Ok(_) => {}
             Err(e) => {
@@ -86,6 +90,7 @@ pub async fn handle_requests_for_single_session(
 ) -> anyhow::Result<()> {
     let message_stream = create_server_to_client_message_stream(socket);
     let mut db_connection = create_mysql_connection_from_config(&config.mysql).await?;
+    log::debug!("Successfully connected to database");
 
     let result = handle_requests_for_single_session_with_db_connection(
         message_stream,
@@ -121,6 +126,8 @@ pub async fn handle_requests_for_single_session_with_db_connection(
                 break;
             }
         };
+
+        log::trace!("Received request: {:?}", request);
 
         match request {
             Request::CreateDatabases(databases_names) => {

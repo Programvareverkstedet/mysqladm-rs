@@ -83,6 +83,8 @@ pub fn read_config_from_path_with_arg_overrides(
 pub fn read_config_form_path(config_path: Option<PathBuf>) -> anyhow::Result<ServerConfig> {
     let config_path = config_path.unwrap_or_else(|| PathBuf::from(DEFAULT_CONFIG_PATH));
 
+    log::debug!("Reading config from {:?}", &config_path);
+
     fs::read_to_string(&config_path)
         .context(format!(
             "Failed to read config file from {:?}",
@@ -99,6 +101,10 @@ pub fn read_config_form_path(config_path: Option<PathBuf>) -> anyhow::Result<Ser
 pub async fn create_mysql_connection_from_config(
     config: &MysqlConfig,
 ) -> anyhow::Result<MySqlConnection> {
+    let mut display_config = config.clone();
+    display_config.password = "<REDACTED>".to_owned();
+    log::debug!("Connecting to MySQL server with parameters: {:#?}", display_config);
+
     match tokio::time::timeout(
         Duration::from_secs(config.timeout.unwrap_or(DEFAULT_TIMEOUT)),
         MySqlConnectOptions::new()

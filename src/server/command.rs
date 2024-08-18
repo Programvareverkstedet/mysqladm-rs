@@ -51,6 +51,9 @@ async fn socket_activate(config: ServerConfig) -> anyhow::Result<()> {
     let conn = get_socket_from_systemd().await?;
     let uid = conn.peer_cred()?.uid();
     let unix_user = UnixUser::from_uid(uid.into())?;
+
+    log::info!("Accepted connection from {}", unix_user.username);
+
     handle_requests_for_single_session(conn, &unix_user, &config).await?;
 
     Ok(())
