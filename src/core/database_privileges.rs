@@ -62,6 +62,14 @@ pub fn parse_privilege_table_cli_arg(arg: &str) -> anyhow::Result<DatabasePrivil
         anyhow::bail!("Invalid argument format. See `edit-db-privs --help` for more information.");
     }
 
+    if parts[0].is_empty() {
+        anyhow::bail!("Database name cannot be empty.");
+    }
+
+    if parts[1].is_empty() {
+        anyhow::bail!("Username cannot be empty.");
+    }
+
     let db = parts[0].to_string();
     let user = parts[1].to_string();
     let privs = parts[2].to_string();
@@ -577,6 +585,84 @@ mod tests {
         );
         assert_eq!(DatabasePrivilegeChange::new(true, true, "test"), None);
         assert_eq!(DatabasePrivilegeChange::new(false, false, "test"), None);
+    }
+
+    #[test]
+    fn test_parse_privilege_table_cli_arg() {
+        let result = parse_privilege_table_cli_arg("db:user:A");
+        assert_eq!(
+            result.ok(),
+            Some(DatabasePrivilegeRow {
+                db: "db".to_owned(),
+                user: "user".to_owned(),
+                select_priv: true,
+                insert_priv: true,
+                update_priv: true,
+                delete_priv: true,
+                create_priv: true,
+                drop_priv: true,
+                alter_priv: true,
+                index_priv: true,
+                create_tmp_table_priv: true,
+                lock_tables_priv: true,
+                references_priv: true,
+            })
+        );
+
+        let result = parse_privilege_table_cli_arg("db:user:");
+        assert_eq!(
+            result.ok(),
+            Some(DatabasePrivilegeRow {
+                db: "db".to_owned(),
+                user: "user".to_owned(),
+                select_priv: false,
+                insert_priv: false,
+                update_priv: false,
+                delete_priv: false,
+                create_priv: false,
+                drop_priv: false,
+                alter_priv: false,
+                index_priv: false,
+                create_tmp_table_priv: false,
+                lock_tables_priv: false,
+                references_priv: false,
+            })
+        );
+
+        let result = parse_privilege_table_cli_arg("db:user:siud");
+        assert_eq!(
+            result.ok(),
+            Some(DatabasePrivilegeRow {
+                db: "db".to_owned(),
+                user: "user".to_owned(),
+                select_priv: true,
+                insert_priv: true,
+                update_priv: true,
+                delete_priv: true,
+                create_priv: false,
+                drop_priv: false,
+                alter_priv: false,
+                index_priv: false,
+                create_tmp_table_priv: false,
+                lock_tables_priv: false,
+                references_priv: false,
+            })
+        );
+
+        let result = parse_privilege_table_cli_arg("db:user:F");
+        assert!(result.is_err());
+
+        let result = parse_privilege_table_cli_arg("db:s");
+        assert!(result.is_err());
+
+        let result = parse_privilege_table_cli_arg("::");
+        assert!(result.is_err());
+
+        let result = parse_privilege_table_cli_arg("db::");
+        assert!(result.is_err());
+
+        let result = parse_privilege_table_cli_arg(":user:");
+        assert!(result.is_err());
     }
 
     #[test]
