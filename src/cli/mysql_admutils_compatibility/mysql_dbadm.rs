@@ -56,11 +56,11 @@ The Y/N-values corresponds to the following mysql privileges:
 /// Please consider using the newer mysqladm command instead.
 #[derive(Parser)]
 #[command(
-  bin_name = "mysql-dbadm",
-  version,
-  about,
-  disable_help_subcommand = true,
-  verbatim_doc_comment,
+    bin_name = "mysql-dbadm",
+    version,
+    about,
+    disable_help_subcommand = true,
+    verbatim_doc_comment
 )]
 pub struct Args {
     #[command(subcommand)]

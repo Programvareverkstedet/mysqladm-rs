@@ -109,17 +109,17 @@ fn main() -> anyhow::Result<()> {
     env_logger::init();
 
     #[cfg(feature = "mysql-admutils-compatibility")]
-    if let Some(_) = handle_mysql_admutils_command()? {
+    if handle_mysql_admutils_command()?.is_some() {
         return Ok(());
     }
 
     let args: Args = Args::parse();
 
-    if let Some(_) = handle_server_command(&args)? {
+    if handle_server_command(&args)?.is_some() {
         return Ok(());
     }
 
-    if let Some(_) = handle_generate_completions_command(&args)? {
+    if handle_generate_completions_command(&args)?.is_some() {
         return Ok(());
     }
 
@@ -139,8 +139,8 @@ fn handle_mysql_admutils_command() -> anyhow::Result<Option<()>> {
     });
 
     match argv0.as_deref() {
-        Some("mysql-dbadm") => mysql_dbadm::main().map(|result| Some(result)),
-        Some("mysql-useradm") => mysql_useradm::main().map(|result| Some(result)),
+        Some("mysql-dbadm") => mysql_dbadm::main().map(Some),
+        Some("mysql-useradm") => mysql_useradm::main().map(Some),
         _ => Ok(None),
     }
 }

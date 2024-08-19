@@ -141,8 +141,7 @@ pub async fn create_mysql_connection_from_config(
 ) -> anyhow::Result<MySqlConnection> {
     log_config(config);
 
-    let mut mysql_options = MySqlConnectOptions::new()
-        .database("mysql");
+    let mut mysql_options = MySqlConnectOptions::new().database("mysql");
 
     if let Some(username) = &config.username {
         mysql_options = mysql_options.username(username);
@@ -168,6 +167,8 @@ pub async fn create_mysql_connection_from_config(
     .await
     {
         Ok(connection) => connection.context("Failed to connect to the database"),
-        Err(_) => Err(anyhow!("Timed out after 2 seconds")).context("Failed to connect to the database"),
+        Err(_) => {
+            Err(anyhow!("Timed out after 2 seconds")).context("Failed to connect to the database")
+        }
     }
 }

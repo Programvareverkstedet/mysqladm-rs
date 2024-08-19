@@ -32,15 +32,18 @@ pub fn drop_privs() -> anyhow::Result<()> {
 
 /// This function is used to bootstrap the connection to the server.
 /// This can happen in two ways:
+///
 /// 1. If a socket path is provided, or exists in the default location,
 ///    the function will connect to the socket and authenticate with the
 ///    server to ensure that the server knows the uid of the client.
+///
 /// 2. If a config path is provided, or exists in the default location,
 ///    and the config is readable, the function will assume it is either
 ///    setuid or setgid, and will fork a child process to run the server
 ///    with the provided config. The server will exit silently by itself
 ///    when it is done, and this function will only return for the client
 ///    with the socket for the server.
+///
 /// If neither of these options are available, the function will fail.
 pub fn bootstrap_server_connection_and_drop_privileges(
     server_socket_path: Option<PathBuf>,

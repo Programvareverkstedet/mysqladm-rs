@@ -32,11 +32,11 @@ use crate::{
 /// Please consider using the newer mysqladm command instead.
 #[derive(Parser)]
 #[command(
-  bin_name = "mysql-useradm",
-  version,
-  about,
-  disable_help_subcommand = true,
-  verbatim_doc_comment,
+    bin_name = "mysql-useradm",
+    version,
+    about,
+    disable_help_subcommand = true,
+    verbatim_doc_comment
 )]
 pub struct Args {
     #[command(subcommand)]
