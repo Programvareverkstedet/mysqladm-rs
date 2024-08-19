@@ -32,7 +32,7 @@ use crate::{
         },
     },
     server::{
-        common::create_user_group_matching_regex,
+        common::{create_user_group_matching_regex, try_get_with_binary_fallback},
         input_sanitization::{quote_identifier, validate_name, validate_ownership_by_unix_user},
         sql::database_operations::unsafe_database_exists,
     },
@@ -42,8 +42,8 @@ use crate::{
 /// from the `db` table in the database. If you need to add or remove privilege
 /// fields, this is a good place to start.
 pub const DATABASE_PRIVILEGE_FIELDS: [&str; 13] = [
-    "db",
-    "user",
+    "Db",
+    "User",
     "select_priv",
     "insert_priv",
     "update_priv",
@@ -97,6 +97,8 @@ impl DatabasePrivilegeRow {
     }
 }
 
+// TODO: get by name instead of row tuple position
+
 #[inline]
 fn get_mysql_row_priv_field(row: &MySqlRow, position: usize) -> Result<bool, sqlx::Error> {
     let field = DATABASE_PRIVILEGE_FIELDS[position];
@@ -113,8 +115,8 @@ fn get_mysql_row_priv_field(row: &MySqlRow, position: usize) -> Result<bool, sql
 impl FromRow<'_, MySqlRow> for DatabasePrivilegeRow {
     fn from_row(row: &MySqlRow) -> Result<Self, sqlx::Error> {
         Ok(Self {
-            db: row.try_get("db")?,
-            user: row.try_get("user")?,
+            db: try_get_with_binary_fallback(row, "Db")?,
+            user: try_get_with_binary_fallback(row, "User")?,
             select_priv: get_mysql_row_priv_field(row, 2)?,
             insert_priv: get_mysql_row_priv_field(row, 3)?,
             update_priv: get_mysql_row_priv_field(row, 4)?,
@@ -137,7 +139,7 @@ async fn unsafe_get_database_privileges(
     connection: &mut MySqlConnection,
 ) -> Result<Vec<DatabasePrivilegeRow>, sqlx::Error> {
     let result = sqlx::query_as::<_, DatabasePrivilegeRow>(&format!(
-        "SELECT {} FROM `db` WHERE `db` = ?",
+        "SELECT {} FROM `db` WHERE `Db` = ?",
         DATABASE_PRIVILEGE_FIELDS
             .iter()
             .map(|field| quote_identifier(field))
@@ -166,7 +168,7 @@ pub async fn unsafe_get_database_privileges_for_db_user_pair(
     connection: &mut MySqlConnection,
 ) -> Result<Option<DatabasePrivilegeRow>, sqlx::Error> {
     let result = sqlx::query_as::<_, DatabasePrivilegeRow>(&format!(
-        "SELECT {} FROM `db` WHERE `db` = ? AND `user` = ?",
+        "SELECT {} FROM `db` WHERE `Db` = ? AND `User` = ?",
         DATABASE_PRIVILEGE_FIELDS
             .iter()
             .map(|field| quote_identifier(field))
@@ -316,7 +318,7 @@ async fn unsafe_apply_privilege_diff(
                 .join(",");
 
             sqlx::query(
-                format!("UPDATE `db` SET {} WHERE `db` = ? AND `user` = ?", changes).as_str(),
+                format!("UPDATE `db` SET {} WHERE `Db` = ? AND `User` = ?", changes).as_str(),
             )
             .bind(p.db.to_string())
             .bind(p.user.to_string())
@@ -325,7 +327,7 @@ async fn unsafe_apply_privilege_diff(
             .map(|_| ())
         }
         DatabasePrivilegesDiff::Deleted(p) => {
-            sqlx::query("DELETE FROM `db` WHERE `db` = ? AND `user` = ?")
+            sqlx::query("DELETE FROM `db` WHERE `Db` = ? AND `User` = ?")
                 .bind(p.db.to_string())
                 .bind(p.user.to_string())
                 .execute(connection)

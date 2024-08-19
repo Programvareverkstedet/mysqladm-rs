@@ -14,8 +14,8 @@ use crate::server::sql::database_privilege_operations::{
 
 pub fn db_priv_field_human_readable_name(name: &str) -> String {
     match name {
-        "db" => "Database".to_owned(),
-        "user" => "User".to_owned(),
+        "Db" => "Database".to_owned(),
+        "User" => "User".to_owned(),
         "select_priv" => "Select".to_owned(),
         "insert_priv" => "Insert".to_owned(),
         "update_priv" => "Update".to_owned(),
@@ -128,8 +128,8 @@ pub fn format_privileges_line_for_editor(
     DATABASE_PRIVILEGE_FIELDS
         .into_iter()
         .map(|field| match field {
-            "db" => format!("{:width$}", privs.db, width = database_name_len),
-            "user" => format!("{:width$}", privs.user, width = username_len),
+            "Db" => format!("{:width$}", privs.db, width = database_name_len),
+            "User" => format!("{:width$}", privs.user, width = username_len),
             privilege => format!(
                 "{:width$}",
                 yn(privs.get_privilege_by_name(privilege)),

@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::prelude::*;
 use sqlx::MySqlConnection;
 
+use crate::server::common::try_get_with_binary_fallback;
 use crate::{
     core::{
         common::UnixUser,
@@ -348,20 +349,6 @@ pub struct DatabaseUser {
     pub has_password: bool,
     pub is_locked: bool,
     pub databases: Vec<String>,
-}
-
-/// Some mysql versions with some collations mark some columns as binary fields,
-/// which in the current version of sqlx is not parsable as string.
-/// See: https://github.com/launchbadge/sqlx/issues/3387
-#[inline]
-fn try_get_with_binary_fallback(
-    row: &sqlx::mysql::MySqlRow,
-    column: &str,
-) -> Result<String, sqlx::Error> {
-    row.try_get(column).or_else(|_| {
-        row.try_get::<Vec<u8>, _>(column)
-            .map(|v| String::from_utf8_lossy(&v).to_string())
-    })
 }
 
 impl FromRow<'_, sqlx::mysql::MySqlRow> for DatabaseUser {
