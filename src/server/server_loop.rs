@@ -32,8 +32,6 @@ use crate::{
 
 // TODO: consider using a connection pool
 
-// TODO: use tracing for login, so we can scope the log messages per incoming connection
-
 pub async fn listen_for_incoming_connections(
     socket_path: Option<PathBuf>,
     config: ServerConfig,

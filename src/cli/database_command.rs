@@ -356,13 +356,6 @@ pub async fn edit_database_privileges(
         response => return erroneous_server_response(response),
     };
 
-    // TODO: The data from args should not be absolute.
-    //       In the current implementation, the user would need to
-    //       provide all privileges for all users on all databases.
-    //       The intended effect is to modify the privileges which have
-    //       matching users and databases, as well as add any
-    //       new db-user pairs. This makes it impossible to remove
-    //       privileges, but that is an issue for another day.
     let privileges_to_change = if !args.privs.is_empty() {
         parse_privilege_tables_from_args(&args)?
     } else {
@@ -398,7 +391,6 @@ pub async fn edit_database_privileges(
         response => return erroneous_server_response(response),
     };
 
-    // TODO: allow user to return and correct their mistake
     print_modify_database_privileges_output_status(&result);
 
     server_connection.send(Request::Exit).await?;

@@ -187,7 +187,6 @@ fn tokio_run_command(command: Command, server_connection: StdUnixStream) -> anyh
                         name: Some(args.database),
                         privs: vec![],
                         json: false,
-                        // TODO: use this to mimic the old editor-finding logic
                         editor: None,
                         yes: false,
                     };

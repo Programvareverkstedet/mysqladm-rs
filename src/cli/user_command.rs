@@ -299,7 +299,6 @@ async fn show_users(
 
     server_connection.send(Request::Exit).await?;
 
-    // TODO: print databases where user has privileges
     if args.json {
         println!(
             "{}",
