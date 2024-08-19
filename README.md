@@ -38,8 +38,8 @@ cargo run -- --config-file ./config.toml <args>
 # example usage
 cargo run -- --config-file ./config.toml create-db "${USER}_testdb"
 cargo run -- --config-file ./config.toml create-user "${USER}_testuser"
-cargo run -- --config-file ./config.toml edit-db-perm -p "${USER}_testdb:${USER}_testuser:A"
-cargo run -- --config-file ./config.toml show-db-perm
+cargo run -- --config-file ./config.toml edit-db-privs -p "${USER}_testdb:${USER}_testuser:A"
+cargo run -- --config-file ./config.toml show-db-privs
 ```
 
 To stop and remove the container, run the following command:
