@@ -13,7 +13,7 @@ use futures::StreamExt;
 
 use crate::{
     core::{
-        bootstrap::{bootstrap_server_connection_and_drop_privileges, drop_privs},
+        bootstrap::bootstrap_server_connection_and_drop_privileges,
         protocol::{create_client_to_server_message_stream, Response},
     },
     server::command::ServerArgs,
@@ -148,7 +148,6 @@ fn handle_mysql_admutils_command() -> anyhow::Result<Option<()>> {
 fn handle_server_command(args: &Args) -> anyhow::Result<Option<()>> {
     match args.command {
         Command::Server(ref command) => {
-            drop_privs()?;
             tokio_start_server(
                 args.server_socket_path.clone(),
                 args.config.clone(),
