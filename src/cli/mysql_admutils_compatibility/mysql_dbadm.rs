@@ -269,7 +269,7 @@ async fn show_databases(
         .collect();
 
     let message = if database_names.is_empty() {
-        let message = Request::ListDatabases;
+        let message = Request::ListDatabases(None);
         server_connection.send(message).await?;
         let response = server_connection.next().await;
         let databases = match response {
@@ -277,7 +277,9 @@ async fn show_databases(
             response => return erroneous_server_response(response),
         };
 
-        Request::ListPrivileges(Some(databases))
+        let database_names = databases.into_iter().map(|db| db.database).collect();
+
+        Request::ListPrivileges(Some(database_names))
     } else {
         Request::ListPrivileges(Some(database_names))
     };

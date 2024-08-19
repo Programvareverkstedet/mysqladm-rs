@@ -7,6 +7,7 @@ use tokio::net::{UnixListener, UnixStream};
 use sqlx::prelude::*;
 use sqlx::MySqlConnection;
 
+use crate::server::sql::database_operations::list_databases;
 use crate::{
     core::{
         common::{UnixUser, DEFAULT_SOCKET_PATH},
@@ -17,7 +18,7 @@ use crate::{
     server::{
         config::{create_mysql_connection_from_config, ServerConfig},
         sql::{
-            database_operations::{create_databases, drop_databases, list_databases_for_user},
+            database_operations::{create_databases, drop_databases, list_all_databases_for_user},
             database_privilege_operations::{
                 apply_privilege_diffs, get_all_database_privileges, get_databases_privilege_data,
             },
@@ -183,9 +184,18 @@ pub async fn handle_requests_for_single_session_with_db_connection(
                 let result = drop_databases(databases_names, unix_user, db_connection).await;
                 stream.send(Response::DropDatabases(result)).await?;
             }
-            Request::ListDatabases => {
-                let result = list_databases_for_user(unix_user, db_connection).await;
-                stream.send(Response::ListAllDatabases(result)).await?;
+            Request::ListDatabases(database_names) => {
+                let response = match database_names {
+                    Some(database_names) => {
+                        let result = list_databases(database_names, unix_user, db_connection).await;
+                        Response::ListDatabases(result)
+                    }
+                    None => {
+                        let result = list_all_databases_for_user(unix_user, db_connection).await;
+                        Response::ListAllDatabases(result)
+                    }
+                };
+                stream.send(response).await?;
             }
             Request::ListPrivileges(database_names) => {
                 let response = match database_names {

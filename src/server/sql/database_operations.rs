@@ -1,9 +1,16 @@
+use std::collections::BTreeMap;
+
+use sqlx::prelude::*;
+use sqlx::MySqlConnection;
+
+use serde::{Deserialize, Serialize};
+
 use crate::{
     core::{
         common::UnixUser,
         protocol::{
             CreateDatabaseError, CreateDatabasesOutput, DropDatabaseError, DropDatabasesOutput,
-            ListDatabasesError,
+            ListAllDatabasesError, ListAllDatabasesOutput, ListDatabasesError, ListDatabasesOutput,
         },
     },
     server::{
@@ -11,11 +18,6 @@ use crate::{
         input_sanitization::{quote_identifier, validate_name, validate_ownership_by_unix_user},
     },
 };
-
-use sqlx::prelude::*;
-
-use sqlx::MySqlConnection;
-use std::collections::BTreeMap;
 
 // NOTE: this function is unsafe because it does no input validation.
 pub(super) async fn unsafe_database_exists(
@@ -157,11 +159,67 @@ pub async fn drop_databases(
     results
 }
 
-pub async fn list_databases_for_user(
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, FromRow)]
+pub struct DatabaseRow {
+    pub database: String,
+}
+
+pub async fn list_databases(
+    database_names: Vec<String>,
     unix_user: &UnixUser,
     connection: &mut MySqlConnection,
-) -> Result<Vec<String>, ListDatabasesError> {
-    let result = sqlx::query(
+) -> ListDatabasesOutput {
+    let mut results = BTreeMap::new();
+
+    for database_name in database_names {
+        if let Err(err) = validate_name(&database_name) {
+            results.insert(
+                database_name.clone(),
+                Err(ListDatabasesError::SanitizationError(err)),
+            );
+            continue;
+        }
+
+        if let Err(err) = validate_ownership_by_unix_user(&database_name, unix_user) {
+            results.insert(
+                database_name.clone(),
+                Err(ListDatabasesError::OwnershipError(err)),
+            );
+            continue;
+        }
+
+        let result = sqlx::query_as::<_, DatabaseRow>(
+            r#"
+          SELECT `SCHEMA_NAME` AS `database`
+          FROM `information_schema`.`SCHEMATA`
+          WHERE `SCHEMA_NAME` = ?
+        "#,
+        )
+        .bind(&database_name)
+        .fetch_optional(&mut *connection)
+        .await
+        .map_err(|err| ListDatabasesError::MySqlError(err.to_string()))
+        .and_then(|database| {
+            database
+                .map(Ok)
+                .unwrap_or_else(|| Err(ListDatabasesError::DatabaseDoesNotExist))
+        });
+
+        if let Err(err) = &result {
+            log::error!("Failed to list database '{}': {:?}", &database_name, err);
+        }
+
+        results.insert(database_name, result);
+    }
+
+    results
+}
+
+pub async fn list_all_databases_for_user(
+    unix_user: &UnixUser,
+    connection: &mut MySqlConnection,
+) -> ListAllDatabasesOutput {
+    let result = sqlx::query_as::<_, DatabaseRow>(
         r#"
           SELECT `SCHEMA_NAME` AS `database`
           FROM `information_schema`.`SCHEMATA`
@@ -172,12 +230,7 @@ pub async fn list_databases_for_user(
     .bind(create_user_group_matching_regex(unix_user))
     .fetch_all(connection)
     .await
-    .and_then(|rows| {
-        rows.into_iter()
-            .map(|row| row.try_get::<String, _>("database"))
-            .collect::<Result<Vec<String>, sqlx::Error>>()
-    })
-    .map_err(|err| ListDatabasesError::MySqlError(err.to_string()));
+    .map_err(|err| ListAllDatabasesError::MySqlError(err.to_string()));
 
     if let Err(err) = &result {
         log::error!(

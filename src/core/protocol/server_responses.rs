@@ -7,7 +7,8 @@ use serde::{Deserialize, Serialize};
 use crate::{
     core::{common::UnixUser, database_privileges::DatabasePrivilegeRowDiff},
     server::sql::{
-        database_privilege_operations::DatabasePrivilegeRow, user_operations::DatabaseUser,
+        database_operations::DatabaseRow, database_privilege_operations::DatabasePrivilegeRow,
+        user_operations::DatabaseUser,
     },
 };
 
@@ -202,16 +203,44 @@ impl DropDatabaseError {
     }
 }
 
-pub type ListAllDatabasesOutput = Result<Vec<String>, ListDatabasesError>;
+pub type ListDatabasesOutput = BTreeMap<String, Result<DatabaseRow, ListDatabasesError>>;
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ListDatabasesError {
+    SanitizationError(NameValidationError),
+    OwnershipError(OwnerValidationError),
+    DatabaseDoesNotExist,
     MySqlError(String),
 }
 
 impl ListDatabasesError {
+    pub fn to_error_message(&self, database_name: &str) -> String {
+        match self {
+            ListDatabasesError::SanitizationError(err) => {
+                err.to_error_message(database_name, DbOrUser::Database)
+            }
+            ListDatabasesError::OwnershipError(err) => {
+                err.to_error_message(database_name, DbOrUser::Database)
+            }
+            ListDatabasesError::DatabaseDoesNotExist => {
+                format!("Database '{}' does not exist.", database_name)
+            }
+            ListDatabasesError::MySqlError(err) => {
+                format!("MySQL error: {}", err)
+            }
+        }
+    }
+}
+
+pub type ListAllDatabasesOutput = Result<Vec<DatabaseRow>, ListAllDatabasesError>;
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum ListAllDatabasesError {
+    MySqlError(String),
+}
+
+impl ListAllDatabasesError {
     pub fn to_error_message(&self) -> String {
         match self {
-            ListDatabasesError::MySqlError(err) => format!("MySQL error: {}", err),
+            ListAllDatabasesError::MySqlError(err) => format!("MySQL error: {}", err),
         }
     }
 }

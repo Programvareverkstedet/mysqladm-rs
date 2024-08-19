@@ -33,7 +33,7 @@ pub enum UserCommand {
     #[command()]
     PasswdUser(UserPasswdArgs),
 
-    /// Give information about one or more users
+    /// Print information about one or more users
     ///
     /// If no username is provided, all users you have access will be shown.
     #[command()]

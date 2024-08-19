@@ -34,13 +34,15 @@ pub enum DatabaseCommand {
     #[command()]
     DropDb(DatabaseDropArgs),
 
-    /// List all databases you have access to
-    #[command()]
-    ListDb(DatabaseListArgs),
-
-    /// List user privileges for one or more databases
+    /// Print information about one or more databases
     ///
-    /// If no database names are provided, it will show privileges for all databases you have access to.
+    /// If no database name is provided, all databases you have access will be shown.
+    #[command()]
+    ShowDb(DatabaseShowArgs),
+
+    /// Print user privileges for one or more databases
+    ///
+    /// If no database names are provided, all databases you have access to will be shown.
     #[command()]
     ShowDbPrivs(DatabaseShowPrivsArgs),
 
@@ -113,7 +115,11 @@ pub struct DatabaseDropArgs {
 }
 
 #[derive(Parser, Debug, Clone)]
-pub struct DatabaseListArgs {
+pub struct DatabaseShowArgs {
+    /// The name of the database(s) to show.
+    #[arg(num_args = 0..)]
+    name: Vec<String>,
+
     /// Whether to output the information in JSON format.
     #[arg(short, long)]
     json: bool,
@@ -158,7 +164,7 @@ pub async fn handle_command(
     match command {
         DatabaseCommand::CreateDb(args) => create_databases(args, server_connection).await,
         DatabaseCommand::DropDb(args) => drop_databases(args, server_connection).await,
-        DatabaseCommand::ListDb(args) => list_databases(args, server_connection).await,
+        DatabaseCommand::ShowDb(args) => show_databases(args, server_connection).await,
         DatabaseCommand::ShowDbPrivs(args) => {
             show_database_privileges(args, server_connection).await
         }
@@ -214,35 +220,56 @@ async fn drop_databases(
     Ok(())
 }
 
-async fn list_databases(
-    args: DatabaseListArgs,
+async fn show_databases(
+    args: DatabaseShowArgs,
     mut server_connection: ClientToServerMessageStream,
 ) -> anyhow::Result<()> {
-    let message = Request::ListDatabases;
+    let message = if args.name.is_empty() {
+        Request::ListDatabases(None)
+    } else {
+        Request::ListDatabases(Some(args.name.clone()))
+    };
+
     server_connection.send(message).await?;
 
-    let result = match server_connection.next().await {
-        Some(Ok(Response::ListAllDatabases(result))) => result,
+    let database_list = match server_connection.next().await {
+        Some(Ok(Response::ListDatabases(databases))) => databases
+            .into_iter()
+            .filter_map(|(database_name, result)| match result {
+                Ok(database_row) => Some(database_row),
+                Err(err) => {
+                    eprintln!("{}", err.to_error_message(&database_name));
+                    eprintln!("Skipping...");
+                    println!();
+                    None
+                }
+            })
+            .collect::<Vec<_>>(),
+        Some(Ok(Response::ListAllDatabases(database_list))) => match database_list {
+            Ok(list) => list,
+            Err(err) => {
+                server_connection.send(Request::Exit).await?;
+                return Err(
+                    anyhow::anyhow!(err.to_error_message()).context("Failed to list databases")
+                );
+            }
+        },
         response => return erroneous_server_response(response),
     };
 
     server_connection.send(Request::Exit).await?;
-
-    let database_list = match result {
-        Ok(list) => list,
-        Err(err) => {
-            return Err(anyhow::anyhow!(err.to_error_message()).context("Failed to list databases"))
-        }
-    };
 
     if args.json {
         println!("{}", serde_json::to_string_pretty(&database_list)?);
     } else if database_list.is_empty() {
         println!("No databases to show.");
     } else {
+        let mut table = Table::new();
+        table.add_row(Row::new(vec![Cell::new("Database")]));
         for db in database_list {
-            println!("{}", db);
+            table.add_row(row![db.database]);
         }
+        table.printstd();
     }
 
     Ok(())

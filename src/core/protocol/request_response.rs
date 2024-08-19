@@ -36,7 +36,7 @@ pub fn create_client_to_server_message_stream(socket: UnixStream) -> ClientToSer
 pub enum Request {
     CreateDatabases(Vec<String>),
     DropDatabases(Vec<String>),
-    ListDatabases,
+    ListDatabases(Option<Vec<String>>),
     ListPrivileges(Option<Vec<String>>),
     ModifyPrivileges(BTreeSet<DatabasePrivilegesDiff>),
 
@@ -59,6 +59,7 @@ pub enum Response {
     // Specific data for specific commands
     CreateDatabases(CreateDatabasesOutput),
     DropDatabases(DropDatabasesOutput),
+    ListDatabases(ListDatabasesOutput),
     ListAllDatabases(ListAllDatabasesOutput),
     ListPrivileges(GetDatabasesPrivilegeData),
     ListAllPrivileges(GetAllDatabasesPrivilegeData),
