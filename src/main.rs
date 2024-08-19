@@ -9,10 +9,12 @@ use std::path::PathBuf;
 use std::os::unix::net::UnixStream as StdUnixStream;
 use tokio::net::UnixStream as TokioUnixStream;
 
+use futures::StreamExt;
+
 use crate::{
     core::{
         bootstrap::{bootstrap_server_connection_and_drop_privileges, drop_privs},
-        protocol::create_client_to_server_message_stream,
+        protocol::{create_client_to_server_message_stream, Response},
     },
     server::command::ServerArgs,
 };
@@ -205,7 +207,20 @@ fn tokio_run_command(command: Command, server_connection: StdUnixStream) -> anyh
         .unwrap()
         .block_on(async {
             let tokio_socket = TokioUnixStream::from_std(server_connection)?;
-            let message_stream = create_client_to_server_message_stream(tokio_socket);
+            let mut message_stream = create_client_to_server_message_stream(tokio_socket);
+
+            while let Some(Ok(message)) = message_stream.next().await {
+                match message {
+                    Response::Error(err) => {
+                        anyhow::bail!("{}", err);
+                    }
+                    Response::Ready => break,
+                    message => {
+                        eprintln!("Unexpected message from server: {:?}", message);
+                    }
+                }
+            }
+
             match command {
                 Command::User(user_args) => {
                     cli::user_command::handle_command(user_args, message_stream).await

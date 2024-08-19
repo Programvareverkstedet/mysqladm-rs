@@ -73,7 +73,6 @@ pub enum Response {
     UnlockUsers(UnlockUsersOutput),
 
     // Generic responses
-    OperationAborted,
+    Ready,
     Error(String),
-    Exit,
 }
