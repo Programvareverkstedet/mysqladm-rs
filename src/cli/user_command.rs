@@ -140,6 +140,7 @@ async fn create_users(
                     "Do you want to set a password for user '{}'?",
                     username
                 ))
+                .default(false)
                 .interact()?
         {
             let password = read_password_from_stdin_with_double_check(username)?;
