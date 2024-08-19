@@ -1,7 +1,8 @@
 #[macro_use]
 extern crate prettytable;
 
-use clap::Parser;
+use clap::{CommandFactory, Parser, ValueEnum};
+use clap_complete::{generate, Shell};
 
 use std::path::PathBuf;
 
@@ -27,7 +28,14 @@ mod core;
 #[cfg(feature = "tui")]
 mod tui;
 
+/// Database administration tool for non-admin users to manage their own MySQL databases and users.
+///
+/// This tool allows you to manage users and databases in MySQL.
+///
+/// You are only allowed to manage databases and users that are prefixed with
+/// either your username, or a group that you are a member of.
 #[derive(Parser, Debug)]
+#[command(bin_name = "mysqladm", version, about, disable_help_subcommand = true)]
 struct Args {
     #[command(subcommand)]
     command: Command,
@@ -57,14 +65,7 @@ struct Args {
     interactive: bool,
 }
 
-// Database administration tool for non-admin users to manage their own MySQL databases and users.
-//
-// This tool allows you to manage users and databases in MySQL.
-//
-// You are only allowed to manage databases and users that are prefixed with
-// either your username, or a group that you are a member of.
 #[derive(Parser, Debug, Clone)]
-#[command(version, about, disable_help_subcommand = true)]
 enum Command {
     #[command(flatten)]
     Db(cli::database_command::DatabaseCommand),
@@ -74,6 +75,26 @@ enum Command {
 
     #[command(hide = true)]
     Server(server::command::ServerArgs),
+
+    #[command(hide = true)]
+    GenerateCompletions(GenerateCompletionArgs),
+}
+
+#[derive(Parser, Debug, Clone)]
+struct GenerateCompletionArgs {
+    #[arg(long, default_value = "bash")]
+    shell: Shell,
+
+    #[arg(long, default_value = "mysqladm")]
+    command: ToplevelCommands,
+}
+
+#[cfg(feature = "mysql-admutils-compatibility")]
+#[derive(ValueEnum, Debug, Clone)]
+enum ToplevelCommands {
+    Mysqladm,
+    MysqlDbadm,
+    MysqlUseradm,
 }
 
 // TODO: tag all functions that are run with elevated privileges with
@@ -86,28 +107,18 @@ fn main() -> anyhow::Result<()> {
     env_logger::init();
 
     #[cfg(feature = "mysql-admutils-compatibility")]
-    {
-        let argv0 = std::env::args().next().and_then(|s| {
-            PathBuf::from(s)
-                .file_name()
-                .map(|s| s.to_string_lossy().to_string())
-        });
-
-        match argv0.as_deref() {
-            Some("mysql-dbadm") => return mysql_dbadm::main(),
-            Some("mysql-useradm") => return mysql_useradm::main(),
-            _ => { /* fall through */ }
-        }
+    if let Some(_) = handle_mysql_admutils_command()? {
+        return Ok(());
     }
 
     let args: Args = Args::parse();
-    match args.command {
-        Command::Server(ref command) => {
-            drop_privs()?;
-            tokio_start_server(args.server_socket_path, args.config, command.clone())?;
-            return Ok(());
-        }
-        _ => { /* fall through */ }
+
+    if let Some(_) = handle_server_command(&args)? {
+        return Ok(());
+    }
+
+    if let Some(_) = handle_generate_completions_command(&args)? {
+        return Ok(());
     }
 
     let server_connection =
@@ -116,6 +127,61 @@ fn main() -> anyhow::Result<()> {
     tokio_run_command(args.command, server_connection)?;
 
     Ok(())
+}
+
+fn handle_mysql_admutils_command() -> anyhow::Result<Option<()>> {
+    let argv0 = std::env::args().next().and_then(|s| {
+        PathBuf::from(s)
+            .file_name()
+            .map(|s| s.to_string_lossy().to_string())
+    });
+
+    match argv0.as_deref() {
+        Some("mysql-dbadm") => mysql_dbadm::main().map(|result| Some(result)),
+        Some("mysql-useradm") => mysql_useradm::main().map(|result| Some(result)),
+        _ => Ok(None),
+    }
+}
+
+fn handle_server_command(args: &Args) -> anyhow::Result<Option<()>> {
+    match args.command {
+        Command::Server(ref command) => {
+            drop_privs()?;
+            tokio_start_server(
+                args.server_socket_path.clone(),
+                args.config.clone(),
+                command.clone(),
+            )?;
+            Ok(Some(()))
+        }
+        _ => Ok(None),
+    }
+}
+
+fn handle_generate_completions_command(args: &Args) -> anyhow::Result<Option<()>> {
+    match args.command {
+        Command::GenerateCompletions(ref completion_args) => {
+            let mut cmd = match completion_args.command {
+                ToplevelCommands::Mysqladm => Args::command(),
+                #[cfg(feature = "mysql-admutils-compatibility")]
+                ToplevelCommands::MysqlDbadm => mysql_dbadm::Args::command(),
+                #[cfg(feature = "mysql-admutils-compatibility")]
+                ToplevelCommands::MysqlUseradm => mysql_useradm::Args::command(),
+            };
+
+            let binary_name = cmd.get_bin_name().unwrap().to_owned();
+
+            generate(
+                completion_args.shell,
+                &mut cmd,
+                binary_name,
+                &mut std::io::stdout(),
+            );
+
+            Ok(Some(()))
+        }
+        _ => Ok(None),
+    }
 }
 
 fn tokio_start_server(
@@ -148,6 +214,7 @@ fn tokio_run_command(command: Command, server_connection: StdUnixStream) -> anyh
                     cli::database_command::handle_command(db_args, message_stream).await
                 }
                 Command::Server(_) => unreachable!(),
+                Command::GenerateCompletions(_) => unreachable!(),
             }
         })
 }

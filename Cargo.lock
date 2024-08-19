@@ -266,6 +266,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "clap_complete"
+version = "4.5.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1ee158892bd7ce77aa15c208abbdb73e155d191c287a659b57abd5adb92feb03"
+dependencies = [
+ "clap",
+]
+
+[[package]]
 name = "clap_derive"
 version = "4.5.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1055,6 +1064,7 @@ dependencies = [
  "async-bincode",
  "bincode",
  "clap",
+ "clap_complete",
  "derive_more",
  "dialoguer",
  "env_logger",

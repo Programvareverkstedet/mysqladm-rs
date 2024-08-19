@@ -49,7 +49,19 @@ The Y/N-values corresponds to the following mysql privileges:
   References - Enables use of REFERENCES
 "#;
 
+/// Create, drop or edit permissions for the DATABASE(s),
+/// as determined by the COMMAND.
+///
+/// This is a compatibility layer for the mysql-dbadm command.
+/// Please consider using the newer mysqladm command instead.
 #[derive(Parser)]
+#[command(
+  bin_name = "mysql-dbadm",
+  version,
+  about,
+  disable_help_subcommand = true,
+  verbatim_doc_comment,
+)]
 pub struct Args {
     #[command(subcommand)]
     pub command: Option<Command>,
@@ -82,14 +94,7 @@ pub struct Args {
 // NOTE: mysql-dbadm explicitly calls privileges "permissions".
 //       This is something we're trying to move away from.
 //       See https://git.pvv.ntnu.no/Projects/mysqladm-rs/issues/29
-
-/// Create, drop or edit permissions for the DATABASE(s),
-/// as determined by the COMMAND.
-///
-/// This is a compatibility layer for the mysql-dbadm command.
-/// Please consider using the newer mysqladm command instead.
 #[derive(Parser)]
-#[command(version, about, disable_help_subcommand = true, verbatim_doc_comment)]
 pub enum Command {
     /// create the DATABASE(s).
     Create(CreateArgs),

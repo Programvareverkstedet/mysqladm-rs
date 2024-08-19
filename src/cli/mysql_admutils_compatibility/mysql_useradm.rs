@@ -25,7 +25,19 @@ use crate::{
     server::sql::user_operations::DatabaseUser,
 };
 
+/// Create, delete or change password for the USER(s),
+/// as determined by the COMMAND.
+///
+/// This is a compatibility layer for the mysql-useradm command.
+/// Please consider using the newer mysqladm command instead.
 #[derive(Parser)]
+#[command(
+  bin_name = "mysql-useradm",
+  version,
+  about,
+  disable_help_subcommand = true,
+  verbatim_doc_comment,
+)]
 pub struct Args {
     #[command(subcommand)]
     pub command: Option<Command>,
@@ -51,13 +63,7 @@ pub struct Args {
     config: Option<PathBuf>,
 }
 
-/// Create, delete or change password for the USER(s),
-/// as determined by the COMMAND.
-///
-/// This is a compatibility layer for the mysql-useradm command.
-/// Please consider using the newer mysqladm command instead.
 #[derive(Parser)]
-#[command(version, about, disable_help_subcommand = true, verbatim_doc_comment)]
 pub enum Command {
     /// create the USER(s).
     Create(CreateArgs),
