@@ -49,3 +49,6 @@ codegen-units = 1
 
 [build-dependencies]
 anyhow = "1.0.82"
+
+[dev-dependencies]
+regex = "1.10.6"
