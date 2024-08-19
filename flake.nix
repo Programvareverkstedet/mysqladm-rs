@@ -52,9 +52,14 @@
 
     overlays = {
       default = self.overlays.mysqladm-rs;
-      greg-ng = final: prev: {
+      mysqladm-rs = final: prev: {
         inherit (self.packages.${prev.system}) mysqladm-rs;
       };
+    };
+
+    nixosModules = {
+      default = self.nixosModules.mysqladm-rs;
+      mysqladm-rs = import ./nix/module.nix;
     };
 
     packages = let
