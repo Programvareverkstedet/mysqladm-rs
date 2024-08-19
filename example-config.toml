@@ -1,8 +1,22 @@
 # This should go to `/etc/mysqladm/config.toml`
 
+[server]
+# Note that this gets ignored if you are using socket activation.
+socket_path = "/var/run/mysqladm/mysqladm.sock"
+
 [mysql]
+
+# if you use a socket, the host and port will be ignored
+# socket_path = "/var/run/mysql/mysql.sock"
+
 host = "localhost"
 port = 3306
+
+# The username and password can be omitted if you are using
+# socket based authentication. However, the vendored systemd
+# service is running as DynamicUser, so by default you need
+# to at least specify the username.
 username = "root"
 password = "secret"
+
 timeout = 2 # seconds

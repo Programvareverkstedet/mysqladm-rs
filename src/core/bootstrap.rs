@@ -7,7 +7,7 @@ use tokio::net::UnixStream as TokioUnixStream;
 
 use crate::{
     core::common::{UnixUser, DEFAULT_CONFIG_PATH, DEFAULT_SOCKET_PATH},
-    server::{config::read_config_form_path, server_loop::handle_requests_for_single_session},
+    server::{config::read_config_from_path, server_loop::handle_requests_for_single_session},
 };
 
 // TODO: this function is security critical, it should be integration tested
@@ -140,7 +140,7 @@ fn run_forked_server(
     server_socket: StdUnixStream,
     unix_user: UnixUser,
 ) -> anyhow::Result<()> {
-    let config = read_config_form_path(Some(config_path))?;
+    let config = read_config_from_path(Some(config_path))?;
 
     let result: anyhow::Result<()> = tokio::runtime::Builder::new_current_thread()
         .enable_all()
