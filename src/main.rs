@@ -3,6 +3,7 @@ extern crate prettytable;
 
 use clap::{CommandFactory, Parser, ValueEnum};
 use clap_complete::{generate, Shell};
+use clap_verbosity_flag::Verbosity;
 
 use std::path::PathBuf;
 
@@ -62,6 +63,10 @@ struct Args {
     )]
     config: Option<PathBuf>,
 
+    #[command(flatten)]
+    verbose: Verbosity,
+
+    /// Run in TUI mode.
     #[cfg(feature = "tui")]
     #[arg(short, long, alias = "tui", global = true)]
     interactive: bool,
@@ -103,11 +108,6 @@ enum ToplevelCommands {
 //       comments emphasizing the need for caution.
 
 fn main() -> anyhow::Result<()> {
-    // TODO: find out if there are any security risks of running
-    //       env_logger and clap with elevated privileges.
-
-    env_logger::init();
-
     #[cfg(feature = "mysql-admutils-compatibility")]
     if handle_mysql_admutils_command()?.is_some() {
         return Ok(());
@@ -125,6 +125,10 @@ fn main() -> anyhow::Result<()> {
 
     let server_connection =
         bootstrap_server_connection_and_drop_privileges(args.server_socket_path, args.config)?;
+
+    env_logger::Builder::new()
+        .filter_level(args.verbose.log_level_filter())
+        .init();
 
     tokio_run_command(args.command, server_connection)?;
 
@@ -151,6 +155,7 @@ fn handle_server_command(args: &Args) -> anyhow::Result<Option<()>> {
             tokio_start_server(
                 args.server_socket_path.clone(),
                 args.config.clone(),
+                args.verbose.clone(),
                 command.clone(),
             )?;
             Ok(Some(()))
@@ -188,6 +193,7 @@ fn handle_generate_completions_command(args: &Args) -> anyhow::Result<Option<()>
 fn tokio_start_server(
     server_socket_path: Option<PathBuf>,
     config_path: Option<PathBuf>,
+    verbosity: Verbosity,
     args: ServerArgs,
 ) -> anyhow::Result<()> {
     tokio::runtime::Builder::new_current_thread()
@@ -195,7 +201,7 @@ fn tokio_start_server(
         .build()
         .unwrap()
         .block_on(async {
-            server::command::handle_command(server_socket_path, config_path, args).await
+            server::command::handle_command(server_socket_path, config_path, verbosity, args).await
         })
 }
 

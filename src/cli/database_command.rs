@@ -393,6 +393,7 @@ pub async fn edit_database_privileges(
 
     if diffs.is_empty() {
         println!("No changes to make.");
+        server_connection.send(Request::Exit).await?;
         return Ok(());
     }
 

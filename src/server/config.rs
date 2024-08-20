@@ -109,18 +109,12 @@ pub fn read_config_from_path_with_arg_overrides(
 pub fn read_config_from_path(config_path: Option<PathBuf>) -> anyhow::Result<ServerConfig> {
     let config_path = config_path.unwrap_or_else(|| PathBuf::from(DEFAULT_CONFIG_PATH));
 
-    log::debug!("Reading config from {:?}", &config_path);
+    log::debug!("Reading config file at {:?}", &config_path);
 
     fs::read_to_string(&config_path)
-        .context(format!(
-            "Failed to read config file from {:?}",
-            &config_path
-        ))
+        .context(format!("Failed to read config file at {:?}", &config_path))
         .and_then(|c| toml::from_str(&c).context("Failed to parse config file"))
-        .context(format!(
-            "Failed to parse config file from {:?}",
-            &config_path
-        ))
+        .context(format!("Failed to parse config file at {:?}", &config_path))
 }
 
 fn log_config(config: &MysqlConfig) {
@@ -141,7 +135,9 @@ pub async fn create_mysql_connection_from_config(
 ) -> anyhow::Result<MySqlConnection> {
     log_config(config);
 
-    let mut mysql_options = MySqlConnectOptions::new().database("mysql");
+    let mut mysql_options = MySqlConnectOptions::new()
+        .database("mysql")
+        .log_statements(log::LevelFilter::Trace);
 
     if let Some(username) = &config.username {
         mysql_options = mysql_options.username(username);

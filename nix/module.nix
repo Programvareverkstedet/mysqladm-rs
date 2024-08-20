@@ -15,6 +15,20 @@ in
       description = "Create a local database user for mysqladm-rs";
     };
 
+    logLevel = lib.mkOption {
+      type = lib.types.enum [ "quiet" "error" "warn" "info" "debug" "trace" ];
+      default = "debug";
+      description = "Log level for mysqladm-rs";
+      apply = level: {
+        "quiet" = "-q";
+        "error" = "";
+        "warn" = "-v";
+        "info" = "-vv";
+        "debug" = "-vvv";
+        "trace" = "-vvvv";
+      }.${level};
+    };
+
     settings = lib.mkOption {
       default = { };
       type = lib.types.submodule {
@@ -76,7 +90,7 @@ in
         name = cfg.settings.mysql.username;
         ensurePermissions = {
           "mysql.*" = "SELECT, INSERT, UPDATE, DELETE";
-          "*.*" = "CREATE USER, GRANT OPTION";
+          "*.*" = "GRANT OPTION, CREATE, DROP";
         };
       }
     ];
@@ -86,7 +100,9 @@ in
       environment.RUST_LOG = "debug";
       serviceConfig = {
         Type = "notify";
-        ExecStart = "${lib.getExe cfg.package} server socket-activate --config ${configFile}";
+        ExecStart = "${lib.getExe cfg.package} ${cfg.logLevel} server --systemd socket-activate --config ${configFile}";
+
+        WatchdogSec = 15;
 
         User = "mysqladm";
         Group = "mysqladm";
@@ -95,7 +111,18 @@ in
         # This is required to read unix user/group details.
         PrivateUsers = false;
 
-        CapabilityBoundingSet = "";
+        # Needed to communicate with MySQL.
+        PrivateNetwork = false;
+
+        IPAddressDeny =
+          lib.optionals (lib.elem cfg.settings.mysql.host [ null "localhost" "127.0.0.1" ]) [ "any" ];
+
+        RestrictAddressFamilies = [ "AF_UNIX" ]
+          ++ (lib.optionals (cfg.settings.mysql.host != null) [ "AF_INET" "AF_INET6" ]);
+
+        AmbientCapabilities = [ "" ];
+        CapabilityBoundingSet = [ "" ];
+        DeviceAllow = [ "" ];
         LockPersonality = true;
         MemoryDenyWriteExecute = true;
         NoNewPrivileges = true;
@@ -113,12 +140,12 @@ in
         ProtectProc = "invisible";
         ProtectSystem = "strict";
         RemoveIPC = true;
-        UMask = "0000";
-        RestrictAddressFamilies = [ "AF_UNIX" "AF_INET" "AF_INET6" ];
+        UMask = "0777";
         RestrictNamespaces = true;
         RestrictRealtime = true;
         RestrictSUIDSGID = true;
         SystemCallArchitectures = "native";
+        SocketBindDeny = [ "any" ];
         SystemCallFilter = [
           "@system-service"
           "~@privileged"

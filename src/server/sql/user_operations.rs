@@ -167,7 +167,7 @@ pub async fn set_password_for_database_user(
         format!(
             "ALTER USER {}@'%' IDENTIFIED BY {}",
             quote_literal(db_user),
-            quote_literal(password).as_str()
+            quote_literal(password).as_str(),
         )
         .as_str(),
     )
@@ -176,11 +176,10 @@ pub async fn set_password_for_database_user(
     .map(|_| ())
     .map_err(|err| SetPasswordError::MySqlError(err.to_string()));
 
-    if let Err(err) = &result {
+    if result.is_err() {
         log::error!(
-            "Failed to set password for database user '{}': {:?}",
+            "Failed to set password for database user '{}': <REDACTED>",
             &db_user,
-            err
         );
     }
 
