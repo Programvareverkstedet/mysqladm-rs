@@ -7,18 +7,17 @@ use serde::{Deserialize, Serialize};
 use sqlx::prelude::*;
 use sqlx::MySqlConnection;
 
-use crate::server::common::try_get_with_binary_fallback;
 use crate::{
     core::{
         common::UnixUser,
         protocol::{
             CreateUserError, CreateUsersOutput, DropUserError, DropUsersOutput, ListAllUsersError,
             ListAllUsersOutput, ListUsersError, ListUsersOutput, LockUserError, LockUsersOutput,
-            SetPasswordError, SetPasswordOutput, UnlockUserError, UnlockUsersOutput,
+            MySQLUser, SetPasswordError, SetPasswordOutput, UnlockUserError, UnlockUsersOutput,
         },
     },
     server::{
-        common::create_user_group_matching_regex,
+        common::{create_user_group_matching_regex, try_get_with_binary_fallback},
         input_sanitization::{quote_literal, validate_name, validate_ownership_by_unix_user},
     },
 };
@@ -52,7 +51,7 @@ async fn unsafe_user_exists(
 }
 
 pub async fn create_database_users(
-    db_users: Vec<String>,
+    db_users: Vec<MySQLUser>,
     unix_user: &UnixUser,
     connection: &mut MySqlConnection,
 ) -> CreateUsersOutput {
@@ -98,7 +97,7 @@ pub async fn create_database_users(
 }
 
 pub async fn drop_database_users(
-    db_users: Vec<String>,
+    db_users: Vec<MySQLUser>,
     unix_user: &UnixUser,
     connection: &mut MySqlConnection,
 ) -> DropUsersOutput {
@@ -144,7 +143,7 @@ pub async fn drop_database_users(
 }
 
 pub async fn set_password_for_database_user(
-    db_user: &str,
+    db_user: &MySQLUser,
     password: &str,
     unix_user: &UnixUser,
     connection: &mut MySqlConnection,
@@ -219,7 +218,7 @@ async fn database_user_is_locked_unsafe(
 }
 
 pub async fn lock_database_users(
-    db_users: Vec<String>,
+    db_users: Vec<MySQLUser>,
     unix_user: &UnixUser,
     connection: &mut MySqlConnection,
 ) -> LockUsersOutput {
@@ -279,7 +278,7 @@ pub async fn lock_database_users(
 }
 
 pub async fn unlock_database_users(
-    db_users: Vec<String>,
+    db_users: Vec<MySQLUser>,
     unix_user: &UnixUser,
     connection: &mut MySqlConnection,
 ) -> UnlockUsersOutput {
@@ -342,7 +341,7 @@ pub async fn unlock_database_users(
 /// This can be extended if we need more information in the future.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DatabaseUser {
-    pub user: String,
+    pub user: MySQLUser,
     #[serde(skip)]
     pub host: String,
     pub has_password: bool,
@@ -353,7 +352,7 @@ pub struct DatabaseUser {
 impl FromRow<'_, sqlx::mysql::MySqlRow> for DatabaseUser {
     fn from_row(row: &sqlx::mysql::MySqlRow) -> Result<Self, sqlx::Error> {
         Ok(Self {
-            user: try_get_with_binary_fallback(row, "User")?,
+            user: try_get_with_binary_fallback(row, "User")?.into(),
             host: try_get_with_binary_fallback(row, "Host")?,
             has_password: row.try_get("has_password")?,
             is_locked: row.try_get("is_locked")?,
@@ -378,7 +377,7 @@ JOIN `global_priv` ON
 "#;
 
 pub async fn list_database_users(
-    db_users: Vec<String>,
+    db_users: Vec<MySQLUser>,
     unix_user: &UnixUser,
     connection: &mut MySqlConnection,
 ) -> ListUsersOutput {
@@ -398,7 +397,7 @@ pub async fn list_database_users(
         let mut result = sqlx::query_as::<_, DatabaseUser>(
             &(DB_USER_SELECT_STATEMENT.to_string() + "WHERE `mysql`.`user`.`User` = ?"),
         )
-        .bind(&db_user)
+        .bind(db_user.as_str())
         .fetch_optional(&mut *connection)
         .await;
 
@@ -463,7 +462,7 @@ pub async fn append_databases_where_user_has_privileges(
         )
         .as_str(),
     )
-    .bind(db_user.user.clone())
+    .bind(db_user.user.as_str())
     .fetch_all(&mut *connection)
     .await;
 

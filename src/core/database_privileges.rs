@@ -7,7 +7,10 @@ use std::{
     collections::{BTreeSet, HashMap},
 };
 
-use super::common::{rev_yn, yn};
+use super::{
+    common::{rev_yn, yn},
+    protocol::{MySQLDatabase, MySQLUser},
+};
 use crate::server::sql::database_privilege_operations::{
     DatabasePrivilegeRow, DATABASE_PRIVILEGE_FIELDS,
 };
@@ -35,8 +38,8 @@ pub fn diff(row1: &DatabasePrivilegeRow, row2: &DatabasePrivilegeRow) -> Databas
     debug_assert!(row1.db == row2.db && row1.user == row2.user);
 
     DatabasePrivilegeRowDiff {
-        db: row1.db.clone(),
-        user: row1.user.clone(),
+        db: row1.db.to_owned(),
+        user: row1.user.to_owned(),
         diff: DATABASE_PRIVILEGE_FIELDS
             .into_iter()
             .skip(2)
@@ -70,8 +73,8 @@ pub fn parse_privilege_table_cli_arg(arg: &str) -> anyhow::Result<DatabasePrivil
         anyhow::bail!("Username cannot be empty.");
     }
 
-    let db = parts[0].to_string();
-    let user = parts[1].to_string();
+    let db = parts[0].into();
+    let user = parts[1].into();
     let privs = parts[2].to_string();
 
     let mut result = DatabasePrivilegeRow {
@@ -165,11 +168,11 @@ const EDITOR_COMMENT: &str = r#"
 pub fn generate_editor_content_from_privilege_data(
     privilege_data: &[DatabasePrivilegeRow],
     unix_user: &str,
-    database_name: Option<&str>,
+    database_name: Option<&MySQLDatabase>,
 ) -> String {
     let example_user = format!("{}_user", unix_user);
     let example_db = database_name
-        .unwrap_or(&format!("{}_db", unix_user))
+        .unwrap_or(&format!("{}_db", unix_user).into())
         .to_string();
 
     // NOTE: `.max()`` fails when the iterator is empty.
@@ -206,8 +209,8 @@ pub fn generate_editor_content_from_privilege_data(
 
     let example_line = format_privileges_line_for_editor(
         &DatabasePrivilegeRow {
-            db: example_db,
-            user: example_user,
+            db: example_db.into(),
+            user: example_user.into(),
             select_priv: true,
             insert_priv: true,
             update_priv: true,
@@ -298,8 +301,8 @@ fn parse_privilege_row_from_editor(row: &str) -> PrivilegeRowParseResult {
     }
 
     let row = DatabasePrivilegeRow {
-        db: (*parts.first().unwrap()).to_owned(),
-        user: (*parts.get(1).unwrap()).to_owned(),
+        db: (*parts.first().unwrap()).into(),
+        user: (*parts.get(1).unwrap()).into(),
         select_priv: match parse_privilege_cell_from_editor(
             parts.get(2).unwrap(),
             DATABASE_PRIVILEGE_FIELDS[2],
@@ -423,8 +426,8 @@ pub fn parse_privilege_data_from_editor_content(
 /// The `User` and `Database` are the same for both instances.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord)]
 pub struct DatabasePrivilegeRowDiff {
-    pub db: String,
-    pub user: String,
+    pub db: MySQLDatabase,
+    pub user: MySQLUser,
     pub diff: BTreeSet<DatabasePrivilegeChange>,
 }
 
@@ -454,7 +457,7 @@ pub enum DatabasePrivilegesDiff {
 }
 
 impl DatabasePrivilegesDiff {
-    pub fn get_database_name(&self) -> &str {
+    pub fn get_database_name(&self) -> &MySQLDatabase {
         match self {
             DatabasePrivilegesDiff::New(p) => &p.db,
             DatabasePrivilegesDiff::Modified(p) => &p.db,
@@ -462,7 +465,7 @@ impl DatabasePrivilegesDiff {
         }
     }
 
-    pub fn get_user_name(&self) -> &str {
+    pub fn get_user_name(&self) -> &MySQLUser {
         match self {
             DatabasePrivilegesDiff::New(p) => &p.user,
             DatabasePrivilegesDiff::Modified(p) => &p.user,
@@ -478,34 +481,36 @@ pub fn diff_privileges(
     from: &[DatabasePrivilegeRow],
     to: &[DatabasePrivilegeRow],
 ) -> BTreeSet<DatabasePrivilegesDiff> {
-    let from_lookup_table: HashMap<(String, String), DatabasePrivilegeRow> = HashMap::from_iter(
-        from.iter()
-            .cloned()
-            .map(|p| ((p.db.clone(), p.user.clone()), p)),
-    );
+    let from_lookup_table: HashMap<(MySQLDatabase, MySQLUser), DatabasePrivilegeRow> =
+        HashMap::from_iter(
+            from.iter()
+                .cloned()
+                .map(|p| ((p.db.to_owned(), p.user.to_owned()), p)),
+        );
 
-    let to_lookup_table: HashMap<(String, String), DatabasePrivilegeRow> = HashMap::from_iter(
-        to.iter()
-            .cloned()
-            .map(|p| ((p.db.clone(), p.user.clone()), p)),
-    );
+    let to_lookup_table: HashMap<(MySQLDatabase, MySQLUser), DatabasePrivilegeRow> =
+        HashMap::from_iter(
+            to.iter()
+                .cloned()
+                .map(|p| ((p.db.to_owned(), p.user.to_owned()), p)),
+        );
 
     let mut result = BTreeSet::new();
 
     for p in to {
-        if let Some(old_p) = from_lookup_table.get(&(p.db.clone(), p.user.clone())) {
+        if let Some(old_p) = from_lookup_table.get(&(p.db.to_owned(), p.user.to_owned())) {
             let diff = diff(old_p, p);
             if !diff.diff.is_empty() {
                 result.insert(DatabasePrivilegesDiff::Modified(diff));
             }
         } else {
-            result.insert(DatabasePrivilegesDiff::New(p.clone()));
+            result.insert(DatabasePrivilegesDiff::New(p.to_owned()));
         }
     }
 
     for p in from {
-        if !to_lookup_table.contains_key(&(p.db.clone(), p.user.clone())) {
-            result.insert(DatabasePrivilegesDiff::Deleted(p.clone()));
+        if !to_lookup_table.contains_key(&(p.db.to_owned(), p.user.to_owned())) {
+            result.insert(DatabasePrivilegesDiff::Deleted(p.to_owned()));
         }
     }
 
@@ -593,8 +598,8 @@ mod tests {
         assert_eq!(
             result.ok(),
             Some(DatabasePrivilegeRow {
-                db: "db".to_owned(),
-                user: "user".to_owned(),
+                db: "db".into(),
+                user: "user".into(),
                 select_priv: true,
                 insert_priv: true,
                 update_priv: true,
@@ -613,8 +618,8 @@ mod tests {
         assert_eq!(
             result.ok(),
             Some(DatabasePrivilegeRow {
-                db: "db".to_owned(),
-                user: "user".to_owned(),
+                db: "db".into(),
+                user: "user".into(),
                 select_priv: false,
                 insert_priv: false,
                 update_priv: false,
@@ -633,8 +638,8 @@ mod tests {
         assert_eq!(
             result.ok(),
             Some(DatabasePrivilegeRow {
-                db: "db".to_owned(),
-                user: "user".to_owned(),
+                db: "db".into(),
+                user: "user".into(),
                 select_priv: true,
                 insert_priv: true,
                 update_priv: true,
@@ -668,8 +673,8 @@ mod tests {
     #[test]
     fn test_diff_privileges() {
         let row_to_be_modified = DatabasePrivilegeRow {
-            db: "db".to_owned(),
-            user: "user".to_owned(),
+            db: "db".into(),
+            user: "user".into(),
             select_priv: true,
             insert_priv: true,
             update_priv: true,
@@ -683,20 +688,20 @@ mod tests {
             references_priv: false,
         };
 
-        let mut row_to_be_deleted = row_to_be_modified.clone();
+        let mut row_to_be_deleted = row_to_be_modified.to_owned();
         "user2".clone_into(&mut row_to_be_deleted.user);
 
-        let from = vec![row_to_be_modified.clone(), row_to_be_deleted.clone()];
+        let from = vec![row_to_be_modified.to_owned(), row_to_be_deleted.to_owned()];
 
-        let mut modified_row = row_to_be_modified.clone();
+        let mut modified_row = row_to_be_modified.to_owned();
         modified_row.select_priv = false;
         modified_row.insert_priv = false;
         modified_row.index_priv = true;
 
-        let mut new_row = row_to_be_modified.clone();
+        let mut new_row = row_to_be_modified.to_owned();
         "user3".clone_into(&mut new_row.user);
 
-        let to = vec![modified_row.clone(), new_row.clone()];
+        let to = vec![modified_row.to_owned(), new_row.to_owned()];
 
         let diffs = diff_privileges(&from, &to);
 
@@ -705,8 +710,8 @@ mod tests {
             BTreeSet::from_iter(vec![
                 DatabasePrivilegesDiff::Deleted(row_to_be_deleted),
                 DatabasePrivilegesDiff::Modified(DatabasePrivilegeRowDiff {
-                    db: "db".to_owned(),
-                    user: "user".to_owned(),
+                    db: "db".into(),
+                    user: "user".into(),
                     diff: BTreeSet::from_iter(vec![
                         DatabasePrivilegeChange::YesToNo("select_priv".to_owned()),
                         DatabasePrivilegeChange::YesToNo("insert_priv".to_owned()),
@@ -722,8 +727,8 @@ mod tests {
     fn ensure_generated_and_parsed_editor_content_is_equal() {
         let permissions = vec![
             DatabasePrivilegeRow {
-                db: "db".to_owned(),
-                user: "user".to_owned(),
+                db: "db".into(),
+                user: "user".into(),
                 select_priv: true,
                 insert_priv: true,
                 update_priv: true,
@@ -737,8 +742,8 @@ mod tests {
                 references_priv: true,
             },
             DatabasePrivilegeRow {
-                db: "db2".to_owned(),
-                user: "user2".to_owned(),
+                db: "db".into(),
+                user: "user".into(),
                 select_priv: false,
                 insert_priv: false,
                 update_priv: false,

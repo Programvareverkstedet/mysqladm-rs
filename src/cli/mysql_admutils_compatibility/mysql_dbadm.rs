@@ -9,7 +9,7 @@ use crate::{
         common::erroneous_server_response,
         database_command,
         mysql_admutils_compatibility::{
-            common::trim_to_32_chars,
+            common::trim_db_name_to_32_chars,
             error_messages::{
                 format_show_database_error_message, handle_create_database_error,
                 handle_drop_database_error,
@@ -20,7 +20,7 @@ use crate::{
         bootstrap::bootstrap_server_connection_and_drop_privileges,
         protocol::{
             create_client_to_server_message_stream, ClientToServerMessageStream,
-            GetDatabasesPrivilegeDataError, Request, Response,
+            GetDatabasesPrivilegeDataError, MySQLDatabase, Request, Response,
         },
     },
     server::sql::database_privilege_operations::DatabasePrivilegeRow,
@@ -120,27 +120,27 @@ pub enum Command {
 pub struct CreateArgs {
     /// The name of the DATABASE(s) to create.
     #[arg(num_args = 1..)]
-    name: Vec<String>,
+    name: Vec<MySQLDatabase>,
 }
 
 #[derive(Parser)]
 pub struct DatabaseDropArgs {
     /// The name of the DATABASE(s) to drop.
     #[arg(num_args = 1..)]
-    name: Vec<String>,
+    name: Vec<MySQLDatabase>,
 }
 
 #[derive(Parser)]
 pub struct DatabaseShowArgs {
     /// The name of the DATABASE(s) to show.
     #[arg(num_args = 0..)]
-    name: Vec<String>,
+    name: Vec<MySQLDatabase>,
 }
 
 #[derive(Parser)]
 pub struct EditPermArgs {
     /// The name of the DATABASE to edit permissions for.
-    pub database: String,
+    pub database: MySQLDatabase,
 }
 
 pub fn main() -> anyhow::Result<()> {
@@ -202,11 +202,7 @@ async fn create_databases(
     args: CreateArgs,
     mut server_connection: ClientToServerMessageStream,
 ) -> anyhow::Result<()> {
-    let database_names = args
-        .name
-        .iter()
-        .map(|name| trim_to_32_chars(name))
-        .collect();
+    let database_names = args.name.iter().map(trim_db_name_to_32_chars).collect();
 
     let message = Request::CreateDatabases(database_names);
     server_connection.send(message).await?;
@@ -232,11 +228,7 @@ async fn drop_databases(
     args: DatabaseDropArgs,
     mut server_connection: ClientToServerMessageStream,
 ) -> anyhow::Result<()> {
-    let database_names = args
-        .name
-        .iter()
-        .map(|name| trim_to_32_chars(name))
-        .collect();
+    let database_names = args.name.iter().map(trim_db_name_to_32_chars).collect();
 
     let message = Request::DropDatabases(database_names);
     server_connection.send(message).await?;
@@ -262,11 +254,8 @@ async fn show_databases(
     args: DatabaseShowArgs,
     mut server_connection: ClientToServerMessageStream,
 ) -> anyhow::Result<()> {
-    let database_names: Vec<String> = args
-        .name
-        .iter()
-        .map(|name| trim_to_32_chars(name))
-        .collect();
+    let database_names: Vec<MySQLDatabase> =
+        args.name.iter().map(trim_db_name_to_32_chars).collect();
 
     let message = if database_names.is_empty() {
         let message = Request::ListDatabases(None);
@@ -291,14 +280,16 @@ async fn show_databases(
 
     // NOTE: mysql-dbadm show has a quirk where valid database names
     //       for non-existent databases will report with no users.
-    let results: Vec<Result<(String, Vec<DatabasePrivilegeRow>), String>> = match response {
+    let results: Vec<Result<(MySQLDatabase, Vec<DatabasePrivilegeRow>), String>> = match response {
         Some(Ok(Response::ListPrivileges(result))) => result
             .into_iter()
-            .map(|(name, rows)| match rows.map(|rows| (name.clone(), rows)) {
-                Ok(rows) => Ok(rows),
-                Err(GetDatabasesPrivilegeDataError::DatabaseDoesNotExist) => Ok((name, vec![])),
-                Err(err) => Err(format_show_database_error_message(err, &name)),
-            })
+            .map(
+                |(name, rows)| match rows.map(|rows| (name.to_owned(), rows)) {
+                    Ok(rows) => Ok(rows),
+                    Err(GetDatabasesPrivilegeDataError::DatabaseDoesNotExist) => Ok((name, vec![])),
+                    Err(err) => Err(format_show_database_error_message(err, &name)),
+                },
+            )
             .collect(),
         response => return erroneous_server_response(response),
     };

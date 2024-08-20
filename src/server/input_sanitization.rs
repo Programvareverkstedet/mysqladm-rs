@@ -24,7 +24,7 @@ pub fn validate_ownership_by_unix_user(
     name: &str,
     user: &UnixUser,
 ) -> Result<(), OwnerValidationError> {
-    let prefixes = std::iter::once(user.username.clone())
+    let prefixes = std::iter::once(user.username.to_owned())
         .chain(user.groups.iter().cloned())
         .collect::<Vec<String>>();
 

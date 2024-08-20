@@ -5,6 +5,7 @@ use sqlx::MySqlConnection;
 
 use serde::{Deserialize, Serialize};
 
+use crate::core::protocol::MySQLDatabase;
 use crate::{
     core::{
         common::UnixUser,
@@ -42,7 +43,7 @@ pub(super) async fn unsafe_database_exists(
 }
 
 pub async fn create_databases(
-    database_names: Vec<String>,
+    database_names: Vec<MySQLDatabase>,
     unix_user: &UnixUser,
     connection: &mut MySqlConnection,
 ) -> CreateDatabasesOutput {
@@ -51,7 +52,7 @@ pub async fn create_databases(
     for database_name in database_names {
         if let Err(err) = validate_name(&database_name) {
             results.insert(
-                database_name.clone(),
+                database_name.to_owned(),
                 Err(CreateDatabaseError::SanitizationError(err)),
             );
             continue;
@@ -59,7 +60,7 @@ pub async fn create_databases(
 
         if let Err(err) = validate_ownership_by_unix_user(&database_name, unix_user) {
             results.insert(
-                database_name.clone(),
+                database_name.to_owned(),
                 Err(CreateDatabaseError::OwnershipError(err)),
             );
             continue;
@@ -68,14 +69,14 @@ pub async fn create_databases(
         match unsafe_database_exists(&database_name, &mut *connection).await {
             Ok(true) => {
                 results.insert(
-                    database_name.clone(),
+                    database_name.to_owned(),
                     Err(CreateDatabaseError::DatabaseAlreadyExists),
                 );
                 continue;
             }
             Err(err) => {
                 results.insert(
-                    database_name.clone(),
+                    database_name.to_owned(),
                     Err(CreateDatabaseError::MySqlError(err.to_string())),
                 );
                 continue;
@@ -101,7 +102,7 @@ pub async fn create_databases(
 }
 
 pub async fn drop_databases(
-    database_names: Vec<String>,
+    database_names: Vec<MySQLDatabase>,
     unix_user: &UnixUser,
     connection: &mut MySqlConnection,
 ) -> DropDatabasesOutput {
@@ -110,7 +111,7 @@ pub async fn drop_databases(
     for database_name in database_names {
         if let Err(err) = validate_name(&database_name) {
             results.insert(
-                database_name.clone(),
+                database_name.to_owned(),
                 Err(DropDatabaseError::SanitizationError(err)),
             );
             continue;
@@ -118,7 +119,7 @@ pub async fn drop_databases(
 
         if let Err(err) = validate_ownership_by_unix_user(&database_name, unix_user) {
             results.insert(
-                database_name.clone(),
+                database_name.to_owned(),
                 Err(DropDatabaseError::OwnershipError(err)),
             );
             continue;
@@ -127,14 +128,14 @@ pub async fn drop_databases(
         match unsafe_database_exists(&database_name, &mut *connection).await {
             Ok(false) => {
                 results.insert(
-                    database_name.clone(),
+                    database_name.to_owned(),
                     Err(DropDatabaseError::DatabaseDoesNotExist),
                 );
                 continue;
             }
             Err(err) => {
                 results.insert(
-                    database_name.clone(),
+                    database_name.to_owned(),
                     Err(DropDatabaseError::MySqlError(err.to_string())),
                 );
                 continue;
@@ -159,13 +160,21 @@ pub async fn drop_databases(
     results
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, FromRow)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DatabaseRow {
-    pub database: String,
+    pub database: MySQLDatabase,
+}
+
+impl FromRow<'_, sqlx::mysql::MySqlRow> for DatabaseRow {
+    fn from_row(row: &sqlx::mysql::MySqlRow) -> Result<Self, sqlx::Error> {
+        Ok(DatabaseRow {
+            database: row.try_get::<String, _>("database")?.into(),
+        })
+    }
 }
 
 pub async fn list_databases(
-    database_names: Vec<String>,
+    database_names: Vec<MySQLDatabase>,
     unix_user: &UnixUser,
     connection: &mut MySqlConnection,
 ) -> ListDatabasesOutput {
@@ -174,7 +183,7 @@ pub async fn list_databases(
     for database_name in database_names {
         if let Err(err) = validate_name(&database_name) {
             results.insert(
-                database_name.clone(),
+                database_name.to_owned(),
                 Err(ListDatabasesError::SanitizationError(err)),
             );
             continue;
@@ -182,7 +191,7 @@ pub async fn list_databases(
 
         if let Err(err) = validate_ownership_by_unix_user(&database_name, unix_user) {
             results.insert(
-                database_name.clone(),
+                database_name.to_owned(),
                 Err(ListDatabasesError::OwnershipError(err)),
             );
             continue;
@@ -195,7 +204,7 @@ pub async fn list_databases(
           WHERE `SCHEMA_NAME` = ?
         "#,
         )
-        .bind(&database_name)
+        .bind(database_name.to_string())
         .fetch_optional(&mut *connection)
         .await
         .map_err(|err| ListDatabasesError::MySqlError(err.to_string()))

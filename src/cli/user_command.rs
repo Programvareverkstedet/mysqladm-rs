@@ -8,8 +8,8 @@ use crate::core::protocol::{
     print_drop_users_output_status, print_drop_users_output_status_json,
     print_lock_users_output_status, print_lock_users_output_status_json,
     print_set_password_output_status, print_unlock_users_output_status,
-    print_unlock_users_output_status_json, ClientToServerMessageStream, ListUsersError, Request,
-    Response,
+    print_unlock_users_output_status_json, ClientToServerMessageStream, ListUsersError, MySQLUser,
+    Request, Response,
 };
 
 use super::common::erroneous_server_response;
@@ -53,7 +53,7 @@ pub enum UserCommand {
 #[derive(Parser, Debug, Clone)]
 pub struct UserCreateArgs {
     #[arg(num_args = 1..)]
-    username: Vec<String>,
+    username: Vec<MySQLUser>,
 
     /// Do not ask for a password, leave it unset
     #[clap(long)]
@@ -69,7 +69,7 @@ pub struct UserCreateArgs {
 #[derive(Parser, Debug, Clone)]
 pub struct UserDeleteArgs {
     #[arg(num_args = 1..)]
-    username: Vec<String>,
+    username: Vec<MySQLUser>,
 
     /// Print the information as JSON
     #[arg(short, long)]
@@ -78,7 +78,7 @@ pub struct UserDeleteArgs {
 
 #[derive(Parser, Debug, Clone)]
 pub struct UserPasswdArgs {
-    username: String,
+    username: MySQLUser,
 
     #[clap(short, long)]
     password_file: Option<String>,
@@ -91,7 +91,7 @@ pub struct UserPasswdArgs {
 #[derive(Parser, Debug, Clone)]
 pub struct UserShowArgs {
     #[arg(num_args = 0..)]
-    username: Vec<String>,
+    username: Vec<MySQLUser>,
 
     /// Print the information as JSON
     #[arg(short, long)]
@@ -101,7 +101,7 @@ pub struct UserShowArgs {
 #[derive(Parser, Debug, Clone)]
 pub struct UserLockArgs {
     #[arg(num_args = 1..)]
-    username: Vec<String>,
+    username: Vec<MySQLUser>,
 
     /// Print the information as JSON
     #[arg(short, long)]
@@ -111,7 +111,7 @@ pub struct UserLockArgs {
 #[derive(Parser, Debug, Clone)]
 pub struct UserUnlockArgs {
     #[arg(num_args = 1..)]
-    username: Vec<String>,
+    username: Vec<MySQLUser>,
 
     /// Print the information as JSON
     #[arg(short, long)]
@@ -140,7 +140,7 @@ async fn create_users(
         anyhow::bail!("No usernames provided");
     }
 
-    let message = Request::CreateUsers(args.username.clone());
+    let message = Request::CreateUsers(args.username.to_owned());
     if let Err(err) = server_connection.send(message).await {
         server_connection.close().await.ok();
         anyhow::bail!(anyhow::Error::from(err).context("Failed to communicate with server"));
@@ -172,7 +172,7 @@ async fn create_users(
                     .interact()?
             {
                 let password = read_password_from_stdin_with_double_check(username)?;
-                let message = Request::PasswdUser(username.clone(), password);
+                let message = Request::PasswdUser(username.to_owned(), password);
 
                 if let Err(err) = server_connection.send(message).await {
                     server_connection.close().await.ok();
@@ -204,7 +204,7 @@ async fn drop_users(
         anyhow::bail!("No usernames provided");
     }
 
-    let message = Request::DropUsers(args.username.clone());
+    let message = Request::DropUsers(args.username.to_owned());
 
     if let Err(err) = server_connection.send(message).await {
         server_connection.close().await.ok();
@@ -227,7 +227,7 @@ async fn drop_users(
     Ok(())
 }
 
-pub fn read_password_from_stdin_with_double_check(username: &str) -> anyhow::Result<String> {
+pub fn read_password_from_stdin_with_double_check(username: &MySQLUser) -> anyhow::Result<String> {
     Password::new()
         .with_prompt(format!("New MySQL password for user '{}'", username))
         .with_confirmation(
@@ -243,7 +243,7 @@ async fn passwd_user(
     mut server_connection: ClientToServerMessageStream,
 ) -> anyhow::Result<()> {
     // TODO: create a "user" exists check" command
-    let message = Request::ListUsers(Some(vec![args.username.clone()]));
+    let message = Request::ListUsers(Some(vec![args.username.to_owned()]));
     if let Err(err) = server_connection.send(message).await {
         server_connection.close().await.ok();
         anyhow::bail!(err);
@@ -273,7 +273,7 @@ async fn passwd_user(
         read_password_from_stdin_with_double_check(&args.username)?
     };
 
-    let message = Request::PasswdUser(args.username.clone(), password);
+    let message = Request::PasswdUser(args.username.to_owned(), password);
 
     if let Err(err) = server_connection.send(message).await {
         server_connection.close().await.ok();
@@ -299,7 +299,7 @@ async fn show_users(
     let message = if args.username.is_empty() {
         Request::ListUsers(None)
     } else {
-        Request::ListUsers(Some(args.username.clone()))
+        Request::ListUsers(Some(args.username.to_owned()))
     };
 
     if let Err(err) = server_connection.send(message).await {
@@ -370,7 +370,7 @@ async fn lock_users(
         anyhow::bail!("No usernames provided");
     }
 
-    let message = Request::LockUsers(args.username.clone());
+    let message = Request::LockUsers(args.username.to_owned());
 
     if let Err(err) = server_connection.send(message).await {
         server_connection.close().await.ok();
@@ -401,7 +401,7 @@ async fn unlock_users(
         anyhow::bail!("No usernames provided");
     }
 
-    let message = Request::UnlockUsers(args.username.clone());
+    let message = Request::UnlockUsers(args.username.to_owned());
 
     if let Err(err) = server_connection.send(message).await {
         server_connection.close().await.ok();

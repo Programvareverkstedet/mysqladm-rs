@@ -9,7 +9,7 @@ use crate::{
     cli::{
         common::erroneous_server_response,
         mysql_admutils_compatibility::{
-            common::trim_to_32_chars,
+            common::trim_user_name_to_32_chars,
             error_messages::{
                 handle_create_user_error, handle_drop_user_error, handle_list_users_error,
             },
@@ -19,7 +19,8 @@ use crate::{
     core::{
         bootstrap::bootstrap_server_connection_and_drop_privileges,
         protocol::{
-            create_client_to_server_message_stream, ClientToServerMessageStream, Request, Response,
+            create_client_to_server_message_stream, ClientToServerMessageStream, MySQLUser,
+            Request, Response,
         },
     },
     server::sql::user_operations::DatabaseUser,
@@ -83,28 +84,28 @@ pub enum Command {
 pub struct CreateArgs {
     /// The name of the USER(s) to create.
     #[arg(num_args = 1..)]
-    name: Vec<String>,
+    name: Vec<MySQLUser>,
 }
 
 #[derive(Parser)]
 pub struct DeleteArgs {
     /// The name of the USER(s) to delete.
     #[arg(num_args = 1..)]
-    name: Vec<String>,
+    name: Vec<MySQLUser>,
 }
 
 #[derive(Parser)]
 pub struct PasswdArgs {
     /// The name of the USER(s) to change the password for.
     #[arg(num_args = 1..)]
-    name: Vec<String>,
+    name: Vec<MySQLUser>,
 }
 
 #[derive(Parser)]
 pub struct ShowArgs {
     /// The name of the USER(s) to show.
     #[arg(num_args = 0..)]
-    name: Vec<String>,
+    name: Vec<MySQLUser>,
 }
 
 pub fn main() -> anyhow::Result<()> {
@@ -152,13 +153,9 @@ async fn create_user(
     args: CreateArgs,
     mut server_connection: ClientToServerMessageStream,
 ) -> anyhow::Result<()> {
-    let usernames = args
-        .name
-        .iter()
-        .map(|name| trim_to_32_chars(name))
-        .collect();
+    let db_users = args.name.iter().map(trim_user_name_to_32_chars).collect();
 
-    let message = Request::CreateUsers(usernames);
+    let message = Request::CreateUsers(db_users);
     server_connection.send(message).await?;
 
     let result = match server_connection.next().await {
@@ -182,13 +179,9 @@ async fn drop_users(
     args: DeleteArgs,
     mut server_connection: ClientToServerMessageStream,
 ) -> anyhow::Result<()> {
-    let usernames = args
-        .name
-        .iter()
-        .map(|name| trim_to_32_chars(name))
-        .collect();
+    let db_users = args.name.iter().map(trim_user_name_to_32_chars).collect();
 
-    let message = Request::DropUsers(usernames);
+    let message = Request::DropUsers(db_users);
     server_connection.send(message).await?;
 
     let result = match server_connection.next().await {
@@ -212,13 +205,9 @@ async fn passwd_users(
     args: PasswdArgs,
     mut server_connection: ClientToServerMessageStream,
 ) -> anyhow::Result<()> {
-    let usernames = args
-        .name
-        .iter()
-        .map(|name| trim_to_32_chars(name))
-        .collect();
+    let db_users = args.name.iter().map(trim_user_name_to_32_chars).collect();
 
-    let message = Request::ListUsers(Some(usernames));
+    let message = Request::ListUsers(Some(db_users));
     server_connection.send(message).await?;
 
     let response = match server_connection.next().await {
@@ -243,11 +232,11 @@ async fn passwd_users(
 
     for user in users {
         let password = read_password_from_stdin_with_double_check(&user.user)?;
-        let message = Request::PasswdUser(user.user.clone(), password);
+        let message = Request::PasswdUser(user.user.to_owned(), password);
         server_connection.send(message).await?;
         match server_connection.next().await {
             Some(Ok(Response::PasswdUser(result))) => match result {
-                Ok(()) => println!("Password updated for user '{}'.", user.user),
+                Ok(()) => println!("Password updated for user '{}'.", &user.user),
                 Err(_) => eprintln!(
                     "{}: Failed to update password for user '{}'.",
                     argv0, user.user,
@@ -266,16 +255,12 @@ async fn show_users(
     args: ShowArgs,
     mut server_connection: ClientToServerMessageStream,
 ) -> anyhow::Result<()> {
-    let usernames: Vec<_> = args
-        .name
-        .iter()
-        .map(|name| trim_to_32_chars(name))
-        .collect();
+    let db_users: Vec<_> = args.name.iter().map(trim_user_name_to_32_chars).collect();
 
-    let message = if usernames.is_empty() {
+    let message = if db_users.is_empty() {
         Request::ListUsers(None)
     } else {
-        Request::ListUsers(Some(usernames))
+        Request::ListUsers(Some(db_users))
     };
     server_connection.send(message).await?;
 

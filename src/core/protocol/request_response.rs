@@ -1,4 +1,9 @@
-use std::collections::BTreeSet;
+use std::{
+    collections::BTreeSet,
+    fmt::{Display, Formatter},
+    ops::{Deref, DerefMut},
+    str::FromStr,
+};
 
 use serde::{Deserialize, Serialize};
 use tokio::net::UnixStream;
@@ -31,21 +36,107 @@ pub fn create_client_to_server_message_stream(socket: UnixStream) -> ClientToSer
     tokio_serde::Framed::new(length_delimited, Bincode::default())
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct MySQLUser(String);
+
+impl FromStr for MySQLUser {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(MySQLUser(s.to_string()))
+    }
+}
+
+impl Deref for MySQLUser {
+    type Target = String;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for MySQLUser {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl Display for MySQLUser {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl From<&str> for MySQLUser {
+    fn from(s: &str) -> Self {
+        MySQLUser(s.to_string())
+    }
+}
+
+impl From<String> for MySQLUser {
+    fn from(s: String) -> Self {
+        MySQLUser(s)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct MySQLDatabase(String);
+
+impl FromStr for MySQLDatabase {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(MySQLDatabase(s.to_string()))
+    }
+}
+
+impl Deref for MySQLDatabase {
+    type Target = String;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for MySQLDatabase {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl Display for MySQLDatabase {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl From<&str> for MySQLDatabase {
+    fn from(s: &str) -> Self {
+        MySQLDatabase(s.to_string())
+    }
+}
+
+impl From<String> for MySQLDatabase {
+    fn from(s: String) -> Self {
+        MySQLDatabase(s)
+    }
+}
+
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Request {
-    CreateDatabases(Vec<String>),
-    DropDatabases(Vec<String>),
-    ListDatabases(Option<Vec<String>>),
-    ListPrivileges(Option<Vec<String>>),
+    CreateDatabases(Vec<MySQLDatabase>),
+    DropDatabases(Vec<MySQLDatabase>),
+    ListDatabases(Option<Vec<MySQLDatabase>>),
+    ListPrivileges(Option<Vec<MySQLDatabase>>),
     ModifyPrivileges(BTreeSet<DatabasePrivilegesDiff>),
 
-    CreateUsers(Vec<String>),
-    DropUsers(Vec<String>),
-    PasswdUser(String, String),
-    ListUsers(Option<Vec<String>>),
-    LockUsers(Vec<String>),
-    UnlockUsers(Vec<String>),
+    CreateUsers(Vec<MySQLUser>),
+    DropUsers(Vec<MySQLUser>),
+    PasswdUser(MySQLUser, String),
+    ListUsers(Option<Vec<MySQLUser>>),
+    LockUsers(Vec<MySQLUser>),
+    UnlockUsers(Vec<MySQLUser>),
 
     // Commit,
     Exit,

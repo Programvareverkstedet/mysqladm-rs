@@ -118,7 +118,7 @@ pub fn read_config_from_path(config_path: Option<PathBuf>) -> anyhow::Result<Ser
 }
 
 fn log_config(config: &MysqlConfig) {
-    let mut display_config = config.clone();
+    let mut display_config = config.to_owned();
     display_config.password = display_config
         .password
         .as_ref()

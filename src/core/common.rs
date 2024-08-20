@@ -54,7 +54,7 @@ impl UnixUser {
 
         Ok(UnixUser {
             username: libc_user.name,
-            groups: groups.iter().map(|g| g.name.clone()).collect(),
+            groups: groups.iter().map(|g| g.name.to_owned()).collect(),
         })
     }
 

@@ -17,8 +17,8 @@ use crate::{
         protocol::{
             print_create_databases_output_status, print_create_databases_output_status_json,
             print_drop_databases_output_status, print_drop_databases_output_status_json,
-            print_modify_database_privileges_output_status, ClientToServerMessageStream, Request,
-            Response,
+            print_modify_database_privileges_output_status, ClientToServerMessageStream,
+            MySQLDatabase, Request, Response,
         },
     },
     server::sql::database_privilege_operations::{DatabasePrivilegeRow, DATABASE_PRIVILEGE_FIELDS},
@@ -105,7 +105,7 @@ pub enum DatabaseCommand {
 pub struct DatabaseCreateArgs {
     /// The name of the database(s) to create
     #[arg(num_args = 1..)]
-    name: Vec<String>,
+    name: Vec<MySQLDatabase>,
 
     /// Print the information as JSON
     #[arg(short, long)]
@@ -116,7 +116,7 @@ pub struct DatabaseCreateArgs {
 pub struct DatabaseDropArgs {
     /// The name of the database(s) to drop
     #[arg(num_args = 1..)]
-    name: Vec<String>,
+    name: Vec<MySQLDatabase>,
 
     /// Print the information as JSON
     #[arg(short, long)]
@@ -127,7 +127,7 @@ pub struct DatabaseDropArgs {
 pub struct DatabaseShowArgs {
     /// The name of the database(s) to show
     #[arg(num_args = 0..)]
-    name: Vec<String>,
+    name: Vec<MySQLDatabase>,
 
     /// Print the information as JSON
     #[arg(short, long)]
@@ -138,7 +138,7 @@ pub struct DatabaseShowArgs {
 pub struct DatabaseShowPrivsArgs {
     /// The name of the database(s) to show
     #[arg(num_args = 0..)]
-    name: Vec<String>,
+    name: Vec<MySQLDatabase>,
 
     /// Print the information as JSON
     #[arg(short, long)]
@@ -148,7 +148,7 @@ pub struct DatabaseShowPrivsArgs {
 #[derive(Parser, Debug, Clone)]
 pub struct DatabaseEditPrivsArgs {
     /// The name of the database to edit privileges for
-    pub name: Option<String>,
+    pub name: Option<MySQLDatabase>,
 
     #[arg(short, long, value_name = "[DATABASE:]USER:PRIVILEGES", num_args = 0..)]
     pub privs: Vec<String>,
@@ -191,7 +191,7 @@ async fn create_databases(
         anyhow::bail!("No database names provided");
     }
 
-    let message = Request::CreateDatabases(args.name.clone());
+    let message = Request::CreateDatabases(args.name.to_owned());
     server_connection.send(message).await?;
 
     let result = match server_connection.next().await {
@@ -218,7 +218,7 @@ async fn drop_databases(
         anyhow::bail!("No database names provided");
     }
 
-    let message = Request::DropDatabases(args.name.clone());
+    let message = Request::DropDatabases(args.name.to_owned());
     server_connection.send(message).await?;
 
     let result = match server_connection.next().await {
@@ -244,7 +244,7 @@ async fn show_databases(
     let message = if args.name.is_empty() {
         Request::ListDatabases(None)
     } else {
-        Request::ListDatabases(Some(args.name.clone()))
+        Request::ListDatabases(Some(args.name.to_owned()))
     };
 
     server_connection.send(message).await?;
@@ -301,7 +301,7 @@ async fn show_database_privileges(
     let message = if args.name.is_empty() {
         Request::ListPrivileges(None)
     } else {
-        Request::ListPrivileges(Some(args.name.clone()))
+        Request::ListPrivileges(Some(args.name.to_owned()))
     };
     server_connection.send(message).await?;
 
@@ -373,7 +373,7 @@ pub async fn edit_database_privileges(
     args: DatabaseEditPrivsArgs,
     mut server_connection: ClientToServerMessageStream,
 ) -> anyhow::Result<()> {
-    let message = Request::ListPrivileges(args.name.clone().map(|name| vec![name]));
+    let message = Request::ListPrivileges(args.name.to_owned().map(|name| vec![name]));
 
     server_connection.send(message).await?;
 
@@ -405,7 +405,7 @@ pub async fn edit_database_privileges(
     let privileges_to_change = if !args.privs.is_empty() {
         parse_privilege_tables_from_args(&args)?
     } else {
-        edit_privileges_with_editor(&privilege_data, args.name.as_deref())?
+        edit_privileges_with_editor(&privilege_data, args.name.as_ref())?
     };
 
     let diffs = diff_privileges(&privilege_data, &privileges_to_change);
@@ -471,7 +471,7 @@ fn parse_privilege_tables_from_args(
 
 fn edit_privileges_with_editor(
     privilege_data: &[DatabasePrivilegeRow],
-    database_name: Option<&str>,
+    database_name: Option<&MySQLDatabase>,
 ) -> anyhow::Result<Vec<DatabasePrivilegeRow>> {
     let unix_user = User::from_uid(getuid())
         .context("Failed to look up your UNIX username")

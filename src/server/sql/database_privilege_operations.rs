@@ -28,7 +28,8 @@ use crate::{
         protocol::{
             DiffDoesNotApplyError, GetAllDatabasesPrivilegeData, GetAllDatabasesPrivilegeDataError,
             GetDatabasesPrivilegeData, GetDatabasesPrivilegeDataError,
-            ModifyDatabasePrivilegesError, ModifyDatabasePrivilegesOutput,
+            ModifyDatabasePrivilegesError, ModifyDatabasePrivilegesOutput, MySQLDatabase,
+            MySQLUser,
         },
     },
     server::{
@@ -63,8 +64,8 @@ pub const DATABASE_PRIVILEGE_FIELDS: [&str; 13] = [
 /// This struct represents the set of privileges for a single user on a single database.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord)]
 pub struct DatabasePrivilegeRow {
-    pub db: String,
-    pub user: String,
+    pub db: MySQLDatabase,
+    pub user: MySQLUser,
     pub select_priv: bool,
     pub insert_priv: bool,
     pub update_priv: bool,
@@ -115,8 +116,8 @@ fn get_mysql_row_priv_field(row: &MySqlRow, position: usize) -> Result<bool, sql
 impl FromRow<'_, MySqlRow> for DatabasePrivilegeRow {
     fn from_row(row: &MySqlRow) -> Result<Self, sqlx::Error> {
         Ok(Self {
-            db: try_get_with_binary_fallback(row, "Db")?,
-            user: try_get_with_binary_fallback(row, "User")?,
+            db: try_get_with_binary_fallback(row, "Db")?.into(),
+            user: try_get_with_binary_fallback(row, "User")?.into(),
             select_priv: get_mysql_row_priv_field(row, 2)?,
             insert_priv: get_mysql_row_priv_field(row, 3)?,
             update_priv: get_mysql_row_priv_field(row, 4)?,
@@ -163,8 +164,8 @@ async fn unsafe_get_database_privileges(
 // NOTE: this function is unsafe because it does no input validation.
 /// Get all users + privileges for a single database-user pair.
 pub async fn unsafe_get_database_privileges_for_db_user_pair(
-    database_name: &str,
-    user_name: &str,
+    database_name: &MySQLDatabase,
+    user_name: &MySQLUser,
     connection: &mut MySqlConnection,
 ) -> Result<Option<DatabasePrivilegeRow>, sqlx::Error> {
     let result = sqlx::query_as::<_, DatabasePrivilegeRow>(&format!(
@@ -174,8 +175,8 @@ pub async fn unsafe_get_database_privileges_for_db_user_pair(
             .map(|field| quote_identifier(field))
             .join(","),
     ))
-    .bind(database_name)
-    .bind(user_name)
+    .bind(database_name.as_str())
+    .bind(user_name.as_str())
     .fetch_optional(connection)
     .await;
 
@@ -192,7 +193,7 @@ pub async fn unsafe_get_database_privileges_for_db_user_pair(
 }
 
 pub async fn get_databases_privilege_data(
-    database_names: Vec<String>,
+    database_names: Vec<MySQLDatabase>,
     unix_user: &UnixUser,
     connection: &mut MySqlConnection,
 ) -> GetDatabasesPrivilegeData {
@@ -201,7 +202,7 @@ pub async fn get_databases_privilege_data(
     for database_name in database_names.iter() {
         if let Err(err) = validate_name(database_name) {
             results.insert(
-                database_name.clone(),
+                database_name.to_owned(),
                 Err(GetDatabasesPrivilegeDataError::SanitizationError(err)),
             );
             continue;
@@ -209,7 +210,7 @@ pub async fn get_databases_privilege_data(
 
         if let Err(err) = validate_ownership_by_unix_user(database_name, unix_user) {
             results.insert(
-                database_name.clone(),
+                database_name.to_owned(),
                 Err(GetDatabasesPrivilegeDataError::OwnershipError(err)),
             );
             continue;
@@ -220,7 +221,7 @@ pub async fn get_databases_privilege_data(
             .unwrap()
         {
             results.insert(
-                database_name.clone(),
+                database_name.to_owned(),
                 Err(GetDatabasesPrivilegeDataError::DatabaseDoesNotExist),
             );
             continue;
@@ -230,7 +231,7 @@ pub async fn get_databases_privilege_data(
             .await
             .map_err(|e| GetDatabasesPrivilegeDataError::MySqlError(e.to_string()));
 
-        results.insert(database_name.clone(), result);
+        results.insert(database_name.to_owned(), result);
     }
 
     debug_assert!(database_names.len() == results.len());
@@ -364,8 +365,8 @@ async fn validate_diff(
             if privilege_row.is_some() {
                 Err(ModifyDatabasePrivilegesError::DiffDoesNotApply(
                     DiffDoesNotApplyError::RowAlreadyExists(
-                        diff.get_user_name().to_string(),
-                        diff.get_database_name().to_string(),
+                        diff.get_database_name().to_owned(),
+                        diff.get_user_name().to_owned(),
                     ),
                 ))
             } else {
@@ -375,8 +376,8 @@ async fn validate_diff(
         DatabasePrivilegesDiff::Modified(_) if privilege_row.is_none() => {
             Err(ModifyDatabasePrivilegesError::DiffDoesNotApply(
                 DiffDoesNotApplyError::RowDoesNotExist(
-                    diff.get_user_name().to_string(),
-                    diff.get_database_name().to_string(),
+                    diff.get_database_name().to_owned(),
+                    diff.get_user_name().to_owned(),
                 ),
             ))
         }
@@ -390,7 +391,7 @@ async fn validate_diff(
 
             if error_exists {
                 Err(ModifyDatabasePrivilegesError::DiffDoesNotApply(
-                    DiffDoesNotApplyError::RowPrivilegeChangeDoesNotApply(row_diff.clone(), row),
+                    DiffDoesNotApplyError::RowPrivilegeChangeDoesNotApply(row_diff.to_owned(), row),
                 ))
             } else {
                 Ok(())
@@ -400,8 +401,8 @@ async fn validate_diff(
             if privilege_row.is_none() {
                 Err(ModifyDatabasePrivilegesError::DiffDoesNotApply(
                     DiffDoesNotApplyError::RowDoesNotExist(
-                        diff.get_user_name().to_string(),
-                        diff.get_database_name().to_string(),
+                        diff.get_database_name().to_owned(),
+                        diff.get_user_name().to_owned(),
                     ),
                 ))
             } else {
@@ -419,12 +420,12 @@ pub async fn apply_privilege_diffs(
     unix_user: &UnixUser,
     connection: &mut MySqlConnection,
 ) -> ModifyDatabasePrivilegesOutput {
-    let mut results: BTreeMap<(String, String), _> = BTreeMap::new();
+    let mut results: BTreeMap<(MySQLDatabase, MySQLUser), _> = BTreeMap::new();
 
     for diff in database_privilege_diffs {
         let key = (
-            diff.get_database_name().to_string(),
-            diff.get_user_name().to_string(),
+            diff.get_database_name().to_owned(),
+            diff.get_user_name().to_owned(),
         );
         if let Err(err) = validate_name(diff.get_database_name()) {
             results.insert(

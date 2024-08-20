@@ -153,10 +153,10 @@ fn handle_server_command(args: &Args) -> anyhow::Result<Option<()>> {
     match args.command {
         Command::Server(ref command) => {
             tokio_start_server(
-                args.server_socket_path.clone(),
-                args.config.clone(),
-                args.verbose.clone(),
-                command.clone(),
+                args.server_socket_path.to_owned(),
+                args.config.to_owned(),
+                args.verbose.to_owned(),
+                command.to_owned(),
             )?;
             Ok(Some(()))
         }
