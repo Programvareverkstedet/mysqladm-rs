@@ -4,9 +4,11 @@ use dialoguer::{Confirm, Password};
 use futures_util::{SinkExt, StreamExt};
 
 use crate::core::protocol::{
-    print_create_users_output_status, print_drop_users_output_status,
-    print_lock_users_output_status, print_set_password_output_status,
-    print_unlock_users_output_status, ClientToServerMessageStream, ListUsersError, Request,
+    print_create_users_output_status, print_create_users_output_status_json,
+    print_drop_users_output_status, print_drop_users_output_status_json,
+    print_lock_users_output_status, print_lock_users_output_status_json,
+    print_set_password_output_status, print_unlock_users_output_status,
+    print_unlock_users_output_status_json, ClientToServerMessageStream, ListUsersError, Request,
     Response,
 };
 
@@ -56,12 +58,22 @@ pub struct UserCreateArgs {
     /// Do not ask for a password, leave it unset
     #[clap(long)]
     no_password: bool,
+
+    /// Print the information as JSON
+    ///
+    /// Note that this implies `--no-password`, since the command will become non-interactive.
+    #[arg(short, long)]
+    json: bool,
 }
 
 #[derive(Parser, Debug, Clone)]
 pub struct UserDeleteArgs {
     #[arg(num_args = 1..)]
     username: Vec<String>,
+
+    /// Print the information as JSON
+    #[arg(short, long)]
+    json: bool,
 }
 
 #[derive(Parser, Debug, Clone)]
@@ -70,6 +82,10 @@ pub struct UserPasswdArgs {
 
     #[clap(short, long)]
     password_file: Option<String>,
+
+    /// Print the information as JSON
+    #[arg(short, long)]
+    json: bool,
 }
 
 #[derive(Parser, Debug, Clone)]
@@ -77,7 +93,8 @@ pub struct UserShowArgs {
     #[arg(num_args = 0..)]
     username: Vec<String>,
 
-    #[clap(short, long)]
+    /// Print the information as JSON
+    #[arg(short, long)]
     json: bool,
 }
 
@@ -85,12 +102,20 @@ pub struct UserShowArgs {
 pub struct UserLockArgs {
     #[arg(num_args = 1..)]
     username: Vec<String>,
+
+    /// Print the information as JSON
+    #[arg(short, long)]
+    json: bool,
 }
 
 #[derive(Parser, Debug, Clone)]
 pub struct UserUnlockArgs {
     #[arg(num_args = 1..)]
     username: Vec<String>,
+
+    /// Print the information as JSON
+    #[arg(short, long)]
+    json: bool,
 }
 
 pub async fn handle_command(
@@ -126,39 +151,43 @@ async fn create_users(
         response => return erroneous_server_response(response),
     };
 
-    print_create_users_output_status(&result);
+    if args.json {
+        print_create_users_output_status_json(&result);
+    } else {
+        print_create_users_output_status(&result);
 
-    let successfully_created_users = result
-        .iter()
-        .filter_map(|(username, result)| result.as_ref().ok().map(|_| username))
-        .collect::<Vec<_>>();
+        let successfully_created_users = result
+            .iter()
+            .filter_map(|(username, result)| result.as_ref().ok().map(|_| username))
+            .collect::<Vec<_>>();
 
-    for username in successfully_created_users {
-        if !args.no_password
-            && Confirm::new()
-                .with_prompt(format!(
-                    "Do you want to set a password for user '{}'?",
-                    username
-                ))
-                .default(false)
-                .interact()?
-        {
-            let password = read_password_from_stdin_with_double_check(username)?;
-            let message = Request::PasswdUser(username.clone(), password);
+        for username in successfully_created_users {
+            if !args.no_password
+                && Confirm::new()
+                    .with_prompt(format!(
+                        "Do you want to set a password for user '{}'?",
+                        username
+                    ))
+                    .default(false)
+                    .interact()?
+            {
+                let password = read_password_from_stdin_with_double_check(username)?;
+                let message = Request::PasswdUser(username.clone(), password);
 
-            if let Err(err) = server_connection.send(message).await {
-                server_connection.close().await.ok();
-                anyhow::bail!(err);
-            }
-
-            match server_connection.next().await {
-                Some(Ok(Response::PasswdUser(result))) => {
-                    print_set_password_output_status(&result, username)
+                if let Err(err) = server_connection.send(message).await {
+                    server_connection.close().await.ok();
+                    anyhow::bail!(err);
                 }
-                response => return erroneous_server_response(response),
-            }
 
-            println!();
+                match server_connection.next().await {
+                    Some(Ok(Response::PasswdUser(result))) => {
+                        print_set_password_output_status(&result, username)
+                    }
+                    response => return erroneous_server_response(response),
+                }
+
+                println!();
+            }
         }
     }
 
@@ -189,7 +218,11 @@ async fn drop_users(
 
     server_connection.send(Request::Exit).await?;
 
-    print_drop_users_output_status(&result);
+    if args.json {
+        print_drop_users_output_status_json(&result);
+    } else {
+        print_drop_users_output_status(&result);
+    }
 
     Ok(())
 }
@@ -351,7 +384,11 @@ async fn lock_users(
 
     server_connection.send(Request::Exit).await?;
 
-    print_lock_users_output_status(&result);
+    if args.json {
+        print_lock_users_output_status_json(&result);
+    } else {
+        print_lock_users_output_status(&result);
+    }
 
     Ok(())
 }
@@ -378,7 +415,11 @@ async fn unlock_users(
 
     server_connection.send(Request::Exit).await?;
 
-    print_unlock_users_output_status(&result);
+    if args.json {
+        print_unlock_users_output_status_json(&result);
+    } else {
+        print_unlock_users_output_status(&result);
+    }
 
     Ok(())
 }

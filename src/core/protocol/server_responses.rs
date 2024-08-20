@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 use indoc::indoc;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 
 use crate::{
     core::{common::UnixUser, database_privileges::DatabasePrivilegeRowDiff},
@@ -141,6 +142,27 @@ pub fn print_create_databases_output_status(output: &CreateDatabasesOutput) {
     }
 }
 
+pub fn print_create_databases_output_status_json(output: &CreateDatabasesOutput) {
+    let value = output
+        .iter()
+        .map(|(name, result)| match result {
+            Ok(()) => (name.to_owned(), json!({ "status": "success" })),
+            Err(err) => (
+                name.clone(),
+                json!({
+                  "status": "error",
+                  "error": err.to_error_message(name),
+                }),
+            ),
+        })
+        .collect::<serde_json::Map<_, _>>();
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&value)
+            .unwrap_or("Failed to serialize result to JSON".to_string())
+    );
+}
+
 impl CreateDatabaseError {
     pub fn to_error_message(&self, database_name: &str) -> String {
         match self {
@@ -182,6 +204,27 @@ pub fn print_drop_databases_output_status(output: &DropDatabasesOutput) {
         }
         println!();
     }
+}
+
+pub fn print_drop_databases_output_status_json(output: &DropDatabasesOutput) {
+    let value = output
+        .iter()
+        .map(|(name, result)| match result {
+            Ok(()) => (name.to_owned(), json!({ "status": "success" })),
+            Err(err) => (
+                name.clone(),
+                json!({
+                  "status": "error",
+                  "error": err.to_error_message(name),
+                }),
+            ),
+        })
+        .collect::<serde_json::Map<_, _>>();
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&value)
+            .unwrap_or("Failed to serialize result to JSON".to_string())
+    );
 }
 
 impl DropDatabaseError {
@@ -412,6 +455,27 @@ pub fn print_create_users_output_status(output: &CreateUsersOutput) {
     }
 }
 
+pub fn print_create_users_output_status_json(output: &CreateUsersOutput) {
+    let value = output
+        .iter()
+        .map(|(name, result)| match result {
+            Ok(()) => (name.to_owned(), json!({ "status": "success" })),
+            Err(err) => (
+                name.clone(),
+                json!({
+                  "status": "error",
+                  "error": err.to_error_message(name),
+                }),
+            ),
+        })
+        .collect::<serde_json::Map<_, _>>();
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&value)
+            .unwrap_or("Failed to serialize result to JSON".to_string())
+    );
+}
+
 impl CreateUserError {
     pub fn to_error_message(&self, username: &str) -> String {
         match self {
@@ -451,6 +515,27 @@ pub fn print_drop_users_output_status(output: &DropUsersOutput) {
         }
         println!();
     }
+}
+
+pub fn print_drop_users_output_status_json(output: &DropUsersOutput) {
+    let value = output
+        .iter()
+        .map(|(name, result)| match result {
+            Ok(()) => (name.to_owned(), json!({ "status": "success" })),
+            Err(err) => (
+                name.clone(),
+                json!({
+                  "status": "error",
+                  "error": err.to_error_message(name),
+                }),
+            ),
+        })
+        .collect::<serde_json::Map<_, _>>();
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&value)
+            .unwrap_or("Failed to serialize result to JSON".to_string())
+    );
 }
 
 impl DropUserError {
@@ -531,6 +616,27 @@ pub fn print_lock_users_output_status(output: &LockUsersOutput) {
     }
 }
 
+pub fn print_lock_users_output_status_json(output: &LockUsersOutput) {
+    let value = output
+        .iter()
+        .map(|(name, result)| match result {
+            Ok(()) => (name.to_owned(), json!({ "status": "success" })),
+            Err(err) => (
+                name.clone(),
+                json!({
+                  "status": "error",
+                  "error": err.to_error_message(name),
+                }),
+            ),
+        })
+        .collect::<serde_json::Map<_, _>>();
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&value)
+            .unwrap_or("Failed to serialize result to JSON".to_string())
+    );
+}
+
 impl LockUserError {
     pub fn to_error_message(&self, username: &str) -> String {
         match self {
@@ -572,6 +678,27 @@ pub fn print_unlock_users_output_status(output: &UnlockUsersOutput) {
         }
         println!();
     }
+}
+
+pub fn print_unlock_users_output_status_json(output: &UnlockUsersOutput) {
+    let value = output
+        .iter()
+        .map(|(name, result)| match result {
+            Ok(()) => (name.to_owned(), json!({ "status": "success" })),
+            Err(err) => (
+                name.clone(),
+                json!({
+                  "status": "error",
+                  "error": err.to_error_message(name),
+                }),
+            ),
+        })
+        .collect::<serde_json::Map<_, _>>();
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&value)
+            .unwrap_or("Failed to serialize result to JSON".to_string())
+    );
 }
 
 impl UnlockUserError {

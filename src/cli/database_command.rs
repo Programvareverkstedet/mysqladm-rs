@@ -15,7 +15,8 @@ use crate::{
             parse_privilege_table_cli_arg,
         },
         protocol::{
-            print_create_databases_output_status, print_drop_databases_output_status,
+            print_create_databases_output_status, print_create_databases_output_status_json,
+            print_drop_databases_output_status, print_drop_databases_output_status_json,
             print_modify_database_privileges_output_status, ClientToServerMessageStream, Request,
             Response,
         },
@@ -102,49 +103,57 @@ pub enum DatabaseCommand {
 
 #[derive(Parser, Debug, Clone)]
 pub struct DatabaseCreateArgs {
-    /// The name of the database(s) to create.
+    /// The name of the database(s) to create
     #[arg(num_args = 1..)]
     name: Vec<String>,
+
+    /// Print the information as JSON
+    #[arg(short, long)]
+    json: bool,
 }
 
 #[derive(Parser, Debug, Clone)]
 pub struct DatabaseDropArgs {
-    /// The name of the database(s) to drop.
+    /// The name of the database(s) to drop
     #[arg(num_args = 1..)]
     name: Vec<String>,
+
+    /// Print the information as JSON
+    #[arg(short, long)]
+    json: bool,
 }
 
 #[derive(Parser, Debug, Clone)]
 pub struct DatabaseShowArgs {
-    /// The name of the database(s) to show.
+    /// The name of the database(s) to show
     #[arg(num_args = 0..)]
     name: Vec<String>,
 
-    /// Whether to output the information in JSON format.
+    /// Print the information as JSON
     #[arg(short, long)]
     json: bool,
 }
 
 #[derive(Parser, Debug, Clone)]
 pub struct DatabaseShowPrivsArgs {
-    /// The name of the database(s) to show.
+    /// The name of the database(s) to show
     #[arg(num_args = 0..)]
     name: Vec<String>,
 
-    /// Whether to output the information in JSON format.
+    /// Print the information as JSON
     #[arg(short, long)]
     json: bool,
 }
 
 #[derive(Parser, Debug, Clone)]
 pub struct DatabaseEditPrivsArgs {
-    /// The name of the database to edit privileges for.
+    /// The name of the database to edit privileges for
     pub name: Option<String>,
 
     #[arg(short, long, value_name = "[DATABASE:]USER:PRIVILEGES", num_args = 0..)]
     pub privs: Vec<String>,
 
-    /// Whether to output the information in JSON format.
+    /// Print the information as JSON
     #[arg(short, long)]
     pub json: bool,
 
@@ -152,7 +161,7 @@ pub struct DatabaseEditPrivsArgs {
     #[arg(short, long)]
     pub editor: Option<String>,
 
-    /// Disable interactive confirmation before saving changes.
+    /// Disable interactive confirmation before saving changes
     #[arg(short, long)]
     pub yes: bool,
 }
@@ -192,7 +201,11 @@ async fn create_databases(
 
     server_connection.send(Request::Exit).await?;
 
-    print_create_databases_output_status(&result);
+    if args.json {
+        print_create_databases_output_status_json(&result);
+    } else {
+        print_create_databases_output_status(&result);
+    }
 
     Ok(())
 }
@@ -215,7 +228,11 @@ async fn drop_databases(
 
     server_connection.send(Request::Exit).await?;
 
-    print_drop_databases_output_status(&result);
+    if args.json {
+        print_drop_databases_output_status_json(&result);
+    } else {
+        print_drop_databases_output_status(&result);
+    };
 
     Ok(())
 }
@@ -231,6 +248,8 @@ async fn show_databases(
     };
 
     server_connection.send(message).await?;
+
+    // TODO: collect errors for json output.
 
     let database_list = match server_connection.next().await {
         Some(Ok(Response::ListDatabases(databases))) => databases
