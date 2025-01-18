@@ -1,3 +1,5 @@
+[![Docs](https://img.shields.io/badge/rust_docs-blue?style=for-the-badge&logo=rust)](https://pages.pvv.ntnu.no/Projects/mysqladm-rs/main/docs/mysqladm/)
+
 # mysqladm-rs
 
 Work in progress rewrite of https://git.pvv.ntnu.no/Projects/mysql-admutils
