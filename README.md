@@ -2,7 +2,26 @@
 
 # mysqladm-rs
 
-Work in progress rewrite of https://git.pvv.ntnu.no/Projects/mysql-admutils
+Healing mysql spasms since 2024
+
+## What is this?
+
+This is a CLI tool that let's normal users perform administrative operations on a MySQL DBMS, with some restrictions.
+The default restriction is to only let the user perform these actions on databases and database users that are prefixed with their username,
+or with the name of any unix group that the user is a part of. i.e. `<user>_mydb`, `<user>_mydbuser`, or `<group>_myotherdb`.
+
+The administrative actions available to the user includes:
+
+- creating/listing/modifying/deleting databases and database users
+- modifying database user privileges
+- changing the passwords of the database users
+- locking and unlocking database user accounts
+- ... more to come
+
+The software is split into a client and a server. The server has administrative access to the mysql server,
+and is responsible for checking client authorization for the different types of actions the client might request.
+
+This is designed for (and is only really useful for) multi-user servers, like tilde servers, university unix servers, etc.
 
 ## Installation
 
