@@ -4,8 +4,8 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use sqlx::prelude::*;
 use sqlx::MySqlConnection;
+use sqlx::prelude::*;
 
 use crate::{
     core::{

@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
-use sqlx::prelude::*;
 use sqlx::MySqlConnection;
+use sqlx::prelude::*;
 
 use serde::{Deserialize, Serialize};
 

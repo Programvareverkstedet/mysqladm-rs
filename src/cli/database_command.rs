@@ -2,7 +2,7 @@ use anyhow::Context;
 use clap::Parser;
 use dialoguer::{Confirm, Editor};
 use futures_util::{SinkExt, StreamExt};
-use nix::unistd::{getuid, User};
+use nix::unistd::{User, getuid};
 use prettytable::{Cell, Row, Table};
 
 use crate::{
@@ -15,13 +15,13 @@ use crate::{
             parse_privilege_table_cli_arg,
         },
         protocol::{
+            ClientToServerMessageStream, MySQLDatabase, Request, Response,
             print_create_databases_output_status, print_create_databases_output_status_json,
             print_drop_databases_output_status, print_drop_databases_output_status_json,
-            print_modify_database_privileges_output_status, ClientToServerMessageStream,
-            MySQLDatabase, Request, Response,
+            print_modify_database_privileges_output_status,
         },
     },
-    server::sql::database_privilege_operations::{DatabasePrivilegeRow, DATABASE_PRIVILEGE_FIELDS},
+    server::sql::database_privilege_operations::{DATABASE_PRIVILEGE_FIELDS, DatabasePrivilegeRow},
 };
 
 #[derive(Parser, Debug, Clone)]

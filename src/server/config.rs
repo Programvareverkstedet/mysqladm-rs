@@ -1,9 +1,9 @@
 use std::{fs, path::PathBuf, time::Duration};
 
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 use clap::Parser;
 use serde::{Deserialize, Serialize};
-use sqlx::{mysql::MySqlConnectOptions, ConnectOptions, MySqlConnection};
+use sqlx::{ConnectOptions, MySqlConnection, mysql::MySqlConnectOptions};
 
 use crate::core::common::DEFAULT_CONFIG_PATH;
 

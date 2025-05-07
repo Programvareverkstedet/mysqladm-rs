@@ -1,12 +1,12 @@
 use std::{fs, path::PathBuf};
 
 use anyhow::Context;
-use nix::libc::{exit, EXIT_SUCCESS};
+use nix::libc::{EXIT_SUCCESS, exit};
 use std::os::unix::net::UnixStream as StdUnixStream;
 use tokio::net::UnixStream as TokioUnixStream;
 
 use crate::{
-    core::common::{UnixUser, DEFAULT_CONFIG_PATH, DEFAULT_SOCKET_PATH},
+    core::common::{DEFAULT_CONFIG_PATH, DEFAULT_SOCKET_PATH, UnixUser},
     server::{config::read_config_from_path, server_loop::handle_requests_for_single_session},
 };
 

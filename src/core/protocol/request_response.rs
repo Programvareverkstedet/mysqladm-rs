@@ -7,7 +7,7 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 use tokio::net::UnixStream;
-use tokio_serde::{formats::Bincode, Framed as SerdeFramed};
+use tokio_serde::{Framed as SerdeFramed, formats::Bincode};
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
 
 use crate::core::{database_privileges::DatabasePrivilegesDiff, protocol::*};

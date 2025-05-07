@@ -4,12 +4,12 @@ use dialoguer::{Confirm, Password};
 use futures_util::{SinkExt, StreamExt};
 
 use crate::core::protocol::{
+    ClientToServerMessageStream, ListUsersError, MySQLUser, Request, Response,
     print_create_users_output_status, print_create_users_output_status_json,
     print_drop_users_output_status, print_drop_users_output_status_json,
     print_lock_users_output_status, print_lock_users_output_status_json,
     print_set_password_output_status, print_unlock_users_output_status,
-    print_unlock_users_output_status_json, ClientToServerMessageStream, ListUsersError, MySQLUser,
-    Request, Response,
+    print_unlock_users_output_status_json,
 };
 
 use super::common::erroneous_server_response;

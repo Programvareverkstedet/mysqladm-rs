@@ -19,8 +19,8 @@ use crate::{
     core::{
         bootstrap::bootstrap_server_connection_and_drop_privileges,
         protocol::{
-            create_client_to_server_message_stream, ClientToServerMessageStream,
-            GetDatabasesPrivilegeDataError, MySQLDatabase, Request, Response,
+            ClientToServerMessageStream, GetDatabasesPrivilegeDataError, MySQLDatabase, Request,
+            Response, create_client_to_server_message_stream,
         },
     },
     server::sql::database_privilege_operations::DatabasePrivilegeRow,
@@ -307,11 +307,7 @@ async fn show_databases(
 
 #[inline]
 fn yn(value: bool) -> &'static str {
-    if value {
-        "Y"
-    } else {
-        "N"
-    }
+    if value { "Y" } else { "N" }
 }
 
 fn print_db_privs(name: &str, rows: Vec<DatabasePrivilegeRow>) -> anyhow::Result<()> {

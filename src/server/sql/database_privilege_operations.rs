@@ -19,11 +19,11 @@ use std::collections::{BTreeMap, BTreeSet};
 use indoc::indoc;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
-use sqlx::{mysql::MySqlRow, prelude::*, MySqlConnection};
+use sqlx::{MySqlConnection, mysql::MySqlRow, prelude::*};
 
 use crate::{
     core::{
-        common::{rev_yn, yn, UnixUser},
+        common::{UnixUser, rev_yn, yn},
         database_privileges::{DatabasePrivilegeChange, DatabasePrivilegesDiff},
         protocol::{
             DiffDoesNotApplyError, GetAllDatabasesPrivilegeData, GetAllDatabasesPrivilegeDataError,
@@ -280,9 +280,8 @@ async fn unsafe_apply_privilege_diff(
                 .map(|field| quote_identifier(field))
                 .join(",");
 
-            let question_marks = std::iter::repeat("?")
-                .take(DATABASE_PRIVILEGE_FIELDS.len())
-                .join(",");
+            let question_marks =
+                std::iter::repeat_n("?", DATABASE_PRIVILEGE_FIELDS.len()).join(",");
 
             sqlx::query(
                 format!("INSERT INTO `db` ({}) VALUES ({})", tables, question_marks).as_str(),

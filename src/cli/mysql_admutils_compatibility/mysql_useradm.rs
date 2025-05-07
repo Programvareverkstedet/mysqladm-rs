@@ -19,8 +19,8 @@ use crate::{
     core::{
         bootstrap::bootstrap_server_connection_and_drop_privileges,
         protocol::{
-            create_client_to_server_message_stream, ClientToServerMessageStream, MySQLUser,
-            Request, Response,
+            ClientToServerMessageStream, MySQLUser, Request, Response,
+            create_client_to_server_message_stream,
         },
     },
     server::sql::user_operations::DatabaseUser,

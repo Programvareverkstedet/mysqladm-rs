@@ -2,7 +2,7 @@
 extern crate prettytable;
 
 use clap::{CommandFactory, Parser, ValueEnum};
-use clap_complete::{generate, Shell};
+use clap_complete::{Shell, generate};
 use clap_verbosity_flag::Verbosity;
 
 use std::path::PathBuf;
@@ -15,7 +15,7 @@ use futures::StreamExt;
 use crate::{
     core::{
         bootstrap::bootstrap_server_connection_and_drop_privileges,
-        protocol::{create_client_to_server_message_stream, Response},
+        protocol::{Response, create_client_to_server_message_stream},
     },
     server::command::ServerArgs,
 };

@@ -66,11 +66,7 @@ impl UnixUser {
 
 #[inline]
 pub(crate) fn yn(b: bool) -> &'static str {
-    if b {
-        "Y"
-    } else {
-        "N"
-    }
+    if b { "Y" } else { "N" }
 }
 
 #[inline]

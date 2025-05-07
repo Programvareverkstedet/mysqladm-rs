@@ -4,20 +4,20 @@ use futures_util::{SinkExt, StreamExt};
 use indoc::concatdoc;
 use tokio::net::{UnixListener, UnixStream};
 
-use sqlx::prelude::*;
 use sqlx::MySqlConnection;
+use sqlx::prelude::*;
 
 use crate::core::protocol::SetPasswordError;
 use crate::server::sql::database_operations::list_databases;
 use crate::{
     core::{
-        common::{UnixUser, DEFAULT_SOCKET_PATH},
+        common::{DEFAULT_SOCKET_PATH, UnixUser},
         protocol::request_response::{
-            create_server_to_client_message_stream, Request, Response, ServerToClientMessageStream,
+            Request, Response, ServerToClientMessageStream, create_server_to_client_message_stream,
         },
     },
     server::{
-        config::{create_mysql_connection_from_config, ServerConfig},
+        config::{ServerConfig, create_mysql_connection_from_config},
         sql::{
             database_operations::{create_databases, drop_databases, list_all_databases_for_user},
             database_privilege_operations::{

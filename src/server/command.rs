@@ -12,7 +12,7 @@ use std::os::unix::net::UnixStream as StdUnixStream;
 use tokio::net::UnixStream as TokioUnixStream;
 
 use crate::core::common::UnixUser;
-use crate::core::protocol::{create_server_to_client_message_stream, Response};
+use crate::core::protocol::{Response, create_server_to_client_message_stream};
 use crate::server::config::read_config_from_path_with_arg_overrides;
 use crate::server::server_loop::listen_for_incoming_connections;
 use crate::server::{

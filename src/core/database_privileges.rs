@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 use itertools::Itertools;
 use prettytable::Table;
 use serde::{Deserialize, Serialize};
@@ -12,7 +12,7 @@ use super::{
     protocol::{MySQLDatabase, MySQLUser},
 };
 use crate::server::sql::database_privilege_operations::{
-    DatabasePrivilegeRow, DATABASE_PRIVILEGE_FIELDS,
+    DATABASE_PRIVILEGE_FIELDS, DatabasePrivilegeRow,
 };
 
 pub fn db_priv_field_human_readable_name(name: &str) -> String {
@@ -288,10 +288,10 @@ fn parse_privilege_row_from_editor(row: &str) -> PrivilegeRowParseResult {
 
     match parts.len() {
         n if (n < DATABASE_PRIVILEGE_FIELDS.len()) => {
-            return PrivilegeRowParseResult::TooFewFields(n)
+            return PrivilegeRowParseResult::TooFewFields(n);
         }
         n if (n > DATABASE_PRIVILEGE_FIELDS.len()) => {
-            return PrivilegeRowParseResult::TooManyFields(n)
+            return PrivilegeRowParseResult::TooManyFields(n);
         }
         _ => {}
     }
