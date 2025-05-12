@@ -1,0 +1,56 @@
+name: "publish-deb"
+on:
+  workflow_dispatch:
+    inputs:
+      # version:
+      #   description: "Version to publish"
+      #   type: string
+      #   required: true
+
+      rust_toolchain:
+        description: "Whether to build the package with stable rust"
+        type: choice
+        options:
+          - stable
+          - nightly
+          - beta
+        default: stable
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+            toolchain: ${{ inputs.rust_toolchain }}
+            override: true
+
+      - name: Install cargo-deb
+        run: cargo install cargo-deb
+
+      - name: Build deb package
+        run: ./create-deb.sh
+
+      - name: Upload deb package artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: rustadm-rs.deb
+          path: target/debian/*.deb
+          if-no-files-found: error
+          retention-days: 30
+          # Already compressed
+          compression: 0
+
+      # This is not safely doable without either:
+      # - tokens scoped to the repository: https://github.com/go-gitea/gitea/issues/25900
+      # - automatically provisioned tokens: https://github.com/go-gitea/gitea/issues/24635
+      #
+      # - name: Publish deb package
+      #   run: |
+      #     curl \
+      #       --user your_username:your_password_or_token \
+      #       --upload-file target/debian/*.deb \
+      #       https://git.pvv.ntnu.no/api/packages/testuser/debian/pool/bionic/main/upload
