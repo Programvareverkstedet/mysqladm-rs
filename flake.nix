@@ -47,6 +47,7 @@
         toolchain
         mysql-client
         cargo-nextest
+        cargo-edit
         cargo-deny
       ];
 
