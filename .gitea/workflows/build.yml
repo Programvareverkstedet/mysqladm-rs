@@ -68,6 +68,6 @@ jobs:
           target: ${{ gitea.ref_name }}/docs/
           username: gitea-web
           ssh-key: ${{ secrets.WEB_SYNC_SSH_KEY }}
-          host: bekkalokk.pvv.ntnu.no
-          known-hosts: "bekkalokk.pvv.ntnu.no ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEI6VSaDrMG8+flg4/AeHlAFIen8RUzWh6URQKqFegSx"
+          host: pages.pvv.ntnu.no
+          known-hosts: "pages.pvv.ntnu.no ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIH2QjfFB+city1SYqltkVqWACfo1j37k+oQQfj13mtgg"
 
