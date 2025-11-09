@@ -1,22 +1,31 @@
 # This should go to `/etc/mysqladm/config.toml`
 
 [server]
-# Note that this gets ignored if you are using socket activation.
-socket_path = "/var/run/mysqladm/mysqladm.sock"
+# The path to the socket where users can connect to the daemon.
+#
+# Note that this options gets ignored if you are using systemd socket activation
+# (see `systemctl status mysqladm.socket`)
+socket_path = "/run/mysqladm/mysqladm.sock"
 
 [mysql]
 
-# if you use a socket, the host and port will be ignored
-# socket_path = "/var/run/mysql/mysql.sock"
-
+# Hostname and port of the database.
 host = "localhost"
 port = 3306
 
-# The username and password can be omitted if you are using
-# socket based authentication. However, the vendored systemd
-# service is running as DynamicUser, so by default you need
-# to at least specify the username.
+# The path to the unix socket of the databse.
+# If you uncomment this line, the host and port will be ignored
+
+# socket_path = "/run/mysql/mysql.sock"
+
+# The username and password for the database connection.
+# The username and password can be omitted if you are connecting
+# to the database using socket based authentication.
+# However, the vendored systemd service is running as DynamicUser,
+# so these need to be specified by default unless you override the
+# systemd unit.
 username = "root"
 password = "secret"
 
-timeout = 2 # seconds
+# Database connection timeout in seconds
+timeout = 2
