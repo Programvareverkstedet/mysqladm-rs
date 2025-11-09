@@ -45,7 +45,7 @@
     devShell = forAllSystems (system: pkgs: toolchain: pkgs.mkShell {
       nativeBuildInputs = with pkgs; [
         toolchain
-        mysql-client
+        mariadb.client
         cargo-nextest
         cargo-edit
         cargo-deny
@@ -57,7 +57,7 @@
     overlays = {
       default = self.overlays.mysqladm-rs;
       mysqladm-rs = final: prev: {
-        inherit (self.packages.${prev.system}) mysqladm-rs;
+        inherit (self.packages.${prev.stdenv.hostPlatform.system}) mysqladm-rs;
       };
     };
 
