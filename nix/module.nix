@@ -37,7 +37,7 @@ in
           server = {
             socket_path = lib.mkOption {
               type = lib.types.path;
-              default = "/var/run/mysqladm/mysqladm.sock";
+              default = "/run/mysqladm/mysqladm.sock";
               description = "Path to the MySQL socket";
             };
           };
@@ -45,7 +45,7 @@ in
           mysql = {
             socket_path = lib.mkOption {
               type = with lib.types; nullOr path;
-              default = "/var/run/mysqld/mysqld.sock";
+              default = "/run/mysqld/mysqld.sock";
               description = "Path to the MySQL socket";
             };
             host = lib.mkOption {
@@ -104,9 +104,10 @@ in
 
         WatchdogSec = 15;
 
-        User = "mysqladm";
-        Group = "mysqladm";
         DynamicUser = true;
+
+        ConfigurationDirectory = "mysqladm";
+        RuntimeDirectory = "mysqladm";
 
         # This is required to read unix user/group details.
         PrivateUsers = false;
@@ -132,7 +133,7 @@ in
         PrivateTmp = "yes";
         ProcSubset = "pid";
         ProtectClock = true;
-        ProtectControlGroups = true;
+        ProtectControlGroups = "strict";
         ProtectHome = true;
         ProtectHostname = true;
         ProtectKernelLogs = true;
