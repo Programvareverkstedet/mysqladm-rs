@@ -31,6 +31,16 @@ Preferrably, this UID/GID should not be root, in order to minimize the potential
 
 ## Development and testing
 
+### Nix
+
+If you have nix installed, you can test your changes in a NixOS vm by running:
+
+```bash
+nix run .#vm
+```
+
+### General setup
+
 Ensure you have a [rust toolchain](https://www.rust-lang.org/tools/install) installed.
 
 In order to set up a test instance of mariadb in a docker container, run the following command:
