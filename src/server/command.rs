@@ -1,23 +1,16 @@
-use std::os::fd::FromRawFd;
 use std::path::PathBuf;
 
 use anyhow::Context;
 use clap::Parser;
 use clap_verbosity_flag::Verbosity;
-use futures::SinkExt;
-use indoc::concatdoc;
 use systemd_journal_logger::JournalLog;
 
-use std::os::unix::net::UnixStream as StdUnixStream;
-use tokio::net::UnixStream as TokioUnixStream;
-
-use crate::core::common::UnixUser;
-use crate::core::protocol::{Response, create_server_to_client_message_stream};
-use crate::server::config::read_config_from_path_with_arg_overrides;
-use crate::server::server_loop::listen_for_incoming_connections;
 use crate::server::{
-    config::{ServerConfig, ServerConfigArgs},
-    server_loop::handle_requests_for_single_session,
+    config::{ServerConfigArgs, read_config_from_path_with_arg_overrides},
+    server_loop::{
+        listen_for_incoming_connections_with_socket_path,
+        listen_for_incoming_connections_with_systemd_socket,
+    },
 };
 
 #[derive(Parser, Debug, Clone)]
@@ -97,7 +90,9 @@ pub async fn handle_command(
     let config = read_config_from_path_with_arg_overrides(config_path, args.config_overrides)?;
 
     match args.subcmd {
-        ServerCommand::Listen => listen_for_incoming_connections(socket_path, config).await,
+        ServerCommand::Listen => {
+            listen_for_incoming_connections_with_socket_path(socket_path, config).await
+        }
         ServerCommand::SocketActivate => {
             if !args.systemd {
                 anyhow::bail!(concat!(
@@ -106,7 +101,7 @@ pub async fn handle_command(
                 ));
             }
 
-            socket_activate(config).await
+            listen_for_incoming_connections_with_systemd_socket(config).await
         }
     }
 }
@@ -135,74 +130,4 @@ fn start_watchdog_thread_if_enabled() {
     } else {
         log::debug!("Systemd watchdog not enabled, skipping watchdog thread");
     }
-}
-
-async fn socket_activate(config: ServerConfig) -> anyhow::Result<()> {
-    let conn = get_socket_from_systemd().await?;
-
-    let uid = match conn.peer_cred() {
-        Ok(cred) => cred.uid(),
-        Err(e) => {
-            log::error!("Failed to get peer credentials from socket: {}", e);
-            let mut message_stream = create_server_to_client_message_stream(conn);
-            message_stream
-                .send(Response::Error(
-                    (concatdoc! {
-                        "Server failed to get peer credentials from socket\n",
-                        "Please check the server logs or contact the system administrators"
-                    })
-                    .to_string(),
-                ))
-                .await
-                .ok();
-            anyhow::bail!("Failed to get peer credentials from socket");
-        }
-    };
-
-    log::debug!("Accepted connection from uid {}", uid);
-
-    let unix_user = match UnixUser::from_uid(uid) {
-        Ok(user) => user,
-        Err(e) => {
-            log::error!("Failed to get username from uid: {}", e);
-            let mut message_stream = create_server_to_client_message_stream(conn);
-            message_stream
-                .send(Response::Error(
-                    (concatdoc! {
-                        "Server failed to get user data from the system\n",
-                        "Please check the server logs or contact the system administrators"
-                    })
-                    .to_string(),
-                ))
-                .await
-                .ok();
-            anyhow::bail!("Failed to get username from uid");
-        }
-    };
-
-    log::info!("Accepted connection from {}", unix_user.username);
-
-    sd_notify::notify(false, &[sd_notify::NotifyState::Ready]).ok();
-
-    handle_requests_for_single_session(conn, &unix_user, &config).await?;
-
-    Ok(())
-}
-
-async fn get_socket_from_systemd() -> anyhow::Result<TokioUnixStream> {
-    let fd = sd_notify::listen_fds()
-        .context("Failed to get file descriptors from systemd")?
-        .next()
-        .context("No file descriptors received from systemd")?;
-
-    debug_assert!(fd == 3, "Unexpected file descriptor from systemd: {}", fd);
-
-    log::debug!(
-        "Received file descriptor from systemd with id: '{}', assuming socket",
-        fd
-    );
-
-    let std_unix_stream = unsafe { StdUnixStream::from_raw_fd(fd) };
-    let socket = TokioUnixStream::from_std(std_unix_stream)?;
-    Ok(socket)
 }

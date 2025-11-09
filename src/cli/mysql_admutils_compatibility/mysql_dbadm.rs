@@ -151,8 +151,11 @@ pub fn main() -> anyhow::Result<()> {
         return Ok(());
     }
 
-    let server_connection =
-        bootstrap_server_connection_and_drop_privileges(args.server_socket_path, args.config)?;
+    let server_connection = bootstrap_server_connection_and_drop_privileges(
+        args.server_socket_path,
+        args.config,
+        Default::default(),
+    )?;
 
     let command = match args.command {
         Some(command) => command,

@@ -38,7 +38,7 @@ in
             socket_path = lib.mkOption {
               type = lib.types.path;
               default = "/run/mysqladm/mysqladm.sock";
-              description = "Path to the MySQL socket";
+              description = "Path to the mysqladm socket";
             };
           };
 
@@ -96,15 +96,20 @@ in
       }
     ];
 
-    systemd.services."mysqladm@" = {
+    systemd.services."mysqladm" = {
       description = "MySQL administration tool for non-admin users";
       restartTriggers = [ config.environment.etc."mysqladm/config.toml".source ];
+      requires = [ "mysqladm.socket" ];
       serviceConfig = {
         Type = "notify";
         ExecStart = "${lib.getExe cfg.package} ${cfg.logLevel} server --systemd socket-activate";
 
         WatchdogSec = 15;
 
+        # Although this is a multi-instance unit, the constant `User` field is needed
+        # for authentication via mysql's auth_socket plugin to work.
+        User = "mysqladm";
+        Group = "mysqladm";
         DynamicUser = true;
 
         ConfigurationDirectory = "mysqladm";
@@ -117,8 +122,12 @@ in
         PrivateNetwork = false;
         PrivateIPC = false;
 
-        IPAddressDeny =
-          lib.optionals (lib.elem cfg.settings.mysql.host [ null "localhost" "127.0.0.1" ]) [ "any" ];
+        IPAddressDeny = "any";
+        IPAddressAllow = [
+          "127.0.0.0/8"
+        ] ++ lib.optionals (cfg.settings.mysql.host != null) [
+          cfg.settings.mysql.host
+        ];
 
         RestrictAddressFamilies = [ "AF_UNIX" ]
           ++ (lib.optionals (cfg.settings.mysql.host != null) [ "AF_INET" "AF_INET6" ]);
@@ -162,7 +171,7 @@ in
       wantedBy = [ "sockets.target" ];
       socketConfig = {
         ListenStream = cfg.settings.server.socket_path;
-        Accept = "yes";
+        Accept = "no";
         PassCredentials = true;
       };
     };

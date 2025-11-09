@@ -124,14 +124,13 @@ fn main() -> anyhow::Result<()> {
         return Ok(());
     }
 
-    let server_connection =
-        bootstrap_server_connection_and_drop_privileges(args.server_socket_path, args.config)?;
+    let connection = bootstrap_server_connection_and_drop_privileges(
+        args.server_socket_path,
+        args.config,
+        args.verbose,
+    )?;
 
-    env_logger::Builder::new()
-        .filter_level(args.verbose.log_level_filter())
-        .init();
-
-    tokio_run_command(args.command, server_connection)?;
+    tokio_run_command(args.command, connection)?;
 
     Ok(())
 }

@@ -1,8 +1,14 @@
-use std::{collections::BTreeSet, fs, path::PathBuf};
+use std::{
+    collections::BTreeSet,
+    fs,
+    os::unix::{io::FromRawFd, net::UnixListener as StdUnixListener},
+    path::PathBuf,
+};
 
+use anyhow::Context;
 use futures_util::{SinkExt, StreamExt};
 use indoc::concatdoc;
-use tokio::net::{UnixListener, UnixStream};
+use tokio::net::{UnixListener as TokioUnixListener, UnixStream as TokioUnixStream};
 
 use sqlx::MySqlConnection;
 use sqlx::prelude::*;
@@ -34,10 +40,9 @@ use crate::{
 
 // TODO: consider using a connection pool
 
-pub async fn listen_for_incoming_connections(
+pub async fn listen_for_incoming_connections_with_socket_path(
     socket_path: Option<PathBuf>,
     config: ServerConfig,
-    // db_connection: &mut MySqlConnection,
 ) -> anyhow::Result<()> {
     let socket_path = socket_path.unwrap_or(PathBuf::from(DEFAULT_SOCKET_PATH));
 
@@ -55,8 +60,35 @@ pub async fn listen_for_incoming_connections(
         Err(e) => return Err(e.into()),
     }
 
-    let listener = UnixListener::bind(socket_path)?;
+    let listener = TokioUnixListener::bind(socket_path)?;
 
+    listen_for_incoming_connections_with_listener(listener, config).await
+}
+
+pub async fn listen_for_incoming_connections_with_systemd_socket(
+    config: ServerConfig,
+) -> anyhow::Result<()> {
+    let fd = sd_notify::listen_fds()
+        .context("Failed to get file descriptors from systemd")?
+        .next()
+        .context("No file descriptors received from systemd")?;
+
+    debug_assert!(fd == 3, "Unexpected file descriptor from systemd: {}", fd);
+
+    log::debug!(
+        "Received file descriptor from systemd with id: '{}', assuming socket",
+        fd
+    );
+
+    let std_unix_listener = unsafe { StdUnixListener::from_raw_fd(fd) };
+    let listener = TokioUnixListener::from_std(std_unix_listener)?;
+    listen_for_incoming_connections_with_listener(listener, config).await
+}
+
+pub async fn listen_for_incoming_connections_with_listener(
+    listener: TokioUnixListener,
+    config: ServerConfig,
+) -> anyhow::Result<()> {
     sd_notify::notify(false, &[sd_notify::NotifyState::Ready]).ok();
 
     while let Ok((conn, _addr)) = listener.accept().await {
@@ -113,12 +145,23 @@ pub async fn listen_for_incoming_connections(
     Ok(())
 }
 
+async fn close_or_ignore_db_connection(db_connection: MySqlConnection) {
+    if let Err(e) = db_connection.close().await {
+        log::error!("Failed to close database connection: {}", e);
+        log::error!("{}", e);
+        log::error!("Ignoring...");
+    }
+}
+
 pub async fn handle_requests_for_single_session(
-    socket: UnixStream,
+    socket: TokioUnixStream,
     unix_user: &UnixUser,
     config: &ServerConfig,
 ) -> anyhow::Result<()> {
     let mut message_stream = create_server_to_client_message_stream(socket);
+
+    log::debug!("Opening connection to database");
+
     let mut db_connection = match create_mysql_connection_from_config(&config.mysql).await {
         Ok(connection) => connection,
         Err(err) => {
@@ -136,6 +179,24 @@ pub async fn handle_requests_for_single_session(
         }
     };
 
+    log::debug!("Verifying that database connection is valid");
+
+    if let Err(e) = db_connection.ping().await {
+        log::error!("Failed to ping database: {}", e);
+        message_stream
+            .send(Response::Error(
+                (concatdoc! {
+                    "Server failed to connect to database\n",
+                    "Please check the server logs or contact the system administrators"
+                })
+                .to_string(),
+            ))
+            .await?;
+        message_stream.flush().await?;
+        close_or_ignore_db_connection(db_connection).await;
+        return Err(e.into());
+    }
+
     log::debug!("Successfully connected to database");
 
     let result = handle_requests_for_single_session_with_db_connection(
@@ -145,11 +206,7 @@ pub async fn handle_requests_for_single_session(
     )
     .await;
 
-    if let Err(e) = db_connection.close().await {
-        log::error!("Failed to close database connection: {}", e);
-        log::error!("{}", e);
-        log::error!("Ignoring...");
-    }
+    close_or_ignore_db_connection(db_connection).await;
 
     result
 }
@@ -157,7 +214,7 @@ pub async fn handle_requests_for_single_session(
 // TODO: ensure proper db_connection hygiene for functions that invoke
 //       this function
 
-pub async fn handle_requests_for_single_session_with_db_connection(
+async fn handle_requests_for_single_session_with_db_connection(
     mut stream: ServerToClientMessageStream,
     unix_user: &UnixUser,
     db_connection: &mut MySqlConnection,

@@ -1,5 +1,6 @@
 use anyhow::Context;
 use nix::unistd::{Group as LibcGroup, User as LibcUser};
+use std::{fs, os::unix::fs::PermissionsExt};
 
 #[cfg(not(target_os = "macos"))]
 use std::ffi::CString;

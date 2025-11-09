@@ -124,8 +124,11 @@ pub fn main() -> anyhow::Result<()> {
         }
     };
 
-    let server_connection =
-        bootstrap_server_connection_and_drop_privileges(args.server_socket_path, args.config)?;
+    let server_connection = bootstrap_server_connection_and_drop_privileges(
+        args.server_socket_path,
+        args.config,
+        Default::default(),
+    )?;
 
     tokio_run_command(command, server_connection)?;
 

@@ -1,33 +1,43 @@
 use std::{fs, path::PathBuf};
 
 use anyhow::Context;
+use clap_verbosity_flag::Verbosity;
 use nix::libc::{EXIT_SUCCESS, exit};
 use std::os::unix::net::UnixStream as StdUnixStream;
 use tokio::net::UnixStream as TokioUnixStream;
 
 use crate::{
-    core::common::{DEFAULT_CONFIG_PATH, DEFAULT_SOCKET_PATH, UnixUser},
+    core::common::{
+        DEFAULT_CONFIG_PATH, DEFAULT_SOCKET_PATH, UnixUser, executable_is_suid_or_sgid,
+    },
     server::{config::read_config_from_path, server_loop::handle_requests_for_single_session},
 };
 
-// TODO: this function is security critical, it should be integration tested
-//       in isolation.
-/// Drop privileges to the real user and group of the process.
-/// If the process is not running with elevated privileges, this function
-/// is a no-op.
-pub fn drop_privs() -> anyhow::Result<()> {
-    log::debug!("Dropping privileges");
-    let real_uid = nix::unistd::getuid();
-    let real_gid = nix::unistd::getgid();
+/// Determine whether we will make a connection to an external server
+/// or start an internal server with elevated privileges.
+///
+/// If neither is feasible, an error is returned.
+fn will_connect_to_external_server(
+    server_socket_path: Option<&PathBuf>,
+    config_path: Option<&PathBuf>,
+) -> anyhow::Result<bool> {
+    if server_socket_path.is_some() {
+        return Ok(true);
+    }
 
-    nix::unistd::setuid(real_uid).context("Failed to drop privileges")?;
-    nix::unistd::setgid(real_gid).context("Failed to drop privileges")?;
+    if config_path.is_some() {
+        return Ok(false);
+    }
 
-    debug_assert_eq!(nix::unistd::getuid(), real_uid);
-    debug_assert_eq!(nix::unistd::getgid(), real_gid);
+    if fs::metadata(DEFAULT_SOCKET_PATH).is_ok() {
+        return Ok(true);
+    }
 
-    log::debug!("Privileges dropped successfully");
-    Ok(())
+    if fs::metadata(DEFAULT_CONFIG_PATH).is_ok() {
+        return Ok(false);
+    }
+
+    anyhow::bail!("No socket path or config path provided, and no default socket or config found");
 }
 
 /// This function is used to bootstrap the connection to the server.
@@ -45,31 +55,44 @@ pub fn drop_privs() -> anyhow::Result<()> {
 ///    with the socket for the server.
 ///
 /// If neither of these options are available, the function will fail.
+///
+/// Note that this function is also responsible for setting up logging,
+/// because in the case of an internal server, we need to drop privileges
+/// before we can initialize logging.
 pub fn bootstrap_server_connection_and_drop_privileges(
     server_socket_path: Option<PathBuf>,
-    config_path: Option<PathBuf>,
+    config: Option<PathBuf>,
+    verbose: Verbosity,
 ) -> anyhow::Result<StdUnixStream> {
-    if server_socket_path.is_some() && config_path.is_some() {
-        anyhow::bail!("Cannot provide both a socket path and a config path");
+    if will_connect_to_external_server(server_socket_path.as_ref(), config.as_ref())? {
+        assert!(
+            !executable_is_suid_or_sgid()?,
+            "The executable should not be SUID or SGID when connecting to an external server"
+        );
+
+        env_logger::Builder::new()
+            .filter_level(verbose.log_level_filter())
+            .init();
+
+        connect_to_external_server(server_socket_path)
+    } else {
+        // NOTE: We need to be really careful with the code up until this point,
+        //       as we might be running with elevated privileges.
+        let server_connection = bootstrap_internal_server_and_drop_privs(config)?;
+
+        env_logger::Builder::new()
+            .filter_level(verbose.log_level_filter())
+            .init();
+
+        Ok(server_connection)
     }
-
-    log::debug!("Starting the server connection bootstrap process");
-
-    let socket = bootstrap_server_connection(server_socket_path, config_path)?;
-
-    drop_privs()?;
-
-    Ok(socket)
 }
 
-/// Inner function for [`bootstrap_server_connection_and_drop_privileges`].
-/// See that function for more information.
-fn bootstrap_server_connection(
-    socket_path: Option<PathBuf>,
-    config_path: Option<PathBuf>,
+fn connect_to_external_server(
+    server_socket_path: Option<PathBuf>,
 ) -> anyhow::Result<StdUnixStream> {
     // TODO: ensure this is both readable and writable
-    if let Some(socket_path) = socket_path {
+    if let Some(socket_path) = server_socket_path {
         log::debug!("Connecting to socket at {:?}", socket_path);
         return match StdUnixStream::connect(socket_path) {
             Ok(socket) => Ok(socket),
@@ -79,15 +102,6 @@ fn bootstrap_server_connection(
                 _ => Err(anyhow::anyhow!("Failed to connect to socket: {}", e)),
             },
         };
-    }
-    if let Some(config_path) = config_path {
-        // ensure config exists and is readable
-        if fs::metadata(&config_path).is_err() {
-            return Err(anyhow::anyhow!("Config file not found or not readable"));
-        }
-
-        log::debug!("Starting server with config at {:?}", config_path);
-        return invoke_server_with_config(config_path);
     }
 
     if fs::metadata(DEFAULT_SOCKET_PATH).is_ok() {
@@ -102,13 +116,60 @@ fn bootstrap_server_connection(
         };
     }
 
+    anyhow::bail!("No socket path provided, and no default socket found");
+}
+
+// TODO: this function is security critical, it should be integration tested
+//       in isolation.
+/// Drop privileges to the real user and group of the process.
+/// If the process is not running with elevated privileges, this function
+/// is a no-op.
+fn drop_privs() -> anyhow::Result<()> {
+    log::debug!("Dropping privileges");
+    let real_uid = nix::unistd::getuid();
+    let real_gid = nix::unistd::getgid();
+
+    nix::unistd::setuid(real_uid).context("Failed to drop privileges")?;
+    nix::unistd::setgid(real_gid).context("Failed to drop privileges")?;
+
+    debug_assert_eq!(nix::unistd::getuid(), real_uid);
+    debug_assert_eq!(nix::unistd::getgid(), real_gid);
+
+    log::debug!("Privileges dropped successfully");
+    Ok(())
+}
+
+fn bootstrap_internal_server_and_drop_privs(
+    config_path: Option<PathBuf>,
+) -> anyhow::Result<StdUnixStream> {
+    if let Some(config_path) = config_path {
+        if !executable_is_suid_or_sgid()? {
+            anyhow::bail!("Executable is not SUID/SGID - refusing to start internal sever");
+        }
+
+        // ensure config exists and is readable
+        if fs::metadata(&config_path).is_err() {
+            return Err(anyhow::anyhow!("Config file not found or not readable"));
+        }
+
+        log::debug!("Starting server with config at {:?}", config_path);
+        let socket = invoke_server_with_config(config_path)?;
+        drop_privs()?;
+        return Ok(socket);
+    };
+
     let config_path = PathBuf::from(DEFAULT_CONFIG_PATH);
     if fs::metadata(&config_path).is_ok() {
+        if !executable_is_suid_or_sgid()? {
+            anyhow::bail!("Executable is not SUID/SGID - refusing to start internal sever");
+        }
         log::debug!("Starting server with default config at {:?}", config_path);
-        return invoke_server_with_config(config_path);
-    }
+        let socket = invoke_server_with_config(config_path)?;
+        drop_privs()?;
+        return Ok(socket);
+    };
 
-    anyhow::bail!("No socket path or config path provided, and no default socket or config found");
+    anyhow::bail!("No config path provided, and no default config found");
 }
 
 // TODO: we should somehow ensure that the forked process is killed on completion,
