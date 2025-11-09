@@ -113,6 +113,7 @@ in
 
         # Needed to communicate with MySQL.
         PrivateNetwork = false;
+        PrivateIPC = false;
 
         IPAddressDeny =
           lib.optionals (lib.elem cfg.settings.mysql.host [ null "localhost" "127.0.0.1" ]) [ "any" ];
