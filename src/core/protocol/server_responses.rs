@@ -75,10 +75,12 @@ impl OwnerValidationError {
     pub fn to_error_message(self, name: &str, db_or_user: DbOrUser) -> String {
         let user = UnixUser::from_enviroment();
 
-        let UnixUser { username, groups } = user.unwrap_or(UnixUser {
+        let UnixUser { username, mut groups } = user.unwrap_or(UnixUser {
             username: "???".to_string(),
             groups: vec![],
         });
+
+        groups.sort();
 
         match self {
             OwnerValidationError::NoMatch => format!(
@@ -97,9 +99,9 @@ impl OwnerValidationError {
                 db_or_user.lowercased(),
                 username,
                 groups
-                    .iter()
+                    .into_iter()
+                    .filter(|g| g != &username)
                     .map(|g| format!("  - {}", g))
-                    .sorted()
                     .join("\n"),
             )
             .to_owned(),
