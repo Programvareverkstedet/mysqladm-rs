@@ -6,3 +6,6 @@ config.toml
 /.direnv/
 result
 result-*
+
+# Nix VM
+*.qcow2

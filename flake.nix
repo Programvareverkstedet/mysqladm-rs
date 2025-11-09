@@ -32,7 +32,6 @@
       };
     in f system pkgs toolchain);
   in {
-
     apps = let
       mkApp = program: { type = "app"; program = toString program; };
     in forAllSystems (system: pkgs: _: {
@@ -40,6 +39,7 @@
       coverage = mkApp (pkgs.writeScript "mysqladm-rs-coverage" ''
         ${lib.getExe pkgs.python3} -m http.server -d "${self.packages.${system}.coverage}/html/src"
       '');
+      vm = mkApp "${self.nixosConfigurations.vm.config.system.build.vm}/bin/run-nixos-vm";
     });
 
     devShell = forAllSystems (system: pkgs: toolchain: pkgs.mkShell {
@@ -86,5 +86,44 @@
         ln -s ${src} $out
       '';
     });
+
+    nixosConfigurations.vm = nixpkgs.lib.nixosSystem {
+      system = "x86_64-linux";
+      pkgs = import nixpkgs {
+        system = "x86_64-linux";
+        overlays = [
+          self.overlays.default
+        ];
+      };
+      modules = [
+        "${nixpkgs}/nixos/modules/virtualisation/qemu-vm.nix"
+        self.nixosModules.default
+        ({ config, pkgs, ... }: {
+          system.stateVersion = config.system.nixos.release;
+          virtualisation.graphics = false;
+          users.extraUsers.root.password = "root";
+          services.getty.autologinUser = "root";
+          users.motd = ''
+            =======================================================
+            Welcome to the mysqladm-rs vm!
+
+            Try running:
+                ${config.services.mysqladm-rs.package.meta.mainProgram}
+
+            To exit, press Ctrl+A, then X
+            =======================================================
+          '';
+
+          services.mysql = {
+            enable = true;
+            package = pkgs.mariadb;
+          };
+          services.mysqladm-rs = {
+            enable = true;
+            createLocalDatabaseUser = true;
+          };
+        })
+      ];
+    };
   };
 }
