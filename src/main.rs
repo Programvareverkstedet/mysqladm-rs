@@ -1,6 +1,7 @@
 #[macro_use]
 extern crate prettytable;
 
+use anyhow::Context;
 use clap::{CommandFactory, Parser, ValueEnum};
 use clap_complete::{Shell, generate};
 use clap_verbosity_flag::Verbosity;
@@ -204,10 +205,10 @@ fn tokio_start_server(
     verbosity: Verbosity,
     args: ServerArgs,
 ) -> anyhow::Result<()> {
-    tokio::runtime::Builder::new_current_thread()
+    tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
-        .unwrap()
+        .context("Failed to start Tokio runtime")?
         .block_on(async {
             server::command::handle_command(server_socket_path, config_path, verbosity, args).await
         })
@@ -217,7 +218,7 @@ fn tokio_run_command(command: Command, server_connection: StdUnixStream) -> anyh
     tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
-        .unwrap()
+        .context("Failed to start Tokio runtime")?
         .block_on(async {
             let tokio_socket = TokioUnixStream::from_std(server_connection)?;
             let mut message_stream = create_client_to_server_message_stream(tokio_socket);
