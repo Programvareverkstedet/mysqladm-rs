@@ -82,9 +82,20 @@ in
   config = lib.mkIf config.services.muscl.enable {
     environment.systemPackages = [ cfg.package ];
 
-    environment.etc."muscl/config.toml".source = let
-      nullStrippedConfig = lib.filterAttrsRecursive (_: v: v != null) cfg.settings;
-    in format.generate "muscl.conf" nullStrippedConfig;
+    environment.etc."muscl/config.toml".source = lib.pipe cfg.settings [
+      # Remove nulls
+      (lib.filterAttrsRecursive (_: v: v != null))
+
+      # Load mysql.passwordFile via LoadCredentials
+      (conf:
+        if conf.mysql.passwordFile or null != null
+          then lib.recursiveUpdate conf { mysql.passwordFile = "/run/credentials/muscl.service/mysql-password"; }
+          else conf
+      )
+
+      # Render file
+      (format.generate "muscl.conf")
+    ];
 
     services.mysql.ensureUsers = lib.mkIf cfg.createLocalDatabaseUser [
       {
@@ -122,6 +133,10 @@ in
         ]
         ++ lib.optionals (cfg.settings.mysql.socket_path != null) [
           cfg.settings.mysql.socket_path
+        ];
+
+        LoadCredential = lib.mkIf (cfg.settings.mysql.passwordFile != null) [
+          "mysql-password:${cfg.settings.mysql.passwordFile}"
         ];
 
         IPAddressDeny = "any";
