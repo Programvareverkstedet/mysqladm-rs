@@ -20,6 +20,23 @@ fn get_unix_groups(_user: &LibcUser) -> anyhow::Result<Vec<LibcGroup>> {
     Ok(vec![])
 }
 
+/// Check if the current executable is SUID or SGID.
+///
+/// If the check fails, an error is returned.
+pub fn executable_is_suid_or_sgid() -> anyhow::Result<bool> {
+    let result = std::env::current_exe()
+        .context("Failed to get current executable path")
+        .and_then(|executable| {
+            fs::metadata(executable).context("Failed to get executable metadata")
+        })
+        .context("Failed to check SUID/SGID bits on executable")
+        .map(|metadata| {
+            let mode = metadata.permissions().mode();
+            mode & 0o4000 != 0 || mode & 0o2000 != 0
+        })?;
+    Ok(result)
+}
+
 #[cfg(not(target_os = "macos"))]
 fn get_unix_groups(user: &LibcUser) -> anyhow::Result<Vec<LibcGroup>> {
     let user_cstr =

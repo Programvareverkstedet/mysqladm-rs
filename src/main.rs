@@ -15,6 +15,7 @@ use futures::StreamExt;
 use crate::{
     core::{
         bootstrap::bootstrap_server_connection_and_drop_privileges,
+        common::executable_is_suid_or_sgid,
         protocol::{Response, create_client_to_server_message_stream},
     },
     server::command::ServerArgs,
@@ -152,6 +153,10 @@ fn handle_mysql_admutils_command() -> anyhow::Result<Option<()>> {
 fn handle_server_command(args: &Args) -> anyhow::Result<Option<()>> {
     match args.command {
         Command::Server(ref command) => {
+            assert!(
+                !executable_is_suid_or_sgid()?,
+                "The executable should not be SUID or SGID when running the server manually"
+            );
             tokio_start_server(
                 args.server_socket_path.to_owned(),
                 args.config.to_owned(),
@@ -167,6 +172,10 @@ fn handle_server_command(args: &Args) -> anyhow::Result<Option<()>> {
 fn handle_generate_completions_command(args: &Args) -> anyhow::Result<Option<()>> {
     match args.command {
         Command::GenerateCompletions(ref completion_args) => {
+            assert!(
+                !executable_is_suid_or_sgid()?,
+                "The executable should not be SUID or SGID when generating completions"
+            );
             let mut cmd = match completion_args.command {
                 ToplevelCommands::Mysqladm => Args::command(),
                 #[cfg(feature = "mysql-admutils-compatibility")]
