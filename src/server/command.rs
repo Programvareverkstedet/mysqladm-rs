@@ -108,7 +108,7 @@ pub async fn handle_command(
 
 fn start_watchdog_thread_if_enabled() {
     let mut micro_seconds: u64 = 0;
-    let watchdog_enabled = sd_notify::watchdog_enabled(true, &mut micro_seconds);
+    let watchdog_enabled = sd_notify::watchdog_enabled(false, &mut micro_seconds);
 
     if watchdog_enabled {
         micro_seconds = micro_seconds.max(2_000_000).div_ceil(2);
