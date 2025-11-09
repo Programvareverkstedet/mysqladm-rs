@@ -2,6 +2,19 @@
 name = "mysqladm-rs"
 version = "0.1.0"
 edition = "2021"
+license = "BSD3"
+authors = [
+  "oysteikt@pvv.ntnu.no",
+  "felixalb@pvv.ntnu.no",
+]
+repository = "https://git.pvv.ntnu.no/Projects/mysqladm-rs"
+documentation = "https://pages.pvv.ntnu.no/Projects/mysqladm-rs/main/docs/mysqladm/"
+description = "A command-line utility for MySQL administration for non-admin users"
+categories = ["command-line-interface", "command-line-utilities"]
+keywords = ["mysql", "cli", "administration"]
+readme = "README.md"
+autobins = false
+autolib = false
 
 [dependencies]
 anyhow = "1.0.100"
