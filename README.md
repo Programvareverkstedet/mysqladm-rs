@@ -3,44 +3,58 @@
 
 # muscl 💪
 
-Lifting DBs (dumbbells) and having mysql spasms since 2024
+Dropping DBs (dumbbells) and having mysql spasms since 2024
 
 ## What is this?
 
-This is a CLI tool that let's normal users perform administrative operations on a MySQL DBMS, with some restrictions.
-The default restriction is to only let the user perform these actions on databases and database users that are prefixed with their username,
+This is a CLI tool that let's unprivileged users perform administrative operations on a MySQL DBMS, given the are authorized to perform the action on the database or database user in question.
+The default authorization mechanism is to only let the user perform these actions on databases and database users that are prefixed with their username,
 or with the name of any unix group that the user is a part of. i.e. `<user>_mydb`, `<user>_mydbuser`, or `<group>_myotherdb`.
 
-The administrative actions available to the user includes:
+The available administrative actions include:
 
 - creating/listing/modifying/deleting databases and database users
-- modifying database user privileges
+- modifying privileges for a database user on a database
 - changing the passwords of the database users
-- locking and unlocking database user accounts
+- locking and unlocking database users
 - ... more to come
 
-The software is split into a client and a server. The server has administrative access to the mysql server,
-and is responsible for checking client authorization for the different types of actions the client might request.
+The software is designed to be run as a client and a server. The server has administrative access to the mysql server,
+and is responsible for authorizing any requests from the clients.
 
-This is designed for (and is only really useful for) multi-user servers, like tilde servers, university unix servers, etc.
+This software is designed for multi-user servers, like tilde servers, university servers, etc.
 
-## Installation
+## Installation and configuration
 
-The resulting binary will probably need to be marked as either SUID or SGID to work in a multi-user environment.
-The UID/GID of the binary should have access to the config file, which contains secrets to log in to an admin-like MySQL user.
-Preferrably, this UID/GID should not be root, in order to minimize the potential damage that can be done in case of security vulnerabilities in the program.
+### Debian/Ubuntu
 
-## Development and testing
+**TODO:** write this section once the package has been pushed to the gitea package repository.
 
-### Nix
+### NixOS
 
-If you have nix installed, you can test your changes in a NixOS vm by running:
+For NixOS, there is a module available via the nix flake. You can include it in your configuration like this:
 
-```bash
-nix run .#vm
+```nix
+{
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-XX.YY";
+
+  inputs.muscl.url = "git+https://git.pvv.ntnu.no/Projects/muscle.git";
+  inputs.muscl.inputs.nixpkgs.follows = "nixpkgs";
+
+  ...
+}
 ```
 
-### General setup
+The module allows for easy setup on a local machine by enabling `services.muscl.createLocalDatabaseUser`.
+
+### SUID/SGID mode
+
+For backwards compatibility reasons, it is possible to run the program without a daemon by utilizing SUID/SGID.
+In order to do this, you should set either the SUID/SGID bit and preferably make the executable owned by a non-privileged user.
+If the database is running on the same machine, the user/group will need access to write and read from the database socket.
+Otherwise, the only requirement is that the user/group is able to read the config file (typically `/etc/muscl/config.toml`).
+
+## Development and testing
 
 Ensure you have a [rust toolchain](https://www.rust-lang.org/tools/install) installed.
 
@@ -51,7 +65,6 @@ docker run --rm --name mariadb -e MYSQL_ROOT_PASSWORD=secret -p 3306:3306 -d mar
 ```
 
 This will start a mariadb instance with the root password `secret`, and expose the port 3306 on the host machine.
-
 
 Run the following command to create a configuration file with the default settings:
 
@@ -70,8 +83,8 @@ cargo run -- --config-file ./config.toml <args>
 # example usage
 cargo run -- --config-file ./config.toml create-db "${USER}_testdb"
 cargo run -- --config-file ./config.toml create-user "${USER}_testuser"
-cargo run -- --config-file ./config.toml edit-db-privs -p "${USER}_testdb:${USER}_testuser:A"
-cargo run -- --config-file ./config.toml show-db-privs
+cargo run -- --config-file ./config.toml edit-privs -p "${USER}_testdb:${USER}_testuser:A"
+cargo run -- --config-file ./config.toml show-privs
 ```
 
 To stop and remove the container, run the following command:
@@ -79,6 +92,16 @@ To stop and remove the container, run the following command:
 ```bash
 docker stop mariadb
 ```
+
+### Nix
+
+If you have nix installed, you can easily test your changes in a NixOS vm by running:
+
+```bash
+nix run .#vm
+```
+
+You can configure the vm in `flake.nix`
 
 ## Filter logs by user with journalctl
 
@@ -90,7 +113,7 @@ journalctl -eu muscl F_USER=<username>
 
 ## Compatibility mode with [mysql-admutils](https://git.pvv.ntnu.no/Projects/mysql-admutils)
 
-If you enable the feature flag `mysql-admutils-compatibility` (enabled by default), the output directory will contain two symlinks to the binary, `mysql-dbadm` and `mysql-useradm`. In the same fashion as busybox, the binary will react to its `argv[0]` and behave as if it was called with the corresponding name. While the internal functionality is written in rust, these modes strive to behave as similar as possible to the original programs.
+If you enable the feature flag `mysql-admutils-compatibility` (enabled by default for now), the output directory will contain two symlinks to the `musl` binary: `mysql-dbadm` and `mysql-useradm`. When invoked through these symlinks, the binary will react to its `argv[0]` and behave accordingly. These modes strive to behave as similar as possible to the original programs.
 
 ```bash
 cargo build
@@ -102,10 +125,10 @@ cargo build
 
 - Added flags for database configuration, not present in the original programs
 - `--help` output is formatted by clap in a modern style.
-- `mysql-dbadm edit-perm` uses the new implementation. The idea was that the parsing
-  logic was too complex to be worth porting, and there wouldn't be any scripts depending
-  on this command anyway. As such, the new implementation is more user-friendly and only
-  brings positive changes.
+- `mysql-dbadm edit-perm` uses the new implementation. Parsing the old logic was
+  too complex to be worth porting, and since the action is inherently interactive,
+  there shoulnd't have been any (or at least very few) scripts relying on the old
+  command API or behavior.
 - The new tools use the modern implementation to find it's configuration. If you compiled
   the old programs with `--sysconfdir=<somewhere>`, you might have to provide `--config-file`
   where the old program would just work by itself.
