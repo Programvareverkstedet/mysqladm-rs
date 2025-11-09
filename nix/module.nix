@@ -98,7 +98,6 @@ in
 
     systemd.services."mysqladm@" = {
       description = "MySQL administration tool for non-admin users";
-      environment.RUST_LOG = "debug";
       restartTriggers = [ config.environment.etc."mysqladm/config.toml".source ];
       serviceConfig = {
         Type = "notify";

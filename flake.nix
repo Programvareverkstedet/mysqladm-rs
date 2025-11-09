@@ -122,6 +122,8 @@
             enable = true;
             createLocalDatabaseUser = true;
           };
+
+          systemd.services."mysqladm@".environment.RUST_LOG = "debug";
         })
       ];
     };
