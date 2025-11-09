@@ -6,7 +6,7 @@
     rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
   };
 
-  outputs = { self, nixpkgs, rust-overlay }@inputs:
+  outputs = { self, nixpkgs, rust-overlay }:
   let
     inherit (nixpkgs) lib;
 
@@ -97,21 +97,42 @@
       };
       modules = [
         "${nixpkgs}/nixos/modules/virtualisation/qemu-vm.nix"
+        "${nixpkgs}/nixos/tests/common/user-account.nix"
+
         self.nixosModules.default
+
         ({ config, pkgs, ... }: {
           system.stateVersion = config.system.nixos.release;
           virtualisation.graphics = false;
-          users.extraUsers.root.password = "root";
-          services.getty.autologinUser = "root";
+
+          users = {
+            groups = {
+              a = { };
+              b = { };
+            };
+            users.alice.extraGroups = [
+              "a"
+              "b"
+              "wheel"
+              "systemd-journal"
+            ];
+            extraUsers.root.password = "root";
+          };
+
+          services.getty.autologinUser = "alice";
+
           users.motd = ''
-            =======================================================
+            =================================
             Welcome to the mysqladm-rs vm!
 
             Try running:
                 ${config.services.mysqladm-rs.package.meta.mainProgram}
 
+            Password for alice is 'foobar'
+            Password for root is 'root'
+
             To exit, press Ctrl+A, then X
-            =======================================================
+            =================================
           '';
 
           services.mysql = {
