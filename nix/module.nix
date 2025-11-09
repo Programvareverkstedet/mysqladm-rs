@@ -79,11 +79,12 @@ in
     };
   };
 
-  config = let
-    nullStrippedConfig = lib.filterAttrsRecursive (_: v: v != null) cfg.settings;
-    configFile = format.generate "mysqladm-rs.conf" nullStrippedConfig;
-  in lib.mkIf config.services.mysqladm-rs.enable {
+  config = lib.mkIf config.services.mysqladm-rs.enable {
     environment.systemPackages = [ cfg.package ];
+
+    environment.etc."mysqladm/config.toml".source = let
+      nullStrippedConfig = lib.filterAttrsRecursive (_: v: v != null) cfg.settings;
+    in format.generate "mysqladm-rs.conf" nullStrippedConfig;
 
     services.mysql.ensureUsers = lib.mkIf cfg.createLocalDatabaseUser [
       {
@@ -98,9 +99,10 @@ in
     systemd.services."mysqladm@" = {
       description = "MySQL administration tool for non-admin users";
       environment.RUST_LOG = "debug";
+      restartTriggers = [ config.environment.etc."mysqladm/config.toml".source ];
       serviceConfig = {
         Type = "notify";
-        ExecStart = "${lib.getExe cfg.package} ${cfg.logLevel} server --systemd socket-activate --config ${configFile}";
+        ExecStart = "${lib.getExe cfg.package} ${cfg.logLevel} server --systemd socket-activate";
 
         WatchdogSec = 15;
 
@@ -159,7 +161,6 @@ in
     systemd.sockets."mysqladm" = {
       description = "MySQL administration tool for non-admin users";
       wantedBy = [ "sockets.target" ];
-      restartTriggers = [ configFile ];
       socketConfig = {
         ListenStream = cfg.settings.server.socket_path;
         Accept = "yes";
