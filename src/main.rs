@@ -106,9 +106,7 @@ enum ToplevelCommands {
     MysqlUseradm,
 }
 
-// TODO: tag all functions that are run with elevated privileges with
-//       comments emphasizing the need for caution.
-
+/// **WARNING:** This function may be run with elevated privileges.
 fn main() -> anyhow::Result<()> {
     #[cfg(feature = "mysql-admutils-compatibility")]
     if handle_mysql_admutils_command()?.is_some() {
@@ -136,6 +134,7 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// **WARNING:** This function may be run with elevated privileges.
 fn handle_mysql_admutils_command() -> anyhow::Result<Option<()>> {
     let argv0 = std::env::args().next().and_then(|s| {
         PathBuf::from(s)
@@ -150,6 +149,7 @@ fn handle_mysql_admutils_command() -> anyhow::Result<Option<()>> {
     }
 }
 
+/// **WARNING:** This function may be run with elevated privileges.
 fn handle_server_command(args: &Args) -> anyhow::Result<Option<()>> {
     match args.command {
         Command::Server(ref command) => {
@@ -169,6 +169,7 @@ fn handle_server_command(args: &Args) -> anyhow::Result<Option<()>> {
     }
 }
 
+/// **WARNING:** This function may be run with elevated privileges.
 fn handle_generate_completions_command(args: &Args) -> anyhow::Result<Option<()>> {
     match args.command {
         Command::GenerateCompletions(ref completion_args) => {
@@ -199,6 +200,7 @@ fn handle_generate_completions_command(args: &Args) -> anyhow::Result<Option<()>
     }
 }
 
+/// Start a long-lived server using Tokio.
 fn tokio_start_server(
     server_socket_path: Option<PathBuf>,
     config_path: Option<PathBuf>,
@@ -214,6 +216,9 @@ fn tokio_start_server(
         })
 }
 
+/// Run the given commmand (from the client side) using Tokio.
+///
+/// **WARNING:** This function may be run with elevated privileges.
 fn tokio_run_command(command: Command, server_connection: StdUnixStream) -> anyhow::Result<()> {
     tokio::runtime::Builder::new_current_thread()
         .enable_all()

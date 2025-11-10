@@ -59,6 +59,8 @@ fn will_connect_to_external_server(
 /// Note that this function is also responsible for setting up logging,
 /// because in the case of an internal server, we need to drop privileges
 /// before we can initialize logging.
+///
+/// **WARNING:** This function may be run with elevated privileges.
 pub fn bootstrap_server_connection_and_drop_privileges(
     server_socket_path: Option<PathBuf>,
     config: Option<PathBuf>,

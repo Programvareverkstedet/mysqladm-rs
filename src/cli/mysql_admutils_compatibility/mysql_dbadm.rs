@@ -143,6 +143,7 @@ pub struct EditPermArgs {
     pub database: MySQLDatabase,
 }
 
+/// **WARNING:** This function may be run with elevated privileges.
 pub fn main() -> anyhow::Result<()> {
     let args: Args = Args::parse();
 
