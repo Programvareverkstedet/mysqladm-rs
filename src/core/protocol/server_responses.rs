@@ -75,7 +75,10 @@ impl OwnerValidationError {
     pub fn to_error_message(self, name: &str, db_or_user: DbOrUser) -> String {
         let user = UnixUser::from_enviroment();
 
-        let UnixUser { username, mut groups } = user.unwrap_or(UnixUser {
+        let UnixUser {
+            username,
+            mut groups,
+        } = user.unwrap_or(UnixUser {
             username: "???".to_string(),
             groups: vec![],
         });
