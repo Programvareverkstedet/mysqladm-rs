@@ -1,6 +1,5 @@
 use anyhow::Context;
 use nix::unistd::{Group as LibcGroup, User as LibcUser};
-use std::{fs, os::unix::fs::PermissionsExt};
 
 #[cfg(not(target_os = "macos"))]
 use std::ffi::CString;
@@ -19,23 +18,6 @@ pub struct UnixUser {
 fn get_unix_groups(_user: &LibcUser) -> anyhow::Result<Vec<LibcGroup>> {
     // Return an empty list on macOS since there is no `getgrouplist` function
     Ok(vec![])
-}
-
-/// Check if the current executable is SUID or SGID.
-///
-/// If the check fails, an error is returned.
-pub fn executable_is_suid_or_sgid() -> anyhow::Result<bool> {
-    let result = std::env::current_exe()
-        .context("Failed to get current executable path")
-        .and_then(|executable| {
-            fs::metadata(executable).context("Failed to get executable metadata")
-        })
-        .context("Failed to check SUID/SGID bits on executable")
-        .map(|metadata| {
-            let mode = metadata.permissions().mode();
-            mode & 0o4000 != 0 || mode & 0o2000 != 0
-        })?;
-    Ok(result)
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -59,6 +41,31 @@ fn get_unix_groups(user: &LibcUser) -> anyhow::Result<Vec<LibcGroup>> {
         .collect::<Vec<LibcGroup>>();
 
     Ok(groups)
+}
+
+/// Check if the current executable is SUID or SGID.
+///
+/// If the check fails, an error is returned.
+#[cfg(feature = "suid-sgid-mode")]
+pub fn executable_is_suid_or_sgid() -> anyhow::Result<bool> {
+    use std::{fs, os::unix::fs::PermissionsExt};
+    let result = std::env::current_exe()
+        .context("Failed to get current executable path")
+        .and_then(|executable| {
+            fs::metadata(executable).context("Failed to get executable metadata")
+        })
+        .context("Failed to check SUID/SGID bits on executable")
+        .map(|metadata| {
+            let mode = metadata.permissions().mode();
+            mode & 0o4000 != 0 || mode & 0o2000 != 0
+        })?;
+    Ok(result)
+}
+
+#[cfg(not(feature = "suid-sgid-mode"))]
+#[inline]
+pub fn executable_is_suid_or_sgid() -> anyhow::Result<bool> {
+    Ok(false)
 }
 
 impl UnixUser {

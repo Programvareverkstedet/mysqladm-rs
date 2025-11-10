@@ -19,12 +19,14 @@ use crate::{
 /// If neither is feasible, an error is returned.
 fn will_connect_to_external_server(
     server_socket_path: Option<&PathBuf>,
-    config_path: Option<&PathBuf>,
+    // This parameter is only used in suid-sgid-mode
+    #[allow(unused_variables)] config_path: Option<&PathBuf>,
 ) -> anyhow::Result<bool> {
     if server_socket_path.is_some() {
         return Ok(true);
     }
 
+    #[cfg(feature = "suid-sgid-mode")]
     if config_path.is_some() {
         return Ok(false);
     }
@@ -33,11 +35,16 @@ fn will_connect_to_external_server(
         return Ok(true);
     }
 
+    #[cfg(feature = "suid-sgid-mode")]
     if fs::metadata(DEFAULT_CONFIG_PATH).is_ok() {
         return Ok(false);
     }
 
+    #[cfg(feature = "suid-sgid-mode")]
     anyhow::bail!("No socket path or config path provided, and no default socket or config found");
+
+    #[cfg(not(feature = "suid-sgid-mode"))]
+    anyhow::bail!("No socket path provided, and no default socket found");
 }
 
 /// This function is used to bootstrap the connection to the server.
@@ -77,7 +84,7 @@ pub fn bootstrap_server_connection_and_drop_privileges(
             .init();
 
         connect_to_external_server(server_socket_path)
-    } else {
+    } else if cfg!(feature = "suid-sgid-mode") {
         // NOTE: We need to be really careful with the code up until this point,
         //       as we might be running with elevated privileges.
         let server_connection = bootstrap_internal_server_and_drop_privs(config)?;
@@ -87,6 +94,8 @@ pub fn bootstrap_server_connection_and_drop_privileges(
             .init();
 
         Ok(server_connection)
+    } else {
+        anyhow::bail!("SUID/SGID support is not enabled, cannot start internal server");
     }
 }
 

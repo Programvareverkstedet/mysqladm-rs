@@ -51,6 +51,7 @@ uuid = { version = "1.18.1", features = ["v4"] }
 default = ["mysql-admutils-compatibility"]
 tui = ["dep:ratatui"]
 mysql-admutils-compatibility = []
+suid-sgid-mode = []
 
 [[bin]]
 name = "mysqladm"
