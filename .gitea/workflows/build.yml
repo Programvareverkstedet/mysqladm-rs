@@ -17,9 +17,6 @@ jobs:
             toolchain: stable
             override: true
 
-      - name: Build or restore dependency cache
-        uses: Swatinem/rust-cache@v2
-
       - name: Build
         run: cargo build --all-features --verbose --release
 
@@ -34,9 +31,6 @@ jobs:
             toolchain: stable
             override: true
             components: rustfmt, clippy
-
-      - name: Build or restore dependency cache
-        uses: Swatinem/rust-cache@v2
 
       - name: Check code format
         run: cargo fmt -- --check
@@ -54,9 +48,6 @@ jobs:
         with:
             toolchain: stable
             override: true
-
-      - name: Build or restore dependency cache
-        uses: Swatinem/rust-cache@v2
 
       - name: Build docs
         run: cargo doc --all-features --document-private-items --release
