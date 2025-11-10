@@ -145,6 +145,11 @@
           };
 
           systemd.services."mysqladm@".environment.RUST_LOG = "debug";
+
+          programs.vim = {
+            enable = true;
+            defaultEditor = true;
+          };
         })
       ];
     };
