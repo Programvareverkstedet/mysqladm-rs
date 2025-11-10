@@ -82,6 +82,9 @@ enum Command {
     #[command(flatten)]
     User(cli::user_command::UserCommand),
 
+    #[command(flatten)]
+    Other(cli::other_command::OtherCommand),
+
     #[command(hide = true)]
     Server(server::command::ServerArgs),
 
@@ -246,6 +249,9 @@ fn tokio_run_command(command: Command, server_connection: StdUnixStream) -> anyh
                 }
                 Command::Db(db_args) => {
                     cli::database_command::handle_command(db_args, message_stream).await
+                }
+                Command::Other(other_args) => {
+                    cli::other_command::handle_command(other_args, message_stream).await
                 }
                 Command::Server(_) => unreachable!(),
                 Command::GenerateCompletions(_) => unreachable!(),

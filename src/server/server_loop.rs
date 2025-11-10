@@ -241,6 +241,8 @@ async fn handle_requests_for_single_session_with_db_connection(
         log::info!("Received request: {:#?}", request_to_display);
 
         let response = match request {
+            Request::Ping => Response::Pong,
+
             Request::CreateDatabases(databases_names) => {
                 let result = create_databases(databases_names, unix_user, db_connection).await;
                 Response::CreateDatabases(result)

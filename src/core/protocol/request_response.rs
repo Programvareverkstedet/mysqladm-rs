@@ -125,6 +125,8 @@ impl From<String> for MySQLDatabase {
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Request {
+    Ping,
+
     CreateDatabases(Vec<MySQLDatabase>),
     DropDatabases(Vec<MySQLDatabase>),
     ListDatabases(Option<Vec<MySQLDatabase>>),
@@ -147,6 +149,8 @@ pub enum Request {
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Response {
+    Pong,
+
     // Specific data for specific commands
     CreateDatabases(CreateDatabasesOutput),
     DropDatabases(DropDatabasesOutput),
