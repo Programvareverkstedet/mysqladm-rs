@@ -6,11 +6,11 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 use crate::{
-    core::{common::UnixUser, database_privileges::DatabasePrivilegeRowDiff},
-    server::sql::{
-        database_operations::DatabaseRow, database_privilege_operations::DatabasePrivilegeRow,
-        user_operations::DatabaseUser,
+    core::{
+        common::UnixUser,
+        database_privileges::{DatabasePrivilegeRow, DatabasePrivilegeRowDiff},
     },
+    server::sql::{database_operations::DatabaseRow, user_operations::DatabaseUser},
 };
 
 use super::{MySQLDatabase, MySQLUser};

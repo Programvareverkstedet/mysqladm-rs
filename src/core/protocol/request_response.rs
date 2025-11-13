@@ -36,7 +36,7 @@ pub fn create_client_to_server_message_stream(socket: UnixStream) -> ClientToSer
     tokio_serde::Framed::new(length_delimited, Bincode::default())
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, Default)]
 pub struct MySQLUser(String);
 
 impl FromStr for MySQLUser {
@@ -79,7 +79,7 @@ impl From<String> for MySQLUser {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, Default)]
 pub struct MySQLDatabase(String);
 
 impl FromStr for MySQLDatabase {

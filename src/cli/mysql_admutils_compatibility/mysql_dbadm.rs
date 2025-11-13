@@ -18,12 +18,12 @@ use crate::{
     },
     core::{
         bootstrap::bootstrap_server_connection_and_drop_privileges,
+        database_privileges::DatabasePrivilegeRow,
         protocol::{
             ClientToServerMessageStream, GetDatabasesPrivilegeDataError, MySQLDatabase, Request,
             Response, create_client_to_server_message_stream,
         },
     },
-    server::sql::database_privilege_operations::DatabasePrivilegeRow,
 };
 
 const HELP_DB_PERM: &str = r#"

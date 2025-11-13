@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 use anyhow::Context;
 use clap::Parser;
 use dialoguer::{Confirm, Editor};
@@ -10,9 +12,11 @@ use crate::{
     core::{
         common::yn,
         database_privileges::{
+            DATABASE_PRIVILEGE_FIELDS, DatabasePrivilegeEditEntry, DatabasePrivilegeRow,
+            DatabasePrivilegeRowDiff, DatabasePrivilegesDiff, create_or_modify_privilege_rows,
             db_priv_field_human_readable_name, diff_privileges, display_privilege_diffs,
             generate_editor_content_from_privilege_data, parse_privilege_data_from_editor_content,
-            parse_privilege_table_cli_arg,
+            reduce_privilege_diffs,
         },
         protocol::{
             ClientToServerMessageStream, MySQLDatabase, Request, Response,
@@ -21,7 +25,6 @@ use crate::{
             print_modify_database_privileges_output_status,
         },
     },
-    server::sql::database_privilege_operations::{DATABASE_PRIVILEGE_FIELDS, DatabasePrivilegeRow},
 };
 
 #[derive(Parser, Debug, Clone)]
@@ -59,7 +62,7 @@ pub enum DatabaseCommand {
     ///
     /// 2. Non-interactive mode: If the `-p` flag is specified, the user can write privileges using arguments.
     ///
-    ///    The privilege arguments should be formatted as `<db>:<user>:<privileges>`
+    ///    The privilege arguments should be formatted as `<db>:<user>+<privileges>-<privileges>`
     ///    where the privileges are a string of characters, each representing a single privilege.
     ///    The character `A` is an exception - it represents all privileges.
     ///
@@ -79,7 +82,7 @@ pub enum DatabaseCommand {
     ///    - `A` - ALL PRIVILEGES
     ///
     ///   If you provide a database name, you can omit it from the privilege string,
-    ///   e.g. `edit-db-privs my_db -p my_user:siu` is equivalent to `edit-db-privs -p my_db:my_user:siu`.
+    ///   e.g. `edit-db-privs my_db -p my_user+siu` is equivalent to `edit-db-privs -p my_db:my_user:siu`.
     ///   While it doesn't make much of a difference for a single edit, it can be useful for editing multiple users
     ///   on the same database at once.
     ///
@@ -150,8 +153,8 @@ pub struct DatabaseEditPrivsArgs {
     /// The name of the database to edit privileges for
     pub name: Option<MySQLDatabase>,
 
-    #[arg(short, long, value_name = "[DATABASE:]USER:PRIVILEGES", num_args = 0..)]
-    pub privs: Vec<String>,
+    #[arg(short, long, value_name = "[DATABASE:]USER:[+-]PRIVILEGES", num_args = 0.., value_parser = DatabasePrivilegeEditEntry::parse_from_str)]
+    pub privs: Vec<DatabasePrivilegeEditEntry>,
 
     /// Print the information as JSON
     #[arg(short, long)]
@@ -377,7 +380,7 @@ pub async fn edit_database_privileges(
 
     server_connection.send(message).await?;
 
-    let privilege_data = match server_connection.next().await {
+    let existing_privilege_rows = match server_connection.next().await {
         Some(Ok(Response::ListPrivileges(databases))) => databases
             .into_iter()
             .filter_map(|(database_name, result)| match result {
@@ -402,13 +405,15 @@ pub async fn edit_database_privileges(
         response => return erroneous_server_response(response),
     };
 
-    let privileges_to_change = if !args.privs.is_empty() {
-        parse_privilege_tables_from_args(&args)?
+    let diffs: BTreeSet<DatabasePrivilegesDiff> = if !args.privs.is_empty() {
+        let privileges_to_change = parse_privilege_tables_from_args(&args)?;
+        create_or_modify_privilege_rows(&existing_privilege_rows, &privileges_to_change)?
     } else {
-        edit_privileges_with_editor(&privilege_data, args.name.as_ref())?
+        let privileges_to_change =
+            edit_privileges_with_editor(&existing_privilege_rows, args.name.as_ref())?;
+        diff_privileges(&existing_privilege_rows, &privileges_to_change)
     };
-
-    let diffs = diff_privileges(&privilege_data, &privileges_to_change);
+    let diffs = reduce_privilege_diffs(&existing_privilege_rows, diffs)?;
 
     if diffs.is_empty() {
         println!("No changes to make.");
@@ -447,26 +452,19 @@ pub async fn edit_database_privileges(
 
 fn parse_privilege_tables_from_args(
     args: &DatabaseEditPrivsArgs,
-) -> anyhow::Result<Vec<DatabasePrivilegeRow>> {
+) -> anyhow::Result<BTreeSet<DatabasePrivilegeRowDiff>> {
     debug_assert!(!args.privs.is_empty());
-    let result = if let Some(name) = &args.name {
-        args.privs
-            .iter()
-            .map(|p| {
-                parse_privilege_table_cli_arg(&format!("{}:{}", name, &p))
-                    .context(format!("Failed parsing database privileges: `{}`", &p))
-            })
-            .collect::<anyhow::Result<Vec<DatabasePrivilegeRow>>>()?
-    } else {
-        args.privs
-            .iter()
-            .map(|p| {
-                parse_privilege_table_cli_arg(p)
-                    .context(format!("Failed parsing database privileges: `{}`", &p))
-            })
-            .collect::<anyhow::Result<Vec<DatabasePrivilegeRow>>>()?
-    };
-    Ok(result)
+    args.privs
+        .iter()
+        .map(|priv_edit_entry| {
+            priv_edit_entry
+                .as_database_privileges_diff(args.name.as_ref())
+                .context(format!(
+                    "Failed parsing database privileges: `{}`",
+                    priv_edit_entry
+                ))
+        })
+        .collect::<anyhow::Result<BTreeSet<DatabasePrivilegeRowDiff>>>()
 }
 
 fn edit_privileges_with_editor(

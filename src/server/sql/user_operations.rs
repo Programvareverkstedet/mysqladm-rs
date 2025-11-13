@@ -10,6 +10,7 @@ use sqlx::prelude::*;
 use crate::{
     core::{
         common::UnixUser,
+        database_privileges::DATABASE_PRIVILEGE_FIELDS,
         protocol::{
             CreateUserError, CreateUsersOutput, DropUserError, DropUsersOutput, ListAllUsersError,
             ListAllUsersOutput, ListUsersError, ListUsersOutput, LockUserError, LockUsersOutput,
@@ -21,8 +22,6 @@ use crate::{
         input_sanitization::{quote_literal, validate_name, validate_ownership_by_unix_user},
     },
 };
-
-use super::database_privilege_operations::DATABASE_PRIVILEGE_FIELDS;
 
 // NOTE: this function is unsafe because it does no input validation.
 async fn unsafe_user_exists(
