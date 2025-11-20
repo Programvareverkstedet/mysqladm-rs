@@ -11,7 +11,7 @@ use std::path::PathBuf;
 use std::os::unix::net::UnixStream as StdUnixStream;
 use tokio::net::UnixStream as TokioUnixStream;
 
-use futures::StreamExt;
+use futures_util::StreamExt;
 
 use crate::{
     core::{
