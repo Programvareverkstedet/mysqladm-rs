@@ -23,11 +23,11 @@ use crate::{
 };
 
 #[cfg(feature = "mysql-admutils-compatibility")]
-use crate::cli::mysql_admutils_compatibility::{mysql_dbadm, mysql_useradm};
+use crate::client::mysql_admutils_compatibility::{mysql_dbadm, mysql_useradm};
 
 mod server;
 
-mod cli;
+mod client;
 mod core;
 
 #[cfg(feature = "tui")]
@@ -77,10 +77,7 @@ struct Args {
 #[derive(Parser, Debug, Clone)]
 enum Command {
     #[command(flatten)]
-    Db(cli::database_command::DatabaseCommand),
-
-    #[command(flatten)]
-    User(cli::user_command::UserCommand),
+    Client(client::command::ClientCommand),
 
     #[command(hide = true)]
     Server(server::command::ServerArgs),
@@ -241,11 +238,8 @@ fn tokio_run_command(command: Command, server_connection: StdUnixStream) -> anyh
             }
 
             match command {
-                Command::User(user_args) => {
-                    cli::user_command::handle_command(user_args, message_stream).await
-                }
-                Command::Db(db_args) => {
-                    cli::database_command::handle_command(db_args, message_stream).await
+                Command::Client(client_args) => {
+                    client::command::handle_command(client_args, message_stream).await
                 }
                 Command::Server(_) => unreachable!(),
                 Command::GenerateCompletions(_) => unreachable!(),

@@ -5,9 +5,8 @@ use std::path::PathBuf;
 use tokio::net::UnixStream as TokioUnixStream;
 
 use crate::{
-    cli::{
-        common::erroneous_server_response,
-        database_command,
+    client::{
+        command::{DatabaseEditPrivsArgs, edit_database_privileges, erroneous_server_response},
         mysql_admutils_compatibility::{
             common::trim_db_name_to_32_chars,
             error_messages::{
@@ -187,7 +186,7 @@ fn tokio_run_command(command: Command, server_connection: StdUnixStream) -> anyh
                 Command::Drop(args) => drop_databases(args, message_stream).await,
                 Command::Show(args) => show_databases(args, message_stream).await,
                 Command::Editperm(args) => {
-                    let edit_privileges_args = database_command::DatabaseEditPrivsArgs {
+                    let edit_privileges_args = DatabaseEditPrivsArgs {
                         name: Some(args.database),
                         privs: vec![],
                         json: false,
@@ -195,8 +194,7 @@ fn tokio_run_command(command: Command, server_connection: StdUnixStream) -> anyh
                         yes: false,
                     };
 
-                    database_command::edit_database_privileges(edit_privileges_args, message_stream)
-                        .await
+                    edit_database_privileges(edit_privileges_args, message_stream).await
                 }
             }
         })

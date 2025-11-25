@@ -6,15 +6,13 @@ use std::os::unix::net::UnixStream as StdUnixStream;
 use tokio::net::UnixStream as TokioUnixStream;
 
 use crate::{
-    cli::{
-        common::erroneous_server_response,
-        mysql_admutils_compatibility::{
+    client::{
+        command::{erroneous_server_response, read_password_from_stdin_with_double_check}, mysql_admutils_compatibility::{
             common::trim_user_name_to_32_chars,
             error_messages::{
                 handle_create_user_error, handle_drop_user_error, handle_list_users_error,
             },
-        },
-        user_command::read_password_from_stdin_with_double_check,
+        }
     },
     core::{
         bootstrap::bootstrap_server_connection_and_drop_privileges,
