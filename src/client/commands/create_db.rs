@@ -4,9 +4,12 @@ use tokio_stream::StreamExt;
 
 use crate::{
     client::commands::erroneous_server_response,
-    core::protocol::{
-        ClientToServerMessageStream, MySQLDatabase, Request, Response,
-        print_create_databases_output_status, print_create_databases_output_status_json,
+    core::{
+        protocol::{
+            ClientToServerMessageStream, Request, Response, print_create_databases_output_status,
+            print_create_databases_output_status_json,
+        },
+        types::MySQLDatabase,
     },
 };
 

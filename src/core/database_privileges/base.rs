@@ -3,7 +3,7 @@
 
 use std::fmt;
 
-use crate::core::protocol::{MySQLDatabase, MySQLUser};
+use crate::core::types::{MySQLDatabase, MySQLUser};
 use serde::{Deserialize, Serialize};
 
 /// This is the list of fields that are used to fetch the db + user + privileges

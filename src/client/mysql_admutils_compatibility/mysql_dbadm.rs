@@ -19,9 +19,10 @@ use crate::{
         bootstrap::bootstrap_server_connection_and_drop_privileges,
         database_privileges::DatabasePrivilegeRow,
         protocol::{
-            ClientToServerMessageStream, GetDatabasesPrivilegeDataError, MySQLDatabase, Request,
-            Response, create_client_to_server_message_stream,
+            ClientToServerMessageStream, GetDatabasesPrivilegeDataError, Request, Response,
+            create_client_to_server_message_stream,
         },
+        types::MySQLDatabase,
     },
 };
 

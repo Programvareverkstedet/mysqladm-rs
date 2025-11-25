@@ -8,7 +8,8 @@ use crate::{
     core::{
         common::yn,
         database_privileges::{DATABASE_PRIVILEGE_FIELDS, db_priv_field_human_readable_name},
-        protocol::{ClientToServerMessageStream, MySQLDatabase, Request, Response},
+        protocol::{ClientToServerMessageStream, Request, Response},
+        types::MySQLDatabase,
     },
 };
 

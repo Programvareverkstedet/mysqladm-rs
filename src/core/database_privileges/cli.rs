@@ -2,7 +2,7 @@
 //! database privileges related CLI commands.
 
 use super::diff::{DatabasePrivilegeChange, DatabasePrivilegeRowDiff};
-use crate::core::protocol::{MySQLDatabase, MySQLUser};
+use crate::core::types::{MySQLDatabase, MySQLUser};
 
 /// This enum represents a part of a CLI argument for editing database privileges,
 /// indicating whether privileges are to be added, set, or removed.

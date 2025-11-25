@@ -14,8 +14,9 @@ use crate::{
         protocol::{
             CreateUserError, CreateUsersOutput, DropUserError, DropUsersOutput, ListAllUsersError,
             ListAllUsersOutput, ListUsersError, ListUsersOutput, LockUserError, LockUsersOutput,
-            MySQLUser, SetPasswordError, SetPasswordOutput, UnlockUserError, UnlockUsersOutput,
+            SetPasswordError, SetPasswordOutput, UnlockUserError, UnlockUsersOutput,
         },
+        types::MySQLUser,
     },
     server::{
         common::{create_user_group_matching_regex, try_get_with_binary_fallback},

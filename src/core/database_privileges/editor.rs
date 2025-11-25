@@ -6,7 +6,7 @@ use super::base::{
 };
 use crate::core::{
     common::{rev_yn, yn},
-    protocol::MySQLDatabase,
+    types::MySQLDatabase,
 };
 use anyhow::{Context, anyhow};
 use itertools::Itertools;

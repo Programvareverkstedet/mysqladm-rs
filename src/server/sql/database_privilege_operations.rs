@@ -30,9 +30,9 @@ use crate::{
         protocol::{
             DiffDoesNotApplyError, GetAllDatabasesPrivilegeData, GetAllDatabasesPrivilegeDataError,
             GetDatabasesPrivilegeData, GetDatabasesPrivilegeDataError,
-            ModifyDatabasePrivilegesError, ModifyDatabasePrivilegesOutput, MySQLDatabase,
-            MySQLUser,
+            ModifyDatabasePrivilegesError, ModifyDatabasePrivilegesOutput,
         },
+        types::{MySQLDatabase, MySQLUser},
     },
     server::{
         common::{create_user_group_matching_regex, try_get_with_binary_fallback},

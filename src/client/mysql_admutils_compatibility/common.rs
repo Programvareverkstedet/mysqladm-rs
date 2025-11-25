@@ -1,4 +1,4 @@
-use crate::core::protocol::{MySQLDatabase, MySQLUser};
+use crate::core::types::{MySQLDatabase, MySQLUser};
 
 #[inline]
 pub fn trim_db_name_to_32_chars(db_name: &MySQLDatabase) -> MySQLDatabase {

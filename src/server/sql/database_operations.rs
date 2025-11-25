@@ -5,7 +5,7 @@ use sqlx::prelude::*;
 
 use serde::{Deserialize, Serialize};
 
-use crate::core::protocol::MySQLDatabase;
+use crate::core::types::MySQLDatabase;
 use crate::{
     core::{
         common::UnixUser,

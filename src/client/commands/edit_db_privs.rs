@@ -17,9 +17,10 @@ use crate::{
             parse_privilege_data_from_editor_content, reduce_privilege_diffs,
         },
         protocol::{
-            ClientToServerMessageStream, MySQLDatabase, Request, Response,
+            ClientToServerMessageStream, Request, Response,
             print_modify_database_privileges_output_status,
         },
+        types::MySQLDatabase,
     },
 };
 

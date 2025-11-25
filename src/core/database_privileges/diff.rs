@@ -2,7 +2,7 @@
 //! generating, validating and reducing diffs between two sets of database privileges.
 
 use super::base::{DatabasePrivilegeRow, db_priv_field_human_readable_name};
-use crate::core::protocol::{MySQLDatabase, MySQLUser};
+use crate::core::types::{MySQLDatabase, MySQLUser};
 use prettytable::Table;
 use serde::{Deserialize, Serialize};
 use std::{

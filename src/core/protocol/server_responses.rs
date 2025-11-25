@@ -9,11 +9,10 @@ use crate::{
     core::{
         common::UnixUser,
         database_privileges::{DatabasePrivilegeRow, DatabasePrivilegeRowDiff},
+        types::{MySQLDatabase, MySQLUser},
     },
     server::sql::{database_operations::DatabaseRow, user_operations::DatabaseUser},
 };
-
-use super::{MySQLDatabase, MySQLUser};
 
 /// This enum is used to differentiate between database and user operations.
 /// Their output are very similar, but there are slight differences in the words used.

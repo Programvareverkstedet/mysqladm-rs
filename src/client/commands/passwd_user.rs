@@ -6,9 +6,12 @@ use tokio_stream::StreamExt;
 
 use crate::{
     client::commands::erroneous_server_response,
-    core::protocol::{
-        ClientToServerMessageStream, ListUsersError, MySQLUser, Request, Response,
-        print_set_password_output_status,
+    core::{
+        protocol::{
+            ClientToServerMessageStream, ListUsersError, Request, Response,
+            print_set_password_output_status,
+        },
+        types::MySQLUser,
     },
 };
 

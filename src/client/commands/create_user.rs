@@ -5,10 +5,12 @@ use tokio_stream::StreamExt;
 
 use crate::{
     client::commands::{erroneous_server_response, read_password_from_stdin_with_double_check},
-    core::protocol::{
-        ClientToServerMessageStream, MySQLUser, Request, Response,
-        print_create_users_output_status, print_create_users_output_status_json,
-        print_set_password_output_status,
+    core::{
+        protocol::{
+            ClientToServerMessageStream, Request, Response, print_create_users_output_status,
+            print_create_users_output_status_json, print_set_password_output_status,
+        },
+        types::MySQLUser,
     },
 };
 

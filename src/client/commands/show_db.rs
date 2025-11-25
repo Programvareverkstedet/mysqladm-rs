@@ -5,7 +5,10 @@ use tokio_stream::StreamExt;
 
 use crate::{
     client::commands::erroneous_server_response,
-    core::protocol::{ClientToServerMessageStream, MySQLDatabase, Request, Response},
+    core::{
+        protocol::{ClientToServerMessageStream, Request, Response},
+        types::MySQLDatabase,
+    },
 };
 
 #[derive(Parser, Debug, Clone)]
