@@ -1,0 +1,52 @@
+use clap::Parser;
+use futures_util::SinkExt;
+use tokio_stream::StreamExt;
+
+use crate::{
+    client::commands::erroneous_server_response,
+    core::protocol::{
+        ClientToServerMessageStream, MySQLUser, Request, Response,
+        print_unlock_users_output_status, print_unlock_users_output_status_json,
+    },
+};
+
+#[derive(Parser, Debug, Clone)]
+pub struct UnlockUserArgs {
+    #[arg(num_args = 1..)]
+    username: Vec<MySQLUser>,
+
+    /// Print the information as JSON
+    #[arg(short, long)]
+    json: bool,
+}
+
+pub async fn unlock_users(
+    args: UnlockUserArgs,
+    mut server_connection: ClientToServerMessageStream,
+) -> anyhow::Result<()> {
+    if args.username.is_empty() {
+        anyhow::bail!("No usernames provided");
+    }
+
+    let message = Request::UnlockUsers(args.username.to_owned());
+
+    if let Err(err) = server_connection.send(message).await {
+        server_connection.close().await.ok();
+        anyhow::bail!(err);
+    }
+
+    let result = match server_connection.next().await {
+        Some(Ok(Response::UnlockUsers(result))) => result,
+        response => return erroneous_server_response(response),
+    };
+
+    server_connection.send(Request::Exit).await?;
+
+    if args.json {
+        print_unlock_users_output_status_json(&result);
+    } else {
+        print_unlock_users_output_status(&result);
+    }
+
+    Ok(())
+}

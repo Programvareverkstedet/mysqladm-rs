@@ -77,7 +77,7 @@ struct Args {
 #[derive(Parser, Debug, Clone)]
 enum Command {
     #[command(flatten)]
-    Client(client::command::ClientCommand),
+    Client(client::commands::ClientCommand),
 
     #[command(hide = true)]
     Server(server::command::ServerArgs),
@@ -239,7 +239,7 @@ fn tokio_run_command(command: Command, server_connection: StdUnixStream) -> anyh
 
             match command {
                 Command::Client(client_args) => {
-                    client::command::handle_command(client_args, message_stream).await
+                    client::commands::handle_command(client_args, message_stream).await
                 }
                 Command::Server(_) => unreachable!(),
                 Command::GenerateCompletions(_) => unreachable!(),

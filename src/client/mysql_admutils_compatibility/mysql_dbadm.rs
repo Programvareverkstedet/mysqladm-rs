@@ -6,7 +6,7 @@ use tokio::net::UnixStream as TokioUnixStream;
 
 use crate::{
     client::{
-        command::{DatabaseEditPrivsArgs, edit_database_privileges, erroneous_server_response},
+        commands::{EditDbPrivsArgs, edit_database_privileges, erroneous_server_response},
         mysql_admutils_compatibility::{
             common::trim_db_name_to_32_chars,
             error_messages::{
@@ -186,7 +186,7 @@ fn tokio_run_command(command: Command, server_connection: StdUnixStream) -> anyh
                 Command::Drop(args) => drop_databases(args, message_stream).await,
                 Command::Show(args) => show_databases(args, message_stream).await,
                 Command::Editperm(args) => {
-                    let edit_privileges_args = DatabaseEditPrivsArgs {
+                    let edit_privileges_args = EditDbPrivsArgs {
                         name: Some(args.database),
                         privs: vec![],
                         json: false,

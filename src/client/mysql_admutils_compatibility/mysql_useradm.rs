@@ -7,12 +7,13 @@ use tokio::net::UnixStream as TokioUnixStream;
 
 use crate::{
     client::{
-        command::{erroneous_server_response, read_password_from_stdin_with_double_check}, mysql_admutils_compatibility::{
+        commands::{erroneous_server_response, read_password_from_stdin_with_double_check},
+        mysql_admutils_compatibility::{
             common::trim_user_name_to_32_chars,
             error_messages::{
                 handle_create_user_error, handle_drop_user_error, handle_list_users_error,
             },
-        }
+        },
     },
     core::{
         bootstrap::bootstrap_server_connection_and_drop_privileges,
