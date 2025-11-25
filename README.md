@@ -1,9 +1,9 @@
 [![Coverage](https://pages.pvv.ntnu.no/Projects/muscl/main/coverage/badges/for_the_badge.svg)](https://pages.pvv.ntnu.no/Projects/muscl/main/coverage/)
 [![Docs](https://img.shields.io/badge/rust_docs-blue?style=for-the-badge&logo=rust)](https://pages.pvv.ntnu.no/Projects/muscl/main/docs/muscl/)
 
-# muscl
+# muscl 💪
 
-Healing mysql spasms since 2024
+Lifting DBs (dumbbells) and having mysql spasms since 2024
 
 ## What is this?
 
