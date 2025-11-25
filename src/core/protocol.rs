@@ -1,5 +1,4 @@
-pub mod request_response;
-pub mod server_responses;
+mod commands;
+pub mod request_validation;
 
-pub use request_response::*;
-pub use server_responses::*;
+pub use commands::*;

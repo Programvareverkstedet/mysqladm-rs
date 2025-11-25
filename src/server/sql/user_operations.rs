@@ -12,9 +12,10 @@ use crate::{
         common::UnixUser,
         database_privileges::DATABASE_PRIVILEGE_FIELDS,
         protocol::{
-            CreateUserError, CreateUsersOutput, DropUserError, DropUsersOutput, ListAllUsersError,
-            ListAllUsersOutput, ListUsersError, ListUsersOutput, LockUserError, LockUsersOutput,
-            SetPasswordError, SetPasswordOutput, UnlockUserError, UnlockUsersOutput,
+            CreateUserError, CreateUsersResponse, DropUserError, DropUsersResponse,
+            ListAllUsersError, ListAllUsersResponse, ListUsersError, ListUsersResponse,
+            LockUserError, LockUsersResponse, SetPasswordError, SetUserPasswordResponse,
+            UnlockUserError, UnlockUsersResponse,
         },
         types::MySQLUser,
     },
@@ -54,7 +55,7 @@ pub async fn create_database_users(
     db_users: Vec<MySQLUser>,
     unix_user: &UnixUser,
     connection: &mut MySqlConnection,
-) -> CreateUsersOutput {
+) -> CreateUsersResponse {
     let mut results = BTreeMap::new();
 
     for db_user in db_users {
@@ -100,7 +101,7 @@ pub async fn drop_database_users(
     db_users: Vec<MySQLUser>,
     unix_user: &UnixUser,
     connection: &mut MySqlConnection,
-) -> DropUsersOutput {
+) -> DropUsersResponse {
     let mut results = BTreeMap::new();
 
     for db_user in db_users {
@@ -147,7 +148,7 @@ pub async fn set_password_for_database_user(
     password: &str,
     unix_user: &UnixUser,
     connection: &mut MySqlConnection,
-) -> SetPasswordOutput {
+) -> SetUserPasswordResponse {
     if let Err(err) = validate_name(db_user) {
         return Err(SetPasswordError::SanitizationError(err));
     }
@@ -221,7 +222,7 @@ pub async fn lock_database_users(
     db_users: Vec<MySQLUser>,
     unix_user: &UnixUser,
     connection: &mut MySqlConnection,
-) -> LockUsersOutput {
+) -> LockUsersResponse {
     let mut results = BTreeMap::new();
 
     for db_user in db_users {
@@ -281,7 +282,7 @@ pub async fn unlock_database_users(
     db_users: Vec<MySQLUser>,
     unix_user: &UnixUser,
     connection: &mut MySqlConnection,
-) -> UnlockUsersOutput {
+) -> UnlockUsersResponse {
     let mut results = BTreeMap::new();
 
     for db_user in db_users {
@@ -380,7 +381,7 @@ pub async fn list_database_users(
     db_users: Vec<MySQLUser>,
     unix_user: &UnixUser,
     connection: &mut MySqlConnection,
-) -> ListUsersOutput {
+) -> ListUsersResponse {
     let mut results = BTreeMap::new();
 
     for db_user in db_users {
@@ -422,7 +423,7 @@ pub async fn list_database_users(
 pub async fn list_all_database_users_for_unix_user(
     unix_user: &UnixUser,
     connection: &mut MySqlConnection,
-) -> ListAllUsersOutput {
+) -> ListAllUsersResponse {
     let mut result = sqlx::query_as::<_, DatabaseUser>(
         &(DB_USER_SELECT_STATEMENT.to_string() + "WHERE `user`.`User` REGEXP ?"),
     )

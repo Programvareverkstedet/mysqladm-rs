@@ -10,8 +10,9 @@ use crate::{
     core::{
         common::UnixUser,
         protocol::{
-            CreateDatabaseError, CreateDatabasesOutput, DropDatabaseError, DropDatabasesOutput,
-            ListAllDatabasesError, ListAllDatabasesOutput, ListDatabasesError, ListDatabasesOutput,
+            CreateDatabaseError, CreateDatabasesResponse, DropDatabaseError, DropDatabasesResponse,
+            ListAllDatabasesError, ListAllDatabasesResponse, ListDatabasesError,
+            ListDatabasesResponse,
         },
     },
     server::{
@@ -46,7 +47,7 @@ pub async fn create_databases(
     database_names: Vec<MySQLDatabase>,
     unix_user: &UnixUser,
     connection: &mut MySqlConnection,
-) -> CreateDatabasesOutput {
+) -> CreateDatabasesResponse {
     let mut results = BTreeMap::new();
 
     for database_name in database_names {
@@ -105,7 +106,7 @@ pub async fn drop_databases(
     database_names: Vec<MySQLDatabase>,
     unix_user: &UnixUser,
     connection: &mut MySqlConnection,
-) -> DropDatabasesOutput {
+) -> DropDatabasesResponse {
     let mut results = BTreeMap::new();
 
     for database_name in database_names {
@@ -177,7 +178,7 @@ pub async fn list_databases(
     database_names: Vec<MySQLDatabase>,
     unix_user: &UnixUser,
     connection: &mut MySqlConnection,
-) -> ListDatabasesOutput {
+) -> ListDatabasesResponse {
     let mut results = BTreeMap::new();
 
     for database_name in database_names {
@@ -227,7 +228,7 @@ pub async fn list_databases(
 pub async fn list_all_databases_for_user(
     unix_user: &UnixUser,
     connection: &mut MySqlConnection,
-) -> ListAllDatabasesOutput {
+) -> ListAllDatabasesResponse {
     let result = sqlx::query_as::<_, DatabaseRow>(
         r#"
           SELECT `SCHEMA_NAME` AS `database`

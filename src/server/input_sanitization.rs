@@ -1,6 +1,6 @@
 use crate::core::{
     common::UnixUser,
-    protocol::server_responses::{NameValidationError, OwnerValidationError},
+    protocol::request_validation::{NameValidationError, OwnerValidationError},
 };
 
 const MAX_NAME_LENGTH: usize = 64;

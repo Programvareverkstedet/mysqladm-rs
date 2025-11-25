@@ -1,0 +1,18 @@
+use serde::{Deserialize, Serialize};
+
+use crate::server::sql::user_operations::DatabaseUser;
+
+pub type ListAllUsersResponse = Result<Vec<DatabaseUser>, ListAllUsersError>;
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum ListAllUsersError {
+    MySqlError(String),
+}
+
+impl ListAllUsersError {
+    pub fn to_error_message(&self) -> String {
+        match self {
+            ListAllUsersError::MySqlError(err) => format!("MySQL error: {}", err),
+        }
+    }
+}

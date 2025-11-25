@@ -28,9 +28,9 @@ use crate::{
             DatabasePrivilegesDiff,
         },
         protocol::{
-            DiffDoesNotApplyError, GetAllDatabasesPrivilegeData, GetAllDatabasesPrivilegeDataError,
-            GetDatabasesPrivilegeData, GetDatabasesPrivilegeDataError,
-            ModifyDatabasePrivilegesError, ModifyDatabasePrivilegesOutput,
+            DiffDoesNotApplyError, GetAllDatabasesPrivilegeDataError,
+            GetDatabasesPrivilegeDataError, ListAllPrivilegesResponse, ListPrivilegesResponse,
+            ModifyDatabasePrivilegesError, ModifyPrivilegesResponse,
         },
         types::{MySQLDatabase, MySQLUser},
     },
@@ -139,7 +139,7 @@ pub async fn get_databases_privilege_data(
     database_names: Vec<MySQLDatabase>,
     unix_user: &UnixUser,
     connection: &mut MySqlConnection,
-) -> GetDatabasesPrivilegeData {
+) -> ListPrivilegesResponse {
     let mut results = BTreeMap::new();
 
     for database_name in database_names.iter() {
@@ -186,7 +186,7 @@ pub async fn get_databases_privilege_data(
 pub async fn get_all_database_privileges(
     unix_user: &UnixUser,
     connection: &mut MySqlConnection,
-) -> GetAllDatabasesPrivilegeData {
+) -> ListAllPrivilegesResponse {
     let result = sqlx::query_as::<_, DatabasePrivilegeRow>(&format!(
         indoc! {r#"
           SELECT {} FROM `db` WHERE `db` IN
@@ -393,7 +393,7 @@ pub async fn apply_privilege_diffs(
     database_privilege_diffs: BTreeSet<DatabasePrivilegesDiff>,
     unix_user: &UnixUser,
     connection: &mut MySqlConnection,
-) -> ModifyDatabasePrivilegesOutput {
+) -> ModifyPrivilegesResponse {
     let mut results: BTreeMap<(MySQLDatabase, MySQLUser), _> = BTreeMap::new();
 
     for diff in database_privilege_diffs {

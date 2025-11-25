@@ -70,7 +70,7 @@ pub async fn create_users(
                     .interact()?
             {
                 let password = read_password_from_stdin_with_double_check(username)?;
-                let message = Request::PasswdUser(username.to_owned(), password);
+                let message = Request::PasswdUser((username.to_owned(), password));
 
                 if let Err(err) = server_connection.send(message).await {
                     server_connection.close().await.ok();
@@ -78,7 +78,7 @@ pub async fn create_users(
                 }
 
                 match server_connection.next().await {
-                    Some(Ok(Response::PasswdUser(result))) => {
+                    Some(Ok(Response::SetUserPassword(result))) => {
                         print_set_password_output_status(&result, username)
                     }
                     response => return erroneous_server_response(response),

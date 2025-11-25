@@ -18,7 +18,7 @@ use crate::server::sql::database_operations::list_databases;
 use crate::{
     core::{
         common::{DEFAULT_SOCKET_PATH, UnixUser},
-        protocol::request_response::{
+        protocol::{
             Request, Response, ServerToClientMessageStream, create_server_to_client_message_stream,
         },
     },
@@ -233,8 +233,8 @@ async fn handle_requests_for_single_session_with_db_connection(
 
         // TODO: don't clone the request
         let request_to_display = match &request {
-            Request::PasswdUser(db_user, _) => {
-                Request::PasswdUser(db_user.to_owned(), "<REDACTED>".to_string())
+            Request::PasswdUser((db_user, _)) => {
+                Request::PasswdUser((db_user.to_owned(), "<REDACTED>".to_string()))
             }
             request => request.to_owned(),
         };
@@ -289,11 +289,11 @@ async fn handle_requests_for_single_session_with_db_connection(
                 let result = drop_database_users(db_users, unix_user, db_connection).await;
                 Response::DropUsers(result)
             }
-            Request::PasswdUser(db_user, password) => {
+            Request::PasswdUser((db_user, password)) => {
                 let result =
                     set_password_for_database_user(&db_user, &password, unix_user, db_connection)
                         .await;
-                Response::PasswdUser(result)
+                Response::SetUserPassword(result)
             }
             Request::ListUsers(db_users) => match db_users {
                 Some(db_users) => {
@@ -321,8 +321,10 @@ async fn handle_requests_for_single_session_with_db_connection(
 
         // TODO: don't clone the response
         let response_to_display = match &response {
-            Response::PasswdUser(Err(SetPasswordError::MySqlError(_))) => {
-                Response::PasswdUser(Err(SetPasswordError::MySqlError("<REDACTED>".to_string())))
+            Response::SetUserPassword(Err(SetPasswordError::MySqlError(_))) => {
+                Response::SetUserPassword(Err(SetPasswordError::MySqlError(
+                    "<REDACTED>".to_string(),
+                )))
             }
             response => response.to_owned(),
         };

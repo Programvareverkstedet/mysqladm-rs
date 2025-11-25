@@ -1,0 +1,76 @@
+use std::collections::BTreeMap;
+
+use serde::{Deserialize, Serialize};
+use serde_json::json;
+
+use crate::core::{
+    protocol::request_validation::{DbOrUser, NameValidationError, OwnerValidationError},
+    types::MySQLUser,
+};
+
+pub type LockUsersRequest = Vec<MySQLUser>;
+
+pub type LockUsersResponse = BTreeMap<MySQLUser, Result<(), LockUserError>>;
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum LockUserError {
+    SanitizationError(NameValidationError),
+    OwnershipError(OwnerValidationError),
+    UserDoesNotExist,
+    UserIsAlreadyLocked,
+    MySqlError(String),
+}
+
+pub fn print_lock_users_output_status(output: &LockUsersResponse) {
+    for (username, result) in output {
+        match result {
+            Ok(()) => {
+                println!("User '{}' locked successfully.", username);
+            }
+            Err(err) => {
+                println!("{}", err.to_error_message(username));
+                println!("Skipping...");
+            }
+        }
+        println!();
+    }
+}
+
+pub fn print_lock_users_output_status_json(output: &LockUsersResponse) {
+    let value = output
+        .iter()
+        .map(|(name, result)| match result {
+            Ok(()) => (name.to_string(), json!({ "status": "success" })),
+            Err(err) => (
+                name.to_string(),
+                json!({
+                  "status": "error",
+                  "error": err.to_error_message(name),
+                }),
+            ),
+        })
+        .collect::<serde_json::Map<_, _>>();
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&value)
+            .unwrap_or("Failed to serialize result to JSON".to_string())
+    );
+}
+
+impl LockUserError {
+    pub fn to_error_message(&self, username: &MySQLUser) -> String {
+        match self {
+            LockUserError::SanitizationError(err) => err.to_error_message(username, DbOrUser::User),
+            LockUserError::OwnershipError(err) => err.to_error_message(username, DbOrUser::User),
+            LockUserError::UserDoesNotExist => {
+                format!("User '{}' does not exist.", username)
+            }
+            LockUserError::UserIsAlreadyLocked => {
+                format!("User '{}' is already locked.", username)
+            }
+            LockUserError::MySqlError(err) => {
+                format!("MySQL error: {}", err)
+            }
+        }
+    }
+}

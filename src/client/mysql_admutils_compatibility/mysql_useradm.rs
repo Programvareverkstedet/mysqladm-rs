@@ -235,10 +235,10 @@ async fn passwd_users(
 
     for user in users {
         let password = read_password_from_stdin_with_double_check(&user.user)?;
-        let message = Request::PasswdUser(user.user.to_owned(), password);
+        let message = Request::PasswdUser((user.user.to_owned(), password));
         server_connection.send(message).await?;
         match server_connection.next().await {
-            Some(Ok(Response::PasswdUser(result))) => match result {
+            Some(Ok(Response::SetUserPassword(result))) => match result {
                 Ok(()) => println!("Password updated for user '{}'.", &user.user),
                 Err(_) => eprintln!(
                     "{}: Failed to update password for user '{}'.",

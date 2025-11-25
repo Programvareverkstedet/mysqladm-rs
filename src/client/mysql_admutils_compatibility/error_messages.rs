@@ -1,6 +1,6 @@
 use crate::core::protocol::{
-    CreateDatabaseError, CreateUserError, DbOrUser, DropDatabaseError, DropUserError,
-    GetDatabasesPrivilegeDataError, ListUsersError,
+    CreateDatabaseError, CreateUserError, DropDatabaseError, DropUserError,
+    GetDatabasesPrivilegeDataError, ListUsersError, request_validation::DbOrUser,
 };
 
 pub fn name_validation_error_to_error_message(name: &str, db_or_user: DbOrUser) -> String {
