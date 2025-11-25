@@ -1,24 +1,24 @@
 { config, pkgs, lib, ... }:
 let
-  cfg = config.services.mysqladm-rs;
+  cfg = config.services.muscl;
   format = pkgs.formats.toml { };
 in
 {
-  options.services.mysqladm-rs = {
-    enable = lib.mkEnableOption "Enable mysqladm-rs";
+  options.services.muscl = {
+    enable = lib.mkEnableOption "Enable muscl";
 
-    package = lib.mkPackageOption pkgs "mysqladm-rs" { };
+    package = lib.mkPackageOption pkgs "muscl" { };
 
     createLocalDatabaseUser = lib.mkOption {
       type = lib.types.bool;
       default = false;
-      description = "Create a local database user for mysqladm-rs";
+      description = "Create a local database user for muscl";
     };
 
     logLevel = lib.mkOption {
       type = lib.types.enum [ "quiet" "error" "warn" "info" "debug" "trace" ];
       default = "debug";
-      description = "Log level for mysqladm-rs";
+      description = "Log level for muscl";
       apply = level: {
         "quiet" = "-q";
         "error" = "";
@@ -37,8 +37,8 @@ in
           server = {
             socket_path = lib.mkOption {
               type = lib.types.path;
-              default = "/run/mysqladm/mysqladm.sock";
-              description = "Path to the mysqladm socket";
+              default = "/run/muscl/muscl.sock";
+              description = "Path to the muscl socket";
             };
           };
 
@@ -60,7 +60,7 @@ in
             };
             username = lib.mkOption {
               type = lib.types.str;
-              default = "mysqladm";
+              default = "muscl";
               description = "MySQL username";
             };
             passwordFile = lib.mkOption {
@@ -79,12 +79,12 @@ in
     };
   };
 
-  config = lib.mkIf config.services.mysqladm-rs.enable {
+  config = lib.mkIf config.services.muscl.enable {
     environment.systemPackages = [ cfg.package ];
 
-    environment.etc."mysqladm/config.toml".source = let
+    environment.etc."muscl/config.toml".source = let
       nullStrippedConfig = lib.filterAttrsRecursive (_: v: v != null) cfg.settings;
-    in format.generate "mysqladm-rs.conf" nullStrippedConfig;
+    in format.generate "muscl.conf" nullStrippedConfig;
 
     services.mysql.ensureUsers = lib.mkIf cfg.createLocalDatabaseUser [
       {
@@ -96,10 +96,10 @@ in
       }
     ];
 
-    systemd.services."mysqladm" = {
+    systemd.services."muscl" = {
       description = "MySQL administration tool for non-admin users";
-      restartTriggers = [ config.environment.etc."mysqladm/config.toml".source ];
-      requires = [ "mysqladm.socket" ];
+      restartTriggers = [ config.environment.etc."muscl/config.toml".source ];
+      requires = [ "muscl.socket" ];
       serviceConfig = {
         Type = "notify";
         ExecStart = "${lib.getExe cfg.package} ${cfg.logLevel} server --systemd socket-activate";
@@ -108,12 +108,12 @@ in
 
         # Although this is a multi-instance unit, the constant `User` field is needed
         # for authentication via mysql's auth_socket plugin to work.
-        User = "mysqladm";
-        Group = "mysqladm";
+        User = "muscl";
+        Group = "muscl";
         DynamicUser = true;
 
-        ConfigurationDirectory = "mysqladm";
-        RuntimeDirectory = "mysqladm";
+        ConfigurationDirectory = "muscl";
+        RuntimeDirectory = "muscl";
 
         # This is required to read unix user/group details.
         PrivateUsers = false;
@@ -166,7 +166,7 @@ in
       };
     };
 
-    systemd.sockets."mysqladm" = {
+    systemd.sockets."muscl" = {
       description = "MySQL administration tool for non-admin users";
       wantedBy = [ "sockets.target" ];
       socketConfig = {

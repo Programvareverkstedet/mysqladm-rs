@@ -21,7 +21,7 @@ fn generate_mysql_admutils_symlinks() -> anyhow::Result<()> {
 
     if !target_profile_dir.join("mysql-useradm").exists() {
         symlink(
-            target_profile_dir.join("mysqladm"),
+            target_profile_dir.join("muscl"),
             target_profile_dir.join("mysql-useradm"),
         )
         .ok();
@@ -29,7 +29,7 @@ fn generate_mysql_admutils_symlinks() -> anyhow::Result<()> {
 
     if !target_profile_dir.join("mysql-dbadm").exists() {
         symlink(
-            target_profile_dir.join("mysqladm"),
+            target_profile_dir.join("muscl"),
             target_profile_dir.join("mysql-dbadm"),
         )
         .ok();

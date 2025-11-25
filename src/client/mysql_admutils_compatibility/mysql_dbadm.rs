@@ -52,8 +52,8 @@ The Y/N-values corresponds to the following mysql privileges:
 /// Create, drop or edit permissions for the DATABASE(s),
 /// as determined by the COMMAND.
 ///
-/// This is a compatibility layer for the mysql-dbadm command.
-/// Please consider using the newer mysqladm command instead.
+/// This is a compatibility layer for the 'mysql-dbadm' command.
+/// Please consider using the newer 'muscl' command instead.
 #[derive(Parser)]
 #[command(
     bin_name = "mysql-dbadm",
@@ -93,7 +93,7 @@ pub struct Args {
 
 // NOTE: mysql-dbadm explicitly calls privileges "permissions".
 //       This is something we're trying to move away from.
-//       See https://git.pvv.ntnu.no/Projects/mysqladm-rs/issues/29
+//       See https://git.pvv.ntnu.no/Projects/muscl/issues/29
 #[derive(Parser)]
 pub enum Command {
     /// create the DATABASE(s).

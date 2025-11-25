@@ -25,11 +25,11 @@ buildFunction {
   nativeBuildInputs = [ installShellFiles ];
   postInstall = let
     commands = lib.mapCartesianProduct ({ shell, command }: ''
-      "$out/bin/${mainProgram}" generate-completions --shell "${shell}" --command "${command}" > "$TMP/mysqladm.${shell}"
-      installShellCompletion "--${shell}" --cmd "${command}" "$TMP/mysqladm.${shell}"
+      "$out/bin/${mainProgram}" generate-completions --shell "${shell}" --command "${command}" > "$TMP/muscl.${shell}"
+      installShellCompletion "--${shell}" --cmd "${command}" "$TMP/muscl.${shell}"
     '') {
       shell = [ "bash" "zsh" "fish" ];
-      command = [ "mysqladm" "mysql-dbadm" "mysql-useradm" ];
+      command = [ "muscl" "mysql-dbadm" "mysql-useradm" ];
     };
   in lib.concatStringsSep "\n" commands;
 

@@ -28,8 +28,8 @@ use crate::{
 /// Create, delete or change password for the USER(s),
 /// as determined by the COMMAND.
 ///
-/// This is a compatibility layer for the mysql-useradm command.
-/// Please consider using the newer mysqladm command instead.
+/// This is a compatibility layer for the 'mysql-useradm' command.
+/// Please consider using the newer 'muscl' command instead.
 #[derive(Parser)]
 #[command(
     bin_name = "mysql-useradm",

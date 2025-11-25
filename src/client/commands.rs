@@ -88,15 +88,15 @@ pub enum ClientCommand {
     ///
     ///     Enable privileges `SELECT`, `INSERT`, and `UPDATE` for user `my_user` on database `my_db`:
     ///
-    ///       `mysqladm edit-db-privs -p my_db:my_user:siu`
+    ///       `muscl edit-db-privs -p my_db:my_user:siu`
     ///
     ///     Enable all privileges for user `my_other_user` on database `my_other_db`:
     ///
-    ///       `mysqladm edit-db-privs -p my_other_db:my_other_user:A`
+    ///       `muscl edit-db-privs -p my_other_db:my_other_user:A`
     ///
     ///     Set miscellaneous privileges for multiple users on database `my_db`:
     ///
-    ///       `mysqladm edit-db-privs my_db -p my_user:siu my_other_user:ct``
+    ///       `muscl edit-db-privs my_db -p my_user:siu my_other_user:ct``
     ///
     #[command(verbatim_doc_comment)]
     EditDbPrivs(EditDbPrivsArgs),

@@ -37,7 +37,7 @@ mod core;
 /// You are only allowed to manage databases and users that are prefixed with
 /// either your username, or a group that you are a member of.
 #[derive(Parser, Debug)]
-#[command(bin_name = "mysqladm", version, about, disable_help_subcommand = true)]
+#[command(bin_name = "muscl", version, about, disable_help_subcommand = true)]
 struct Args {
     #[command(subcommand)]
     command: Command,
@@ -83,14 +83,14 @@ struct GenerateCompletionArgs {
     #[arg(long, default_value = "bash")]
     shell: Shell,
 
-    #[arg(long, default_value = "mysqladm")]
+    #[arg(long, default_value = "muscl")]
     command: ToplevelCommands,
 }
 
 #[cfg(feature = "mysql-admutils-compatibility")]
 #[derive(ValueEnum, Debug, Clone)]
 enum ToplevelCommands {
-    Mysqladm,
+    Muscl,
     MysqlDbadm,
     MysqlUseradm,
 }
@@ -167,7 +167,7 @@ fn handle_generate_completions_command(args: &Args) -> anyhow::Result<Option<()>
                 "The executable should not be SUID or SGID when generating completions"
             );
             let mut cmd = match completion_args.command {
-                ToplevelCommands::Mysqladm => Args::command(),
+                ToplevelCommands::Muscl => Args::command(),
                 #[cfg(feature = "mysql-admutils-compatibility")]
                 ToplevelCommands::MysqlDbadm => mysql_dbadm::Args::command(),
                 #[cfg(feature = "mysql-admutils-compatibility")]

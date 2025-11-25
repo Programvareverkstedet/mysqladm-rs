@@ -37,8 +37,8 @@
     apps = let
       mkApp = program: { type = "app"; program = toString program; };
     in forAllSystems (system: pkgs: _: {
-      mysqladm-rs = mkApp (lib.getExe self.packages.${system}.mysqladm-rs);
-      coverage = mkApp (pkgs.writeScript "mysqladm-rs-coverage" ''
+      muscl = mkApp (lib.getExe self.packages.${system}.muscl);
+      coverage = mkApp (pkgs.writeScript "muscl-coverage" ''
         ${lib.getExe pkgs.python3} -m http.server -d "${self.packages.${system}.coverage}/html/src"
       '');
       vm = mkApp "${self.nixosConfigurations.vm.config.system.build.vm}/bin/run-nixos-vm";
@@ -59,18 +59,18 @@
     });
 
     overlays = {
-      default = self.overlays.mysqladm-rs;
-      mysqladm-rs = final: prev: {
-        inherit (self.packages.${prev.stdenv.hostPlatform.system}) mysqladm-rs;
+      default = self.overlays.muscl;
+      muscl = final: prev: {
+        inherit (self.packages.${prev.stdenv.hostPlatform.system}) muscl;
       };
-      mysqladm-rs-crane = final: prev: {
-        mysqladm-rs = self.packages.${prev.stdenv.hostPlatform.system}.mysqladm-rs-crane;
+      muscl-crane = final: prev: {
+        muscl = self.packages.${prev.stdenv.hostPlatform.system}.muscl-crane;
       };
     };
 
     nixosModules = {
-      default = self.nixosModules.mysqladm-rs;
-      mysqladm-rs = import ./nix/module.nix;
+      default = self.nixosModules.muscl;
+      muscl = import ./nix/module.nix;
     };
 
     packages = forAllSystems (system: pkgs: _:
@@ -85,9 +85,9 @@
         ];
       };
     in {
-      default = self.packages.${system}.mysqladm-rs-crane;
-      mysqladm-rs = pkgs.callPackage ./nix/default.nix { inherit cargoToml cargoLock src; };
-      mysqladm-rs-crane = pkgs.callPackage ./nix/default.nix {
+      default = self.packages.${system}.muscl-crane;
+      muscl = pkgs.callPackage ./nix/default.nix { inherit cargoToml cargoLock src; };
+      muscl-crane = pkgs.callPackage ./nix/default.nix {
         useCrane = true;
         inherit cargoToml cargoLock src craneLib;
       };
@@ -102,7 +102,7 @@
       pkgs = import nixpkgs {
         system = "x86_64-linux";
         overlays = [
-          self.overlays.mysqladm-rs-crane
+          self.overlays.muscl-crane
         ];
       };
       modules = [
@@ -133,10 +133,10 @@
 
           users.motd = ''
             =================================
-            Welcome to the mysqladm-rs vm!
+            Welcome to the muscl vm!
 
             Try running:
-                ${config.services.mysqladm-rs.package.meta.mainProgram}
+                ${config.services.muscl.package.meta.mainProgram}
 
             Password for alice is 'foobar'
             Password for root is 'root'
@@ -149,12 +149,12 @@
             enable = true;
             package = pkgs.mariadb;
           };
-          services.mysqladm-rs = {
+          services.muscl = {
             enable = true;
             createLocalDatabaseUser = true;
           };
 
-          systemd.services."mysqladm@".environment.RUST_LOG = "debug";
+          systemd.services."muscl".environment.RUST_LOG = "debug";
 
           programs.vim = {
             enable = true;

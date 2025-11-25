@@ -1,11 +1,11 @@
-# This should go to `/etc/mysqladm/config.toml`
+# This should go to `/etc/muscl/config.toml`
 
 [server]
 # The path to the socket where users can connect to the daemon.
 #
 # Note that this options gets ignored if you are using systemd socket activation
-# (see `systemctl status mysqladm.socket`)
-socket_path = "/run/mysqladm/mysqladm.sock"
+# (see `systemctl status muscl.socket`)
+socket_path = "/run/muscl/muscl.sock"
 
 [mysql]
 

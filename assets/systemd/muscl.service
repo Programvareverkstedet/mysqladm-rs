@@ -1,19 +1,19 @@
 [Unit]
 Description=MySQL administration tool for non-admin users
-Requires=mysqladm.socket
+Requires=muscl.socket
 
 [Service]
 Type=notify
-ExecStart=/usr/bin/mysqladm-rs server --systemd socket-activate
+ExecStart=/usr/bin/muscl server --systemd socket-activate
 
 WatchdogSec=15
 
-User=mysqladm
-Group=mysqladm
+User=muscl
+Group=muscl
 DynamicUser=yes
 
-ConfigurationDirectory=mysqladm
-RuntimeDirectory=mysqladm
+ConfigurationDirectory=muscl
+RuntimeDirectory=muscl
 
 # This is required to read unix user/group details.
 PrivateUsers=false

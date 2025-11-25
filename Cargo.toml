@@ -1,5 +1,5 @@
 [package]
-name = "mysqladm-rs"
+name = "muscl"
 version = "0.1.0"
 edition = "2024"
 license = "BSD-3-Clause"
@@ -7,8 +7,8 @@ authors = [
   "oysteikt@pvv.ntnu.no",
   "felixalb@pvv.ntnu.no",
 ]
-repository = "https://git.pvv.ntnu.no/Projects/mysqladm-rs"
-documentation = "https://pages.pvv.ntnu.no/Projects/mysqladm-rs/main/docs/mysqladm/"
+repository = "https://git.pvv.ntnu.no/Projects/muscl"
+documentation = "https://pages.pvv.ntnu.no/Projects/muscl/main/docs/muscl/"
 description = "A command-line utility for MySQL administration for non-admin users"
 categories = ["command-line-interface", "command-line-utilities"]
 keywords = ["mysql", "cli", "administration"]
@@ -51,7 +51,7 @@ mysql-admutils-compatibility = []
 suid-sgid-mode = []
 
 [[bin]]
-name = "mysqladm"
+name = "muscl"
 bench = false
 path = "src/main.rs"
 
@@ -67,7 +67,7 @@ anyhow = "1.0.100"
 regex = "1.12.2"
 
 [package.metadata.deb]
-name = "mysqladm-rs"
+name = "muscl"
 priority = "optional"
 section = "databases"
 depends = "$auto"
@@ -76,13 +76,13 @@ maintainer = "Programvareverkstedet <projects@pvv.ntnu.no>"
 copyright = "Copyright (c) 2025, Programvareverkstedet"
 assets = [
     [
-        "target/release/mysqladm",
+        "target/release/muscl",
         "usr/bin/",
         "755",
     ],
     [
         "example-config.toml",
-        "etc/mysqladm/config.toml",
+        "etc/muscl/config.toml",
         "600",
     ],
     [
@@ -107,5 +107,5 @@ assets = [
     ],
 ]
 systemd-units = [
-    { unit-name = "mysqladm", unit-scripts = "assets/systemd", enable = true },
+    { unit-name = "muscl", unit-scripts = "assets/systemd", enable = true },
 ]
