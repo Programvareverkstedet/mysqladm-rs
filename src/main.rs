@@ -30,9 +30,6 @@ mod server;
 mod client;
 mod core;
 
-#[cfg(feature = "tui")]
-mod tui;
-
 /// Database administration tool for non-admin users to manage their own MySQL databases and users.
 ///
 /// This tool allows you to manage users and databases in MySQL.
@@ -67,11 +64,6 @@ struct Args {
 
     #[command(flatten)]
     verbose: Verbosity,
-
-    /// Run in TUI mode.
-    #[cfg(feature = "tui")]
-    #[arg(short, long, alias = "tui", global = true)]
-    interactive: bool,
 }
 
 #[derive(Parser, Debug, Clone)]
