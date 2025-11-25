@@ -5,16 +5,22 @@
 , cargoLock
 , src
 , installShellFiles
+
+, useCrane ? false
+, craneLib ? null
 }:
 let
   mainProgram = (lib.head cargoToml.bin).name;
+  buildFunction = if useCrane then craneLib.buildPackage else rustPlatform.buildRustPackage;
+  cargoLock' = if useCrane then cargoLock else { lockFile = cargoLock; };
+  pname = if useCrane then "${cargoToml.package.name}-crane" else cargoToml.package.name;
 in
-rustPlatform.buildRustPackage {
-  pname = cargoToml.package.name;
+buildFunction {
+  pname = pname;
   version = cargoToml.package.version;
   inherit src;
 
-  cargoLock.lockFile = cargoLock;
+  cargoLock = cargoLock';
 
   nativeBuildInputs = [ installShellFiles ];
   postInstall = let

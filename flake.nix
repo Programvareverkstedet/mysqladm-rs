@@ -4,9 +4,11 @@
 
     rust-overlay.url = "github:oxalica/rust-overlay";
     rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
+
+    crane.url = "github:ipetkov/crane";
   };
 
-  outputs = { self, nixpkgs, rust-overlay }:
+  outputs = { self, nixpkgs, rust-overlay, crane }:
   let
     inherit (nixpkgs) lib;
 
@@ -61,6 +63,9 @@
       mysqladm-rs = final: prev: {
         inherit (self.packages.${prev.stdenv.hostPlatform.system}) mysqladm-rs;
       };
+      mysqladm-rs-crane = final: prev: {
+        mysqladm-rs = self.packages.${prev.stdenv.hostPlatform.system}.mysqladm-rs-crane;
+      };
     };
 
     nixosModules = {
@@ -68,21 +73,24 @@
       mysqladm-rs = import ./nix/module.nix;
     };
 
-    packages = let
+    packages = forAllSystems (system: pkgs: _:
+      let
       cargoToml = builtins.fromTOML (builtins.readFile ./Cargo.toml);
       cargoLock = ./Cargo.lock;
-      src = builtins.filterSource (path: type: let
-        baseName = baseNameOf (toString path);
-      in !(lib.any (b: b) [
-          (!(lib.cleanSourceFilter path type))
-          (baseName == "target" && type == "directory")
-          (baseName == "nix" && type == "directory")
-          (baseName == "flake.nix" && type == "regular")
-          (baseName == "flake.lock" && type == "regular")
-        ])) ./.;
-    in forAllSystems (system: pkgs: _: {
-      default = self.packages.${system}.mysqladm-rs;
+      craneLib = crane.mkLib pkgs;
+      src = lib.fileset.toSource {
+        root = ./.;
+        fileset = lib.fileset.unions [
+          (craneLib.fileset.commonCargoSources ./.)
+        ];
+      };
+    in {
+      default = self.packages.${system}.mysqladm-rs-crane;
       mysqladm-rs = pkgs.callPackage ./nix/default.nix { inherit cargoToml cargoLock src; };
+      mysqladm-rs-crane = pkgs.callPackage ./nix/default.nix {
+        useCrane = true;
+        inherit cargoToml cargoLock src craneLib;
+      };
       coverage = pkgs.callPackage ./nix/coverage.nix { inherit cargoToml cargoLock src; };
       filteredSource = pkgs.runCommandLocal "filtered-source" { } ''
         ln -s ${src} $out
@@ -94,7 +102,7 @@
       pkgs = import nixpkgs {
         system = "x86_64-linux";
         overlays = [
-          self.overlays.default
+          self.overlays.mysqladm-rs-crane
         ];
       };
       modules = [
