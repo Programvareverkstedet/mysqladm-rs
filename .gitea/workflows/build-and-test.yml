@@ -38,6 +38,24 @@ jobs:
       - name: Check clippy
         run: cargo clippy --all-features -- --deny warnings
 
+  check-license:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+            toolchain: stable
+            override: true
+
+      - name: Install cargo-deny
+        run: cargo install cargo-deny
+
+      - name: Check licenses
+        run: |
+          cargo deny check bans licenses sources
+
   test:
     runs-on: ubuntu-latest
     steps:
