@@ -25,7 +25,7 @@ use crate::{
 };
 
 #[derive(Parser, Debug, Clone)]
-pub struct EditDbPrivsArgs {
+pub struct EditPrivsArgs {
     /// The name of the database to edit privileges for
     pub name: Option<MySQLDatabase>,
 
@@ -52,7 +52,7 @@ pub struct EditDbPrivsArgs {
 }
 
 pub async fn edit_database_privileges(
-    args: EditDbPrivsArgs,
+    args: EditPrivsArgs,
     mut server_connection: ClientToServerMessageStream,
 ) -> anyhow::Result<()> {
     let message = Request::ListPrivileges(args.name.to_owned().map(|name| vec![name]));
@@ -130,7 +130,7 @@ pub async fn edit_database_privileges(
 }
 
 fn parse_privilege_tables_from_args(
-    args: &EditDbPrivsArgs,
+    args: &EditPrivsArgs,
 ) -> anyhow::Result<BTreeSet<DatabasePrivilegeRowDiff>> {
     debug_assert!(!args.privs.is_empty());
     args.privs

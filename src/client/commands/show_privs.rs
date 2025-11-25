@@ -14,7 +14,7 @@ use crate::{
 };
 
 #[derive(Parser, Debug, Clone)]
-pub struct ShowDbPrivsArgs {
+pub struct ShowPrivsArgs {
     /// The name of the database(s) to show
     #[arg(num_args = 0..)]
     name: Vec<MySQLDatabase>,
@@ -25,7 +25,7 @@ pub struct ShowDbPrivsArgs {
 }
 
 pub async fn show_database_privileges(
-    args: ShowDbPrivsArgs,
+    args: ShowPrivsArgs,
     mut server_connection: ClientToServerMessageStream,
 ) -> anyhow::Result<()> {
     let message = if args.name.is_empty() {

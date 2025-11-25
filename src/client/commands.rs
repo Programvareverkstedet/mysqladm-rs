@@ -2,11 +2,11 @@ mod create_db;
 mod create_user;
 mod drop_db;
 mod drop_user;
-mod edit_db_privs;
+mod edit_privs;
 mod lock_user;
 mod passwd_user;
 mod show_db;
-mod show_db_privs;
+mod show_privs;
 mod show_user;
 mod unlock_user;
 
@@ -14,11 +14,11 @@ pub use create_db::*;
 pub use create_user::*;
 pub use drop_db::*;
 pub use drop_user::*;
-pub use edit_db_privs::*;
+pub use edit_privs::*;
 pub use lock_user::*;
 pub use passwd_user::*;
 pub use show_db::*;
-pub use show_db_privs::*;
+pub use show_privs::*;
 pub use show_user::*;
 pub use unlock_user::*;
 
@@ -46,9 +46,9 @@ pub enum ClientCommand {
     ///
     /// If no database names are provided, all databases you have access to will be shown.
     #[command()]
-    ShowDbPrivs(ShowDbPrivsArgs),
+    ShowPrivs(ShowPrivsArgs),
 
-    /// Change user privileges for one or more databases. See `edit-db-privs --help` for details.
+    /// Change user privileges for one or more databases. See `edit-privs --help` for details.
     ///
     /// This command has two modes of operation:
     ///
@@ -80,7 +80,7 @@ pub enum ClientCommand {
     ///    - `A` - ALL PRIVILEGES
     ///
     ///   If you provide a database name, you can omit it from the privilege string,
-    ///   e.g. `edit-db-privs my_db -p my_user+siu` is equivalent to `edit-db-privs -p my_db:my_user:siu`.
+    ///   e.g. `edit-privs my_db -p my_user+siu` is equivalent to `edit-privs -p my_db:my_user:siu`.
     ///   While it doesn't make much of a difference for a single edit, it can be useful for editing multiple users
     ///   on the same database at once.
     ///
@@ -88,18 +88,18 @@ pub enum ClientCommand {
     ///
     ///     Enable privileges `SELECT`, `INSERT`, and `UPDATE` for user `my_user` on database `my_db`:
     ///
-    ///       `muscl edit-db-privs -p my_db:my_user:siu`
+    ///       `muscl edit-privs -p my_db:my_user:siu`
     ///
     ///     Enable all privileges for user `my_other_user` on database `my_other_db`:
     ///
-    ///       `muscl edit-db-privs -p my_other_db:my_other_user:A`
+    ///       `muscl edit-privs -p my_other_db:my_other_user:A`
     ///
     ///     Set miscellaneous privileges for multiple users on database `my_db`:
     ///
-    ///       `muscl edit-db-privs my_db -p my_user:siu my_other_user:ct``
+    ///       `muscl edit-privs my_db -p my_user:siu my_other_user:ct``
     ///
     #[command(verbatim_doc_comment)]
-    EditDbPrivs(EditDbPrivsArgs),
+    EditPrivs(EditPrivsArgs),
 
     /// Create one or more users
     #[command()]
@@ -136,8 +136,8 @@ pub async fn handle_command(
         ClientCommand::CreateDb(args) => create_databases(args, server_connection).await,
         ClientCommand::DropDb(args) => drop_databases(args, server_connection).await,
         ClientCommand::ShowDb(args) => show_databases(args, server_connection).await,
-        ClientCommand::ShowDbPrivs(args) => show_database_privileges(args, server_connection).await,
-        ClientCommand::EditDbPrivs(args) => edit_database_privileges(args, server_connection).await,
+        ClientCommand::ShowPrivs(args) => show_database_privileges(args, server_connection).await,
+        ClientCommand::EditPrivs(args) => edit_database_privileges(args, server_connection).await,
         ClientCommand::CreateUser(args) => create_users(args, server_connection).await,
         ClientCommand::DropUser(args) => drop_users(args, server_connection).await,
         ClientCommand::PasswdUser(args) => passwd_user(args, server_connection).await,
