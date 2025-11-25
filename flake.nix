@@ -4,9 +4,12 @@
 
     rust-overlay.url = "github:oxalica/rust-overlay";
     rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
+
+    nix-vm-test.url = "github:numtide/nix-vm-test";
+    nix-vm-test.inputs.nixpkgs.follows = "nixpkgs";
   };
 
-  outputs = { self, nixpkgs, rust-overlay }:
+  outputs = { self, nixpkgs, rust-overlay, nix-vm-test }:
   let
     inherit (nixpkgs) lib;
 
@@ -87,6 +90,26 @@
       filteredSource = pkgs.runCommandLocal "filtered-source" { } ''
         ln -s ${src} $out
       '';
+
+      vmTest = let
+        vmTest = nix-vm-test.lib.x86_64-linux.debian."13" {
+          diskSize = "10G";
+          sharedDirs = {
+            debDir = {
+              source = "${./.}";
+              target = "/mnt";
+            };
+          };
+          testScript = ''
+            vm.wait_for_unit("multi-user.target")
+            vm.succeed("apt-get update && apt-get -y install mariadb-server build-essential curl")
+            vm.succeed("curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y")
+            vm.succeed("source /root/.cargo/env && cargo install cargo-deb")
+            vm.succeed("cp -r /mnt /root/src && chmod -R +w /root/src")
+            vm.succeed("source /root/.cargo/env && cd /root/src && ./create-deb.sh")
+          '';
+        };
+      in vmTest.driverInteractive;
     });
 
     nixosConfigurations.vm = nixpkgs.lib.nixosSystem {
