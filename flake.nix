@@ -151,10 +151,9 @@
           };
           services.muscl = {
             enable = true;
+            logLevel = "trace";
             createLocalDatabaseUser = true;
           };
-
-          systemd.services."muscl".environment.RUST_LOG = "debug";
 
           programs.vim = {
             enable = true;

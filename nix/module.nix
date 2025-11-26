@@ -17,7 +17,7 @@ in
 
     logLevel = lib.mkOption {
       type = lib.types.enum [ "quiet" "error" "warn" "info" "debug" "trace" ];
-      default = "debug";
+      default = "info";
       description = "Log level for muscl";
       apply = level: {
         "quiet" = "-q";
