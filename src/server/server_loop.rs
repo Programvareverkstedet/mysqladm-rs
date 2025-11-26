@@ -3,12 +3,17 @@ use std::{
     fs,
     os::unix::{io::FromRawFd, net::UnixListener as StdUnixListener},
     path::PathBuf,
+    sync::Arc,
+    time::Duration,
 };
 
 use anyhow::Context;
 use futures_util::{SinkExt, StreamExt};
 use indoc::concatdoc;
-use tokio::net::{UnixListener as TokioUnixListener, UnixStream as TokioUnixStream};
+use tokio::{
+    net::{UnixListener as TokioUnixListener, UnixStream as TokioUnixStream},
+    time::interval,
+};
 
 use sqlx::MySqlConnection;
 use sqlx::prelude::*;
@@ -89,6 +94,22 @@ pub async fn listen_for_incoming_connections_with_listener(
     listener: TokioUnixListener,
     config: ServerConfig,
 ) -> anyhow::Result<()> {
+    let connection_counter = Arc::new(());
+    let connection_counter_for_log = Arc::clone(&connection_counter);
+    tokio::spawn(async move {
+        let mut interval = interval(Duration::from_secs(1));
+        loop {
+            interval.tick().await;
+            let count = Arc::strong_count(&connection_counter_for_log) - 2;
+            let message = if count > 0 {
+                format!("Handling {} connections", count)
+            } else {
+                "Waiting for connections".to_string()
+            };
+            sd_notify::notify(false, &[sd_notify::NotifyState::Status(message.as_str())]).ok();
+        }
+    });
+
     sd_notify::notify(false, &[sd_notify::NotifyState::Ready]).ok();
 
     while let Ok((conn, _addr)) = listener.accept().await {
@@ -110,6 +131,8 @@ pub async fn listen_for_incoming_connections_with_listener(
                 continue;
             }
         };
+
+        let _connection_counter_guard = Arc::clone(&connection_counter);
 
         log::debug!("Accepted connection from uid {}", uid);
 
