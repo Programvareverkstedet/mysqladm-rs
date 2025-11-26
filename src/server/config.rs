@@ -1,9 +1,9 @@
-use std::{fs, path::PathBuf, time::Duration};
+use std::{fs, path::PathBuf};
 
-use anyhow::{Context, anyhow};
+use anyhow::Context;
 use clap::Parser;
 use serde::{Deserialize, Serialize};
-use sqlx::{ConnectOptions, MySqlConnection, mysql::MySqlConnectOptions};
+use sqlx::{ConnectOptions, mysql::MySqlConnectOptions};
 
 use crate::core::common::DEFAULT_CONFIG_PATH;
 
@@ -35,6 +35,45 @@ pub struct MysqlConfig {
     pub password_file: Option<PathBuf>,
     #[serde(default = "default_mysql_timeout")]
     pub timeout: u64,
+}
+
+impl MysqlConfig {
+    pub fn as_mysql_connect_options(&self) -> anyhow::Result<MySqlConnectOptions> {
+        let mut options = MySqlConnectOptions::new()
+            .database("mysql")
+            .log_statements(log::LevelFilter::Trace);
+
+        if let Some(username) = &self.username {
+            options = options.username(username);
+        }
+
+        if let Some(password) = &self.password {
+            options = options.password(password);
+        }
+
+        if let Some(socket_path) = &self.socket_path {
+            options = options.socket(socket_path);
+        } else if let Some(host) = &self.host {
+            options = options.host(host);
+            options = options.port(self.port);
+        } else {
+            anyhow::bail!("No MySQL host or socket path provided");
+        }
+
+        Ok(options)
+    }
+
+    pub fn log_connection_notice(&self) {
+        let mut display_config = self.to_owned();
+        display_config.password = display_config
+            .password
+            .as_ref()
+            .map(|_| "<REDACTED>".to_owned());
+        log::debug!(
+            "Connecting to MySQL server with parameters: {:#?}",
+            display_config
+        );
+    }
 }
 
 #[derive(Parser, Debug, Clone)]
@@ -127,51 +166,4 @@ pub fn read_config_from_path(config_path: Option<PathBuf>) -> anyhow::Result<Ser
         .context(format!("Failed to read config file at {:?}", &config_path))
         .and_then(|c| toml::from_str(&c).context("Failed to parse config file"))
         .context(format!("Failed to parse config file at {:?}", &config_path))
-}
-
-fn log_config(config: &MysqlConfig) {
-    let mut display_config = config.to_owned();
-    display_config.password = display_config
-        .password
-        .as_ref()
-        .map(|_| "<REDACTED>".to_owned());
-    log::debug!(
-        "Connecting to MySQL server with parameters: {:#?}",
-        display_config
-    );
-}
-
-/// Use the provided configuration to establish a connection to a MySQL server.
-pub async fn create_mysql_connection_from_config(
-    config: &MysqlConfig,
-) -> anyhow::Result<MySqlConnection> {
-    log_config(config);
-
-    let mut mysql_options = MySqlConnectOptions::new()
-        .database("mysql")
-        .log_statements(log::LevelFilter::Trace);
-
-    if let Some(username) = &config.username {
-        mysql_options = mysql_options.username(username);
-    }
-
-    if let Some(password) = &config.password {
-        mysql_options = mysql_options.password(password);
-    }
-
-    if let Some(socket_path) = &config.socket_path {
-        mysql_options = mysql_options.socket(socket_path);
-    } else if let Some(host) = &config.host {
-        mysql_options = mysql_options.host(host);
-        mysql_options = mysql_options.port(config.port);
-    } else {
-        anyhow::bail!("No MySQL host or socket path provided");
-    }
-
-    match tokio::time::timeout(Duration::from_secs(config.timeout), mysql_options.connect()).await {
-        Ok(connection) => connection.context("Failed to connect to the database"),
-        Err(_) => {
-            Err(anyhow!("Timed out after 2 seconds")).context("Failed to connect to the database")
-        }
-    }
 }

@@ -2,32 +2,28 @@ use std::collections::BTreeSet;
 
 use futures_util::{SinkExt, StreamExt};
 use indoc::concatdoc;
+use sqlx::{MySql, MySqlConnection, MySqlPool, pool::PoolConnection};
 use tokio::net::UnixStream;
 
-use sqlx::MySqlConnection;
-use sqlx::prelude::*;
-
-use crate::core::protocol::SetPasswordError;
-use crate::server::sql::database_operations::list_databases;
 use crate::{
     core::{
         common::UnixUser,
         protocol::{
-            Request, Response, ServerToClientMessageStream, create_server_to_client_message_stream,
+            Request, Response, ServerToClientMessageStream, SetPasswordError,
+            create_server_to_client_message_stream,
         },
     },
-    server::{
-        config::{ServerConfig, create_mysql_connection_from_config},
-        sql::{
-            database_operations::{create_databases, drop_databases, list_all_databases_for_user},
-            database_privilege_operations::{
-                apply_privilege_diffs, get_all_database_privileges, get_databases_privilege_data,
-            },
-            user_operations::{
-                create_database_users, drop_database_users, list_all_database_users_for_unix_user,
-                list_database_users, lock_database_users, set_password_for_database_user,
-                unlock_database_users,
-            },
+    server::sql::{
+        database_operations::{
+            create_databases, drop_databases, list_all_databases_for_user, list_databases,
+        },
+        database_privilege_operations::{
+            apply_privilege_diffs, get_all_database_privileges, get_databases_privilege_data,
+        },
+        user_operations::{
+            create_database_users, drop_database_users, list_all_database_users_for_unix_user,
+            list_database_users, lock_database_users, set_password_for_database_user,
+            unlock_database_users,
         },
     },
 };
@@ -37,13 +33,13 @@ use crate::{
 pub async fn session_handler(
     socket: UnixStream,
     unix_user: &UnixUser,
-    config: &ServerConfig,
+    db_pool: MySqlPool,
 ) -> anyhow::Result<()> {
     let mut message_stream = create_server_to_client_message_stream(socket);
 
     log::debug!("Opening connection to database");
 
-    let mut db_connection = match create_mysql_connection_from_config(&config.mysql).await {
+    let mut db_connection = match db_pool.acquire().await {
         Ok(connection) => connection,
         Err(err) => {
             message_stream
@@ -56,27 +52,9 @@ pub async fn session_handler(
                 ))
                 .await?;
             message_stream.flush().await?;
-            return Err(err);
+            return Err(err.into());
         }
     };
-
-    log::debug!("Verifying that database connection is valid");
-
-    if let Err(e) = db_connection.ping().await {
-        log::error!("Failed to ping database: {}", e);
-        message_stream
-            .send(Response::Error(
-                (concatdoc! {
-                    "Server failed to connect to database\n",
-                    "Please check the server logs or contact the system administrators"
-                })
-                .to_string(),
-            ))
-            .await?;
-        message_stream.flush().await?;
-        close_or_ignore_db_connection(db_connection).await;
-        return Err(e.into());
-    }
 
     log::debug!("Successfully connected to database");
 
@@ -215,7 +193,7 @@ async fn session_handler_with_db_connection(
     Ok(())
 }
 
-async fn close_or_ignore_db_connection(db_connection: MySqlConnection) {
+async fn close_or_ignore_db_connection(db_connection: PoolConnection<MySql>) {
     if let Err(e) = db_connection.close().await {
         log::error!("Failed to close database connection: {}", e);
         log::error!("{}", e);

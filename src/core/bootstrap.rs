@@ -1,8 +1,9 @@
-use std::{fs, path::PathBuf};
+use std::{fs, path::PathBuf, time::Duration};
 
-use anyhow::Context;
+use anyhow::{Context, anyhow};
 use clap_verbosity_flag::Verbosity;
 use nix::libc::{EXIT_SUCCESS, exit};
+use sqlx::mysql::MySqlPoolOptions;
 use std::os::unix::net::UnixStream as StdUnixStream;
 use tokio::net::UnixStream as TokioUnixStream;
 
@@ -10,7 +11,10 @@ use crate::{
     core::common::{
         DEFAULT_CONFIG_PATH, DEFAULT_SOCKET_PATH, UnixUser, executable_is_suid_or_sgid,
     },
-    server::{config::read_config_from_path, session_handler},
+    server::{
+        config::{MysqlConfig, read_config_from_path},
+        session_handler,
+    },
 };
 
 /// Determine whether we will make a connection to an external server
@@ -208,6 +212,31 @@ fn invoke_server_with_config(config_path: PathBuf) -> anyhow::Result<StdUnixStre
     }
 }
 
+async fn construct_single_connection_mysql_pool(
+    config: &MysqlConfig,
+) -> anyhow::Result<sqlx::MySqlPool> {
+    let mysql_config = config.as_mysql_connect_options()?;
+
+    let pool_opts = MySqlPoolOptions::new()
+        .max_connections(1)
+        .min_connections(1);
+
+    config.log_connection_notice();
+
+    let pool = match tokio::time::timeout(
+        Duration::from_secs(config.timeout),
+        pool_opts.connect_with(mysql_config),
+    )
+    .await
+    {
+        Ok(connection) => connection.context("Failed to connect to the database"),
+        Err(_) => Err(anyhow!("Timed out after {} seconds", config.timeout))
+            .context("Failed to connect to the database"),
+    }?;
+
+    Ok(pool)
+}
+
 /// Run the server in the forked child process.
 /// This function will not return, but will exit the process with a success code.
 fn run_forked_server(
@@ -223,7 +252,8 @@ fn run_forked_server(
         .unwrap()
         .block_on(async {
             let socket = TokioUnixStream::from_std(server_socket)?;
-            session_handler::session_handler(socket, &unix_user, &config).await?;
+            let db_pool = construct_single_connection_mysql_pool(&config.mysql).await?;
+            session_handler::session_handler(socket, &unix_user, db_pool).await?;
             Ok(())
         });
 

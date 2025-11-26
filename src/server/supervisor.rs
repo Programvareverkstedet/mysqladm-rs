@@ -9,7 +9,7 @@ use std::{
 use anyhow::{Context, anyhow};
 use futures_util::SinkExt;
 use indoc::concatdoc;
-use sqlx::{MySqlPool, mysql::MySqlConnectOptions, prelude::*};
+use sqlx::MySqlPool;
 use tokio::{net::UnixListener as TokioUnixListener, task::JoinHandle, time::interval};
 use tokio_util::task::TaskTracker;
 // use tokio_util::sync::CancellationToken;
@@ -80,11 +80,10 @@ impl Supervisor {
 
         let listener_task = {
             let connection_counter = connection_counter.clone();
-            let config_clone = config.clone();
             tokio::spawn(spawn_listener_task(
                 listener,
-                config_clone,
                 connection_counter,
+                db_connection_pool.clone(),
             ))
         };
 
@@ -192,30 +191,13 @@ async fn create_unix_listener_with_systemd_socket() -> anyhow::Result<TokioUnixL
 }
 
 async fn create_db_connection_pool(config: &MysqlConfig) -> anyhow::Result<MySqlPool> {
-    let mut mysql_options = MySqlConnectOptions::new()
-        .database("mysql")
-        .log_statements(log::LevelFilter::Trace);
+    let mysql_config = config.as_mysql_connect_options()?;
 
-    if let Some(username) = config.username.as_ref() {
-        mysql_options = mysql_options.username(username);
-    }
-
-    if let Some(password) = config.password.as_ref() {
-        mysql_options = mysql_options.password(password);
-    }
-
-    if let Some(socket_path) = config.socket_path.as_ref() {
-        mysql_options = mysql_options.socket(socket_path);
-    } else if let Some(host) = config.host.as_ref() {
-        mysql_options = mysql_options.host(host);
-        mysql_options = mysql_options.port(config.port);
-    } else {
-        anyhow::bail!("No MySQL host or socket path provided");
-    }
+    config.log_connection_notice();
 
     match tokio::time::timeout(
         Duration::from_secs(config.timeout),
-        MySqlPool::connect_with(mysql_options),
+        MySqlPool::connect_with(mysql_config),
     )
     .await
     {
@@ -253,8 +235,8 @@ async fn create_db_connection_pool(config: &MysqlConfig) -> anyhow::Result<MySql
 
 async fn spawn_listener_task(
     listener: TokioUnixListener,
-    config: ServerConfig,
     connection_counter: Arc<()>,
+    db_pool: MySqlPool,
 ) -> anyhow::Result<()> {
     sd_notify::notify(false, &[sd_notify::NotifyState::Ready])?;
 
@@ -305,7 +287,7 @@ async fn spawn_listener_task(
 
         log::info!("Accepted connection from UNIX user: {}", unix_user.username);
 
-        match session_handler(conn, &unix_user, &config).await {
+        match session_handler(conn, &unix_user, db_pool.clone()).await {
             Ok(()) => {}
             Err(e) => {
                 log::error!("Failed to run server: {}", e);
