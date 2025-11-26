@@ -60,9 +60,13 @@ pub enum ClientCommand {
     ///
     /// 2. Non-interactive mode: If the `-p` flag is specified, the user can write privileges using arguments.
     ///
-    ///    The privilege arguments should be formatted as `<db>:<user>+<privileges>-<privileges>`
+    ///    The privilege arguments should be formatted as `<db>:<user>:<op><privileges>`
     ///    where the privileges are a string of characters, each representing a single privilege.
     ///    The character `A` is an exception - it represents all privileges.
+    ///
+    ///    The `<op>` character is optional and can be either `+` to grant additional privileges
+    ///    or `-` to revoke privileges. If omitted, the privileges will be set exactly as specified,
+    ///    removing any privileges not listed, and adding any that are.
     ///
     ///    The character-to-privilege mapping is defined as follows:
     ///
@@ -80,7 +84,7 @@ pub enum ClientCommand {
     ///    - `A` - ALL PRIVILEGES
     ///
     ///   If you provide a database name, you can omit it from the privilege string,
-    ///   e.g. `edit-privs my_db -p my_user+siu` is equivalent to `edit-privs -p my_db:my_user:siu`.
+    ///   e.g. `edit-privs my_db -p my_user:siu` is equivalent to `edit-privs -p my_db:my_user:siu`.
     ///   While it doesn't make much of a difference for a single edit, it can be useful for editing multiple users
     ///   on the same database at once.
     ///
@@ -97,6 +101,10 @@ pub enum ClientCommand {
     ///     Set miscellaneous privileges for multiple users on database `my_db`:
     ///
     ///       `muscl edit-privs my_db -p my_user:siu my_other_user:ct``
+    ///
+    ///     Add the `DELETE` privilege for user `my_user` on database `my_db`:
+    ///
+    ///       `muscl edit-privs my_db -p my_user:+d
     ///
     #[command(verbatim_doc_comment)]
     EditPrivs(EditPrivsArgs),
