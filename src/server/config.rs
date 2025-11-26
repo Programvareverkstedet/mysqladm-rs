@@ -8,13 +8,18 @@ use sqlx::{ConnectOptions, MySqlConnection, mysql::MySqlConnectOptions};
 use crate::core::common::DEFAULT_CONFIG_PATH;
 
 pub const DEFAULT_PORT: u16 = 3306;
-pub const DEFAULT_TIMEOUT: u64 = 2;
+fn default_mysql_port() -> u16 {
+    DEFAULT_PORT
+}
 
-// NOTE: this might look empty now, and the extra wrapping for the mysql
-//       config seems unnecessary, but it will be useful later when we
-//       add more configuration options.
+pub const DEFAULT_TIMEOUT: u64 = 2;
+fn default_mysql_timeout() -> u64 {
+    DEFAULT_TIMEOUT
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ServerConfig {
+    pub socket_path: Option<PathBuf>,
     pub mysql: MysqlConfig,
 }
 
@@ -23,18 +28,24 @@ pub struct ServerConfig {
 pub struct MysqlConfig {
     pub socket_path: Option<PathBuf>,
     pub host: Option<String>,
-    pub port: Option<u16>,
+    #[serde(default = "default_mysql_port")]
+    pub port: u16,
     pub username: Option<String>,
     pub password: Option<String>,
     pub password_file: Option<PathBuf>,
-    pub timeout: Option<u64>,
+    #[serde(default = "default_mysql_timeout")]
+    pub timeout: u64,
 }
 
 #[derive(Parser, Debug, Clone)]
 pub struct ServerConfigArgs {
-    /// Path to the socket of the MySQL server.
+    /// Path where the server socket should be created.
     #[arg(long, value_name = "PATH", global = true)]
     socket_path: Option<PathBuf>,
+
+    /// Path to the socket of the MySQL server.
+    #[arg(long, value_name = "PATH", global = true)]
+    mysql_socket_path: Option<PathBuf>,
 
     /// Hostname of the MySQL server.
     #[arg(
@@ -94,14 +105,15 @@ pub fn read_config_from_path_with_arg_overrides(
     };
 
     Ok(ServerConfig {
+        socket_path: args.socket_path.or(config.socket_path),
         mysql: MysqlConfig {
-            socket_path: args.socket_path.or(mysql.socket_path),
+            socket_path: args.mysql_socket_path.or(mysql.socket_path),
             host: args.mysql_host.or(mysql.host),
-            port: args.mysql_port.or(mysql.port),
+            port: args.mysql_port.unwrap_or(mysql.port),
             username: args.mysql_user.or(mysql.username.to_owned()),
             password,
             password_file: args.mysql_password_file.or(mysql.password_file),
-            timeout: args.mysql_connect_timeout.or(mysql.timeout),
+            timeout: args.mysql_connect_timeout.unwrap_or(mysql.timeout),
         },
     })
 }
@@ -151,17 +163,12 @@ pub async fn create_mysql_connection_from_config(
         mysql_options = mysql_options.socket(socket_path);
     } else if let Some(host) = &config.host {
         mysql_options = mysql_options.host(host);
-        mysql_options = mysql_options.port(config.port.unwrap_or(DEFAULT_PORT));
+        mysql_options = mysql_options.port(config.port);
     } else {
         anyhow::bail!("No MySQL host or socket path provided");
     }
 
-    match tokio::time::timeout(
-        Duration::from_secs(config.timeout.unwrap_or(DEFAULT_TIMEOUT)),
-        mysql_options.connect(),
-    )
-    .await
-    {
+    match tokio::time::timeout(Duration::from_secs(config.timeout), mysql_options.connect()).await {
         Ok(connection) => connection.context("Failed to connect to the database"),
         Err(_) => {
             Err(anyhow!("Timed out after 2 seconds")).context("Failed to connect to the database")

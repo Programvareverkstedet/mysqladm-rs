@@ -10,7 +10,7 @@ use crate::{
     core::common::{
         DEFAULT_CONFIG_PATH, DEFAULT_SOCKET_PATH, UnixUser, executable_is_suid_or_sgid,
     },
-    server::{config::read_config_from_path, server_loop::handle_requests_for_single_session},
+    server::{config::read_config_from_path, session_handler},
 };
 
 /// Determine whether we will make a connection to an external server
@@ -223,7 +223,7 @@ fn run_forked_server(
         .unwrap()
         .block_on(async {
             let socket = TokioUnixStream::from_std(server_socket)?;
-            handle_requests_for_single_session(socket, &unix_user, &config).await?;
+            session_handler::session_handler(socket, &unix_user, &config).await?;
             Ok(())
         });
 

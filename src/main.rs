@@ -147,7 +147,6 @@ fn handle_server_command(args: &Args) -> anyhow::Result<Option<()>> {
                 "The executable should not be SUID or SGID when running the server manually"
             );
             tokio_start_server(
-                args.server_socket_path.to_owned(),
                 args.config.to_owned(),
                 args.verbose.to_owned(),
                 command.to_owned(),
@@ -191,7 +190,6 @@ fn handle_generate_completions_command(args: &Args) -> anyhow::Result<Option<()>
 
 /// Start a long-lived server using Tokio.
 fn tokio_start_server(
-    server_socket_path: Option<PathBuf>,
     config_path: Option<PathBuf>,
     verbosity: Verbosity,
     args: ServerArgs,
@@ -200,9 +198,7 @@ fn tokio_start_server(
         .enable_all()
         .build()
         .context("Failed to start Tokio runtime")?
-        .block_on(async {
-            server::command::handle_command(server_socket_path, config_path, verbosity, args).await
-        })
+        .block_on(async { server::command::handle_command(config_path, verbosity, args).await })
 }
 
 /// Run the given commmand (from the client side) using Tokio.

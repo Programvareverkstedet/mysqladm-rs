@@ -1,19 +1,8 @@
-use std::{
-    collections::BTreeSet,
-    fs,
-    os::unix::{io::FromRawFd, net::UnixListener as StdUnixListener},
-    path::PathBuf,
-    sync::Arc,
-    time::Duration,
-};
+use std::collections::BTreeSet;
 
-use anyhow::Context;
 use futures_util::{SinkExt, StreamExt};
 use indoc::concatdoc;
-use tokio::{
-    net::{UnixListener as TokioUnixListener, UnixStream as TokioUnixStream},
-    time::interval,
-};
+use tokio::net::UnixStream;
 
 use sqlx::MySqlConnection;
 use sqlx::prelude::*;
@@ -22,7 +11,7 @@ use crate::core::protocol::SetPasswordError;
 use crate::server::sql::database_operations::list_databases;
 use crate::{
     core::{
-        common::{DEFAULT_SOCKET_PATH, UnixUser},
+        common::UnixUser,
         protocol::{
             Request, Response, ServerToClientMessageStream, create_server_to_client_message_stream,
         },
@@ -43,141 +32,10 @@ use crate::{
     },
 };
 
-// TODO: consider using a connection pool
+// TODO: don't use database connection unless necessary.
 
-pub async fn listen_for_incoming_connections_with_socket_path(
-    socket_path: Option<PathBuf>,
-    config: ServerConfig,
-) -> anyhow::Result<()> {
-    let socket_path = socket_path.unwrap_or(PathBuf::from(DEFAULT_SOCKET_PATH));
-
-    let parent_directory = socket_path.parent().unwrap();
-    if !parent_directory.exists() {
-        log::debug!("Creating directory {:?}", parent_directory);
-        fs::create_dir_all(parent_directory)?;
-    }
-
-    log::info!("Listening on socket {:?}", socket_path);
-
-    match fs::remove_file(socket_path.as_path()) {
-        Ok(_) => {}
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-        Err(e) => return Err(e.into()),
-    }
-
-    let listener = TokioUnixListener::bind(socket_path)?;
-
-    listen_for_incoming_connections_with_listener(listener, config).await
-}
-
-pub async fn listen_for_incoming_connections_with_systemd_socket(
-    config: ServerConfig,
-) -> anyhow::Result<()> {
-    let fd = sd_notify::listen_fds()
-        .context("Failed to get file descriptors from systemd")?
-        .next()
-        .context("No file descriptors received from systemd")?;
-
-    debug_assert!(fd == 3, "Unexpected file descriptor from systemd: {}", fd);
-
-    log::debug!(
-        "Received file descriptor from systemd with id: '{}', assuming socket",
-        fd
-    );
-
-    let std_unix_listener = unsafe { StdUnixListener::from_raw_fd(fd) };
-    let listener = TokioUnixListener::from_std(std_unix_listener)?;
-    listen_for_incoming_connections_with_listener(listener, config).await
-}
-
-pub async fn listen_for_incoming_connections_with_listener(
-    listener: TokioUnixListener,
-    config: ServerConfig,
-) -> anyhow::Result<()> {
-    let connection_counter = Arc::new(());
-    let connection_counter_for_log = Arc::clone(&connection_counter);
-    tokio::spawn(async move {
-        let mut interval = interval(Duration::from_secs(1));
-        loop {
-            interval.tick().await;
-            let count = Arc::strong_count(&connection_counter_for_log) - 2;
-            let message = if count > 0 {
-                format!("Handling {} connections", count)
-            } else {
-                "Waiting for connections".to_string()
-            };
-            sd_notify::notify(false, &[sd_notify::NotifyState::Status(message.as_str())]).ok();
-        }
-    });
-
-    sd_notify::notify(false, &[sd_notify::NotifyState::Ready]).ok();
-
-    while let Ok((conn, _addr)) = listener.accept().await {
-        let uid = match conn.peer_cred() {
-            Ok(cred) => cred.uid(),
-            Err(e) => {
-                log::error!("Failed to get peer credentials from socket: {}", e);
-                let mut message_stream = create_server_to_client_message_stream(conn);
-                message_stream
-                    .send(Response::Error(
-                        (concatdoc! {
-                            "Server failed to get peer credentials from socket\n",
-                            "Please check the server logs or contact the system administrators"
-                        })
-                        .to_string(),
-                    ))
-                    .await
-                    .ok();
-                continue;
-            }
-        };
-
-        let _connection_counter_guard = Arc::clone(&connection_counter);
-
-        log::debug!("Accepted connection from uid {}", uid);
-
-        let unix_user = match UnixUser::from_uid(uid) {
-            Ok(user) => user,
-            Err(e) => {
-                log::error!("Failed to get username from uid: {}", e);
-                let mut message_stream = create_server_to_client_message_stream(conn);
-                message_stream
-                    .send(Response::Error(
-                        (concatdoc! {
-                            "Server failed to get user data from the system\n",
-                            "Please check the server logs or contact the system administrators"
-                        })
-                        .to_string(),
-                    ))
-                    .await
-                    .ok();
-                continue;
-            }
-        };
-
-        log::info!("Accepted connection from {}", unix_user.username);
-
-        match handle_requests_for_single_session(conn, &unix_user, &config).await {
-            Ok(()) => {}
-            Err(e) => {
-                log::error!("Failed to run server: {}", e);
-            }
-        }
-    }
-
-    Ok(())
-}
-
-async fn close_or_ignore_db_connection(db_connection: MySqlConnection) {
-    if let Err(e) = db_connection.close().await {
-        log::error!("Failed to close database connection: {}", e);
-        log::error!("{}", e);
-        log::error!("Ignoring...");
-    }
-}
-
-pub async fn handle_requests_for_single_session(
-    socket: TokioUnixStream,
+pub async fn session_handler(
+    socket: UnixStream,
     unix_user: &UnixUser,
     config: &ServerConfig,
 ) -> anyhow::Result<()> {
@@ -222,12 +80,8 @@ pub async fn handle_requests_for_single_session(
 
     log::debug!("Successfully connected to database");
 
-    let result = handle_requests_for_single_session_with_db_connection(
-        message_stream,
-        unix_user,
-        &mut db_connection,
-    )
-    .await;
+    let result =
+        session_handler_with_db_connection(message_stream, unix_user, &mut db_connection).await;
 
     close_or_ignore_db_connection(db_connection).await;
 
@@ -237,7 +91,7 @@ pub async fn handle_requests_for_single_session(
 // TODO: ensure proper db_connection hygiene for functions that invoke
 //       this function
 
-async fn handle_requests_for_single_session_with_db_connection(
+async fn session_handler_with_db_connection(
     mut stream: ServerToClientMessageStream,
     unix_user: &UnixUser,
     db_connection: &mut MySqlConnection,
@@ -359,4 +213,12 @@ async fn handle_requests_for_single_session_with_db_connection(
     }
 
     Ok(())
+}
+
+async fn close_or_ignore_db_connection(db_connection: MySqlConnection) {
+    if let Err(e) = db_connection.close().await {
+        log::error!("Failed to close database connection: {}", e);
+        log::error!("{}", e);
+        log::error!("Ignoring...");
+    }
 }

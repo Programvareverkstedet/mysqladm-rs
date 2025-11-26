@@ -7,10 +7,11 @@ use systemd_journal_logger::JournalLog;
 
 use crate::server::{
     config::{ServerConfigArgs, read_config_from_path_with_arg_overrides},
-    server_loop::{
-        listen_for_incoming_connections_with_socket_path,
-        listen_for_incoming_connections_with_systemd_socket,
-    },
+    supervisor::Supervisor,
+    // server_loop::{
+    //     listen_for_incoming_connections_with_socket_path,
+    //     listen_for_incoming_connections_with_systemd_socket,
+    // },
 };
 
 #[derive(Parser, Debug, Clone)]
@@ -46,7 +47,6 @@ const LOG_LEVEL_WARNING: &str = r#"
 "#;
 
 pub async fn handle_command(
-    socket_path: Option<PathBuf>,
     config_path: Option<PathBuf>,
     verbosity: Verbosity,
     args: ServerArgs,
@@ -78,7 +78,7 @@ pub async fn handle_command(
             log::info!("Running in systemd mode");
         }
 
-        start_watchdog_thread_if_enabled();
+        // start_watchdog_thread_if_enabled();
     } else {
         env_logger::Builder::new()
             .filter_level(verbosity.log_level_filter())
@@ -90,9 +90,7 @@ pub async fn handle_command(
     let config = read_config_from_path_with_arg_overrides(config_path, args.config_overrides)?;
 
     match args.subcmd {
-        ServerCommand::Listen => {
-            listen_for_incoming_connections_with_socket_path(socket_path, config).await
-        }
+        ServerCommand::Listen => Supervisor::new(config, systemd_mode).await?.run().await,
         ServerCommand::SocketActivate => {
             if !args.systemd {
                 anyhow::bail!(concat!(
@@ -101,33 +99,33 @@ pub async fn handle_command(
                 ));
             }
 
-            listen_for_incoming_connections_with_systemd_socket(config).await
+            Supervisor::new(config, systemd_mode).await?.run().await
         }
     }
 }
 
-fn start_watchdog_thread_if_enabled() {
-    let mut micro_seconds: u64 = 0;
-    let watchdog_enabled = sd_notify::watchdog_enabled(false, &mut micro_seconds);
+// fn start_watchdog_thread_if_enabled() {
+//     let mut micro_seconds: u64 = 0;
+//     let watchdog_enabled = sd_notify::watchdog_enabled(false, &mut micro_seconds);
 
-    if watchdog_enabled {
-        micro_seconds = micro_seconds.max(2_000_000).div_ceil(2);
+//     if watchdog_enabled {
+//         micro_seconds = micro_seconds.max(2_000_000).div_ceil(2);
 
-        tokio::spawn(async move {
-            log::debug!(
-                "Starting systemd watchdog thread with {} millisecond interval",
-                micro_seconds.div_ceil(1000)
-            );
-            loop {
-                tokio::time::sleep(tokio::time::Duration::from_micros(micro_seconds)).await;
-                if let Err(err) = sd_notify::notify(false, &[sd_notify::NotifyState::Watchdog]) {
-                    log::warn!("Failed to notify systemd watchdog: {}", err);
-                } else {
-                    log::trace!("Ping sent to systemd watchdog");
-                }
-            }
-        });
-    } else {
-        log::debug!("Systemd watchdog not enabled, skipping watchdog thread");
-    }
-}
+//         tokio::spawn(async move {
+//             log::debug!(
+//                 "Starting systemd watchdog thread with {} millisecond interval",
+//                 micro_seconds.div_ceil(1000)
+//             );
+//             loop {
+//                 tokio::time::sleep(tokio::time::Duration::from_micros(micro_seconds)).await;
+//                 if let Err(err) = sd_notify::notify(false, &[sd_notify::NotifyState::Watchdog]) {
+//                     log::warn!("Failed to notify systemd watchdog: {}", err);
+//                 } else {
+//                     log::trace!("Ping sent to systemd watchdog");
+//                 }
+//             }
+//         });
+//     } else {
+//         log::debug!("Systemd watchdog not enabled, skipping watchdog thread");
+//     }
+// }
