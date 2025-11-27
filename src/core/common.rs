@@ -7,6 +7,7 @@ use std::ffi::CString;
 pub const DEFAULT_CONFIG_PATH: &str = "/etc/muscl/config.toml";
 pub const DEFAULT_SOCKET_PATH: &str = "/run/muscl/muscl.sock";
 
+#[derive(Debug, Clone)]
 pub struct UnixUser {
     pub username: String,
     pub groups: Vec<String>,

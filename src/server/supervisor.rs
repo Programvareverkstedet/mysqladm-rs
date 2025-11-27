@@ -7,22 +7,14 @@ use std::{
 };
 
 use anyhow::{Context, anyhow};
-use futures_util::SinkExt;
-use indoc::concatdoc;
 use sqlx::MySqlPool;
 use tokio::{net::UnixListener as TokioUnixListener, task::JoinHandle, time::interval};
 use tokio_util::task::TaskTracker;
 // use tokio_util::sync::CancellationToken;
 
-use crate::{
-    core::{
-        common::UnixUser,
-        protocol::{Response, create_server_to_client_message_stream},
-    },
-    server::{
-        config::{MysqlConfig, ServerConfig},
-        session_handler::session_handler,
-    },
+use crate::server::{
+    config::{MysqlConfig, ServerConfig},
+    session_handler::session_handler,
 };
 
 // TODO: implement graceful shutdown and graceful restarts
@@ -48,6 +40,12 @@ pub struct Supervisor {
 
 impl Supervisor {
     pub async fn new(config: ServerConfig, systemd_mode: bool) -> anyhow::Result<Self> {
+        log::debug!("Starting server supervisor");
+        log::debug!(
+            "Running in tokio with {} worker threads",
+            tokio::runtime::Handle::current().metrics().num_workers()
+        );
+
         let mut watchdog_duration = None;
         let mut watchdog_micro_seconds = 0;
         let watchdog_task =
@@ -120,7 +118,9 @@ fn spawn_watchdog_task(duration: Duration) -> JoinHandle<()> {
             duration.div_f32(2.0).as_millis()
         );
         loop {
+            log::trace!("Waiting for next watchdog interval");
             interval.tick().await;
+            log::trace!("Sending ping to systemd watchdog");
             if let Err(err) = sd_notify::notify(false, &[sd_notify::NotifyState::Watchdog]) {
                 log::warn!("Failed to notify systemd watchdog: {}", err);
             } else {
@@ -137,6 +137,7 @@ fn spawn_status_notifier_task(connection_counter: std::sync::Arc<()>) -> JoinHan
     tokio::spawn(async move {
         let mut interval = interval(STATUS_UPDATE_INTERVAL_SECS);
         loop {
+            log::trace!("Waiting for next status update interval");
             interval.tick().await;
             log::trace!("Updating systemd status notification");
             let count = Arc::strong_count(&connection_counter) - NON_CONNECTION_ARC_COUNT;
@@ -145,7 +146,14 @@ fn spawn_status_notifier_task(connection_counter: std::sync::Arc<()>) -> JoinHan
             } else {
                 "Waiting for connections".to_string()
             };
-            sd_notify::notify(false, &[sd_notify::NotifyState::Status(message.as_str())]).ok();
+
+            if let Err(e) =
+                sd_notify::notify(false, &[sd_notify::NotifyState::Status(message.as_str())])
+            {
+                log::warn!("Failed to send systemd status notification: {}", e);
+            } else {
+                log::trace!("Systemd status notification sent: {}", message);
+            }
         }
     })
 }
@@ -195,7 +203,7 @@ async fn create_db_connection_pool(config: &MysqlConfig) -> anyhow::Result<MySql
 
     config.log_connection_notice();
 
-    match tokio::time::timeout(
+    let pool = match tokio::time::timeout(
         Duration::from_secs(config.timeout),
         MySqlPool::connect_with(mysql_config),
     )
@@ -204,7 +212,16 @@ async fn create_db_connection_pool(config: &MysqlConfig) -> anyhow::Result<MySql
         Ok(connection) => connection.context("Failed to connect to the database"),
         Err(_) => Err(anyhow!("Timed out after {} seconds", config.timeout))
             .context("Failed to connect to the database"),
-    }
+    }?;
+
+    let pool_opts = pool.options();
+    log::debug!(
+        "Successfully opened database connection pool with options (max_connections: {}, min_connections: {})",
+        pool_opts.get_max_connections(),
+        pool_opts.get_min_connections(),
+    );
+
+    Ok(pool)
 }
 
 // fn spawn_signal_handler_task(
@@ -242,57 +259,18 @@ async fn spawn_listener_task(
 
     while let Ok((conn, _addr)) = listener.accept().await {
         log::debug!("Got new connection");
-
-        let uid = match conn.peer_cred() {
-            Ok(cred) => cred.uid(),
-            Err(e) => {
-                log::error!("Failed to get peer credentials from socket: {}", e);
-                let mut message_stream = create_server_to_client_message_stream(conn);
-                message_stream
-                    .send(Response::Error(
-                        (concatdoc! {
-                            "Server failed to get peer credentials from socket\n",
-                            "Please check the server logs or contact the system administrators"
-                        })
-                        .to_string(),
-                    ))
-                    .await
-                    .ok();
-                continue;
-            }
-        };
-
-        log::debug!("Validated peer UID: {}", uid);
-
+        let db_pool_clone = db_pool.clone();
         let _connection_counter_guard = Arc::clone(&connection_counter);
-
-        let unix_user = match UnixUser::from_uid(uid) {
-            Ok(user) => user,
-            Err(e) => {
-                log::error!("Failed to get username from uid: {}", e);
-                let mut message_stream = create_server_to_client_message_stream(conn);
-                message_stream
-                    .send(Response::Error(
-                        (concatdoc! {
-                            "Server failed to get user data from the system\n",
-                            "Please check the server logs or contact the system administrators"
-                        })
-                        .to_string(),
-                    ))
-                    .await
-                    .ok();
-                continue;
+        tokio::spawn(async {
+            let _guard = _connection_counter_guard;
+            log::debug!("Running session handler");
+            match session_handler(conn, db_pool_clone).await {
+                Ok(()) => {}
+                Err(e) => {
+                    log::error!("Failed to run server: {}", e);
+                }
             }
-        };
-
-        log::info!("Accepted connection from UNIX user: {}", unix_user.username);
-
-        match session_handler(conn, &unix_user, db_pool.clone()).await {
-            Ok(()) => {}
-            Err(e) => {
-                log::error!("Failed to run server: {}", e);
-            }
-        }
+        });
     }
 
     Ok(())

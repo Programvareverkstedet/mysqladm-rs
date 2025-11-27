@@ -253,7 +253,7 @@ fn run_forked_server(
         .block_on(async {
             let socket = TokioUnixStream::from_std(server_socket)?;
             let db_pool = construct_single_connection_mysql_pool(&config.mysql).await?;
-            session_handler::session_handler(socket, &unix_user, db_pool).await?;
+            session_handler::session_handler_with_unix_user(socket, &unix_user, db_pool).await?;
             Ok(())
         });
 
