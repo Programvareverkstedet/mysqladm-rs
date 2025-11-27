@@ -48,6 +48,12 @@ pub struct Supervisor {
 
 impl Supervisor {
     pub async fn new(config: ServerConfig, systemd_mode: bool) -> anyhow::Result<Self> {
+        log::debug!("Starting server supervisor");
+        log::debug!(
+            "Running in tokio with {} worker threads",
+            tokio::runtime::Handle::current().metrics().num_workers()
+        );
+
         let mut watchdog_duration = None;
         let mut watchdog_micro_seconds = 0;
         let watchdog_task =

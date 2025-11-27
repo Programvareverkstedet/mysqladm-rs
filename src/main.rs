@@ -188,17 +188,26 @@ fn handle_generate_completions_command(args: &Args) -> anyhow::Result<Option<()>
     }
 }
 
+const MIN_TOKIO_WORKER_THREADS: usize = 4;
+
 /// Start a long-lived server using Tokio.
 fn tokio_start_server(
     config_path: Option<PathBuf>,
     verbosity: Verbosity,
     args: ServerArgs,
 ) -> anyhow::Result<()> {
+    let worker_thread_count = std::cmp::max(num_cpus::get(), MIN_TOKIO_WORKER_THREADS);
+
     tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(worker_thread_count)
         .enable_all()
         .build()
         .context("Failed to start Tokio runtime")?
-        .block_on(async { server::command::handle_command(config_path, verbosity, args).await })
+        .block_on(server::command::handle_command(
+            config_path,
+            verbosity,
+            args,
+        ))
 }
 
 /// Run the given commmand (from the client side) using Tokio.
