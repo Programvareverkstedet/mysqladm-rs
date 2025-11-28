@@ -2,7 +2,7 @@ use std::collections::BTreeSet;
 
 use futures_util::{SinkExt, StreamExt};
 use indoc::concatdoc;
-use sqlx::{MySql, MySqlConnection, MySqlPool, pool::PoolConnection};
+use sqlx::{MySqlConnection, MySqlPool};
 use tokio::net::UnixStream;
 
 use crate::{
@@ -30,15 +30,58 @@ use crate::{
 
 // TODO: don't use database connection unless necessary.
 
-pub async fn session_handler(
+pub async fn session_handler(socket: UnixStream, db_pool: MySqlPool) -> anyhow::Result<()> {
+    let uid = match socket.peer_cred() {
+        Ok(cred) => cred.uid(),
+        Err(e) => {
+            log::error!("Failed to get peer credentials from socket: {}", e);
+            let mut message_stream = create_server_to_client_message_stream(socket);
+            message_stream
+                .send(Response::Error(
+                    (concatdoc! {
+                        "Server failed to get peer credentials from socket\n",
+                        "Please check the server logs or contact the system administrators"
+                    })
+                    .to_string(),
+                ))
+                .await
+                .ok();
+            anyhow::bail!("Failed to get peer credentials from socket");
+        }
+    };
+
+    log::debug!("Validated peer UID: {}", uid);
+
+    let unix_user = match UnixUser::from_uid(uid) {
+        Ok(user) => user,
+        Err(e) => {
+            log::error!("Failed to get username from uid: {}", e);
+            let mut message_stream = create_server_to_client_message_stream(socket);
+            message_stream
+                .send(Response::Error(
+                    (concatdoc! {
+                        "Server failed to get user data from the system\n",
+                        "Please check the server logs or contact the system administrators"
+                    })
+                    .to_string(),
+                ))
+                .await
+                .ok();
+            anyhow::bail!("Failed to get username from uid: {}", e);
+        }
+    };
+
+    session_handler_with_unix_user(socket, &unix_user, db_pool).await
+}
+
+pub async fn session_handler_with_unix_user(
     socket: UnixStream,
     unix_user: &UnixUser,
     db_pool: MySqlPool,
 ) -> anyhow::Result<()> {
     let mut message_stream = create_server_to_client_message_stream(socket);
 
-    log::debug!("Opening connection to database");
-
+    log::debug!("Requesting database connection from pool");
     let mut db_connection = match db_pool.acquire().await {
         Ok(connection) => connection,
         Err(err) => {
@@ -55,13 +98,12 @@ pub async fn session_handler(
             return Err(err.into());
         }
     };
-
-    log::debug!("Successfully connected to database");
+    log::debug!("Successfully acquired database connection from pool");
 
     let result =
         session_handler_with_db_connection(message_stream, unix_user, &mut db_connection).await;
 
-    close_or_ignore_db_connection(db_connection).await;
+    log::debug!("Releasing database connection back to pool");
 
     result
 }
@@ -191,12 +233,4 @@ async fn session_handler_with_db_connection(
     }
 
     Ok(())
-}
-
-async fn close_or_ignore_db_connection(db_connection: PoolConnection<MySql>) {
-    if let Err(e) = db_connection.close().await {
-        log::error!("Failed to close database connection: {}", e);
-        log::error!("{}", e);
-        log::error!("Ignoring...");
-    }
 }

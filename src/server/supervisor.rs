@@ -7,22 +7,14 @@ use std::{
 };
 
 use anyhow::{Context, anyhow};
-use futures_util::SinkExt;
-use indoc::concatdoc;
 use sqlx::MySqlPool;
 use tokio::{net::UnixListener as TokioUnixListener, task::JoinHandle, time::interval};
 use tokio_util::task::TaskTracker;
 // use tokio_util::sync::CancellationToken;
 
-use crate::{
-    core::{
-        common::UnixUser,
-        protocol::{Response, create_server_to_client_message_stream},
-    },
-    server::{
-        config::{MysqlConfig, ServerConfig},
-        session_handler::session_handler,
-    },
+use crate::server::{
+    config::{MysqlConfig, ServerConfig},
+    session_handler::session_handler,
 };
 
 // TODO: implement graceful shutdown and graceful restarts
@@ -262,56 +254,17 @@ async fn spawn_listener_task(
     while let Ok((conn, _addr)) = listener.accept().await {
         log::debug!("Got new connection");
 
-        let uid = match conn.peer_cred() {
-            Ok(cred) => cred.uid(),
-            Err(e) => {
-                log::error!("Failed to get peer credentials from socket: {}", e);
-                let mut message_stream = create_server_to_client_message_stream(conn);
-                message_stream
-                    .send(Response::Error(
-                        (concatdoc! {
-                            "Server failed to get peer credentials from socket\n",
-                            "Please check the server logs or contact the system administrators"
-                        })
-                        .to_string(),
-                    ))
-                    .await
-                    .ok();
-                continue;
-            }
-        };
-
-        log::debug!("Validated peer UID: {}", uid);
-
+        let db_pool_clone = db_pool.clone();
         let _connection_counter_guard = Arc::clone(&connection_counter);
-
-        let unix_user = match UnixUser::from_uid(uid) {
-            Ok(user) => user,
-            Err(e) => {
-                log::error!("Failed to get username from uid: {}", e);
-                let mut message_stream = create_server_to_client_message_stream(conn);
-                message_stream
-                    .send(Response::Error(
-                        (concatdoc! {
-                            "Server failed to get user data from the system\n",
-                            "Please check the server logs or contact the system administrators"
-                        })
-                        .to_string(),
-                    ))
-                    .await
-                    .ok();
-                continue;
+        tokio::spawn(async {
+            let _guard = _connection_counter_guard;
+            match session_handler(conn, db_pool_clone).await {
+                Ok(()) => {}
+                Err(e) => {
+                    log::error!("Failed to run server: {}", e);
+                }
             }
-        };
-
-        log::info!("Accepted connection from UNIX user: {}", unix_user.username);
-
-        match session_handler(conn, &unix_user, db_pool.clone()).await {
-            Ok(()) => {}
-            Err(e) => {
-                log::error!("Failed to run server: {}", e);
-            }
-        }
+        });
     }
 
     Ok(())
