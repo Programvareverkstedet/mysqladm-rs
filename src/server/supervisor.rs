@@ -121,29 +121,40 @@ fn spawn_watchdog_task(duration: Duration) -> JoinHandle<()> {
             interval.tick().await;
             if let Err(err) = sd_notify::notify(false, &[sd_notify::NotifyState::Watchdog]) {
                 log::warn!("Failed to notify systemd watchdog: {}", err);
-            } else {
-                log::trace!("Ping sent to systemd watchdog");
             }
         }
     })
 }
 
 fn spawn_status_notifier_task(connection_counter: std::sync::Arc<()>) -> JoinHandle<()> {
-    const NON_CONNECTION_ARC_COUNT: usize = 4;
+    const NON_CONNECTION_ARC_COUNT: usize = 3;
     const STATUS_UPDATE_INTERVAL_SECS: Duration = Duration::from_secs(1);
 
     tokio::spawn(async move {
         let mut interval = interval(STATUS_UPDATE_INTERVAL_SECS);
         loop {
             interval.tick().await;
-            log::trace!("Updating systemd status notification");
-            let count = Arc::strong_count(&connection_counter) - NON_CONNECTION_ARC_COUNT;
+            let count = match Arc::strong_count(&connection_counter)
+                .checked_sub(NON_CONNECTION_ARC_COUNT)
+            {
+                Some(c) => c,
+                None => {
+                    debug_assert!(false, "Connection counter calculation underflowed");
+                    0
+                }
+            };
+
             let message = if count > 0 {
                 format!("Handling {} connections", count)
             } else {
                 "Waiting for connections".to_string()
             };
-            sd_notify::notify(false, &[sd_notify::NotifyState::Status(message.as_str())]).ok();
+
+            if let Err(e) =
+                sd_notify::notify(false, &[sd_notify::NotifyState::Status(message.as_str())])
+            {
+                log::warn!("Failed to send systemd status notification: {}", e);
+            }
         }
     })
 }
