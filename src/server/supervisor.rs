@@ -205,7 +205,7 @@ async fn create_db_connection_pool(config: &MysqlConfig) -> anyhow::Result<MySql
 
     config.log_connection_notice();
 
-    match tokio::time::timeout(
+    let pool = match tokio::time::timeout(
         Duration::from_secs(config.timeout),
         MySqlPool::connect_with(mysql_config),
     )
@@ -214,7 +214,16 @@ async fn create_db_connection_pool(config: &MysqlConfig) -> anyhow::Result<MySql
         Ok(connection) => connection.context("Failed to connect to the database"),
         Err(_) => Err(anyhow!("Timed out after {} seconds", config.timeout))
             .context("Failed to connect to the database"),
-    }
+    }?;
+
+    let pool_opts = pool.options();
+    log::debug!(
+        "Successfully opened database connection pool with options (max_connections: {}, min_connections: {})",
+        pool_opts.get_max_connections(),
+        pool_opts.get_min_connections(),
+    );
+
+    Ok(pool)
 }
 
 // fn spawn_signal_handler_task(
