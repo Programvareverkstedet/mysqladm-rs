@@ -77,8 +77,6 @@ pub async fn handle_command(
         } else {
             log::info!("Running in systemd mode");
         }
-
-        // start_watchdog_thread_if_enabled();
     } else {
         env_logger::Builder::new()
             .filter_level(verbosity.log_level_filter())
@@ -103,29 +101,3 @@ pub async fn handle_command(
         }
     }
 }
-
-// fn start_watchdog_thread_if_enabled() {
-//     let mut micro_seconds: u64 = 0;
-//     let watchdog_enabled = sd_notify::watchdog_enabled(false, &mut micro_seconds);
-
-//     if watchdog_enabled {
-//         micro_seconds = micro_seconds.max(2_000_000).div_ceil(2);
-
-//         tokio::spawn(async move {
-//             log::debug!(
-//                 "Starting systemd watchdog thread with {} millisecond interval",
-//                 micro_seconds.div_ceil(1000)
-//             );
-//             loop {
-//                 tokio::time::sleep(tokio::time::Duration::from_micros(micro_seconds)).await;
-//                 if let Err(err) = sd_notify::notify(false, &[sd_notify::NotifyState::Watchdog]) {
-//                     log::warn!("Failed to notify systemd watchdog: {}", err);
-//                 } else {
-//                     log::trace!("Ping sent to systemd watchdog");
-//                 }
-//             }
-//         });
-//     } else {
-//         log::debug!("Systemd watchdog not enabled, skipping watchdog thread");
-//     }
-// }
