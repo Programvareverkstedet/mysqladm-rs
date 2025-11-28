@@ -192,7 +192,11 @@ async fn create_unix_listener_with_systemd_socket() -> anyhow::Result<TokioUnixL
     );
 
     let std_unix_listener = unsafe { StdUnixListener::from_raw_fd(fd) };
+    std_unix_listener
+        .set_nonblocking(true)
+        .context("Failed to set non-blocking mode on systemd socket")?;
     let listener = TokioUnixListener::from_std(std_unix_listener)?;
+
     Ok(listener)
 }
 
