@@ -17,7 +17,31 @@ use crate::server::{
     session_handler::session_handler,
 };
 
-// TODO: implement graceful shutdown and graceful restarts
+// TODO: implement graceful shutdown and graceful reloads
+
+// Graceful shutdown process:
+// 1. Notify systemd that shutdown is starting.
+// 2. Stop accepting new connections.
+// 3. Wait for existing connections to:
+//   - Finish all requests
+//   - Forcefully terminate after a timeout
+// 3.5: Log everytime a connection is terminated, and warn if it was forcefully terminated.
+// 4. Shutdown the database connection pool.
+// 5. Cleanup resources and exit.
+
+// Graceful reload process:
+// 1. Notify systemd that reload is starting.
+// 2. Get ahold of the configuration mutex (and hence stop accepting new connections)
+// 3. Reload configuration from file.
+// 4. If the configuration is invalid, log an error and abort the reload (drop mutex, resume as if reload was performed).
+// 5. Set mutex contents to new configuration.
+// 6. If database configuration has changed:
+//   - Wait for existing connections to finish (as in shutdown step 3).
+//   - Shutdown old database connection pool.
+//   - Create new database connection pool.
+// 7. Drop config mutex (and hence resume accepting new connections).
+// 8. Notify systemd that reload is complete.
+
 #[allow(dead_code)]
 pub struct Supervisor {
     config: ServerConfig,
