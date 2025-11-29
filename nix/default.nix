@@ -85,6 +85,9 @@ buildFunction ({
     install -Dm644 assets/systemd/muscl.service -t "$out/lib/systemd/system"
     substituteInPlace "$out/lib/systemd/system/muscl.service" \
       --replace-fail '/usr/bin/muscl' "$out/bin/muscl"
+
+    mkdir -p "$out/share/muscl"
+    cp -r examples "$out/share/muscl"
   '';
 
   meta = with lib; {
