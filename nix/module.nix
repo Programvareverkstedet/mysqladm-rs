@@ -96,31 +96,17 @@ in
       }
     ];
 
+    systemd.packages = [ cfg.package ];
+
+    systemd.sockets."muscl".wantedBy = [ "sockets.target" ];
+
     systemd.services."muscl" = {
-      description = "MySQL administration tool for non-admin users";
       restartTriggers = [ config.environment.etc."muscl/config.toml".source ];
-      requires = [ "muscl.socket" ];
       serviceConfig = {
-        Type = "notify";
-        ExecStart = "${lib.getExe cfg.package} ${cfg.logLevel} server --systemd socket-activate";
-
-        WatchdogSec = 15;
-
-        # Although this is a multi-instance unit, the constant `User` field is needed
-        # for authentication via mysql's auth_socket plugin to work.
-        User = "muscl";
-        Group = "muscl";
-        DynamicUser = true;
-
-        ConfigurationDirectory = "muscl";
-        RuntimeDirectory = "muscl";
-
-        # This is required to read unix user/group details.
-        PrivateUsers = false;
-
-        # Needed to communicate with MySQL.
-        PrivateNetwork = false;
-        PrivateIPC = false;
+        ExecStart = [
+          ""
+          "${lib.getExe cfg.package} ${cfg.logLevel} server --systemd socket-activate"
+        ];
 
         IPAddressDeny = "any";
         IPAddressAllow = [
@@ -131,48 +117,6 @@ in
 
         RestrictAddressFamilies = [ "AF_UNIX" ]
           ++ (lib.optionals (cfg.settings.mysql.host != null) [ "AF_INET" "AF_INET6" ]);
-
-        AmbientCapabilities = [ "" ];
-        CapabilityBoundingSet = [ "" ];
-        DeviceAllow = [ "" ];
-        LockPersonality = true;
-        MemoryDenyWriteExecute = true;
-        NoNewPrivileges = true;
-        PrivateDevices = true;
-        PrivateMounts = true;
-        PrivateTmp = "yes";
-        ProcSubset = "pid";
-        ProtectClock = true;
-        ProtectControlGroups = "strict";
-        ProtectHome = true;
-        ProtectHostname = true;
-        ProtectKernelLogs = true;
-        ProtectKernelModules = true;
-        ProtectKernelTunables = true;
-        ProtectProc = "invisible";
-        ProtectSystem = "strict";
-        RemoveIPC = true;
-        UMask = "0777";
-        RestrictNamespaces = true;
-        RestrictRealtime = true;
-        RestrictSUIDSGID = true;
-        SystemCallArchitectures = "native";
-        SocketBindDeny = [ "any" ];
-        SystemCallFilter = [
-          "@system-service"
-          "~@privileged"
-          "~@resources"
-        ];
-      };
-    };
-
-    systemd.sockets."muscl" = {
-      description = "MySQL administration tool for non-admin users";
-      wantedBy = [ "sockets.target" ];
-      socketConfig = {
-        ListenStream = cfg.settings.server.socket_path;
-        Accept = "no";
-        PassCredentials = true;
       };
     };
   };

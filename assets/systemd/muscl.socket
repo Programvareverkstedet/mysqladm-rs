@@ -1,8 +1,10 @@
 [Unit]
 Description=MySQL administration tool for non-admin users
-WantedBy=sockets.target
 
 [Socket]
 ListenStream=/run/muscl/muscl.sock
 Accept=no
 PassCredentials=true
+
+[Install]
+WantedBy=sockets.target

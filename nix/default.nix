@@ -31,7 +31,12 @@ buildFunction {
       shell = [ "bash" "zsh" "fish" ];
       command = [ "muscl" "mysql-dbadm" "mysql-useradm" ];
     };
-  in lib.concatStringsSep "\n" commands;
+  in lib.concatStringsSep "\n" commands + ''
+    install -Dm444 assets/systemd/muscl.socket -t "$out/lib/systemd/system"
+    install -Dm644 assets/systemd/muscl.service -t "$out/lib/systemd/system"
+    substituteInPlace "$out/lib/systemd/system/muscl.service" \
+      --replace-fail '/usr/bin/muscl' "$out/bin/muscl"
+  '';
 
   meta = with lib; {
     license = licenses.mit;

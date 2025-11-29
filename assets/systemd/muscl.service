@@ -8,6 +8,8 @@ ExecStart=/usr/bin/muscl server --systemd socket-activate
 
 WatchdogSec=15
 
+# Although this is a multi-instance unit, the constant `User` field is needed
+# for authentication via mysql's auth_socket plugin to work.
 User=muscl
 Group=muscl
 DynamicUser=yes
