@@ -5,22 +5,12 @@ use clap::Parser;
 use clap_verbosity_flag::Verbosity;
 use systemd_journal_logger::JournalLog;
 
-use crate::server::{
-    config::{ServerConfigArgs, read_config_from_path_with_arg_overrides},
-    supervisor::Supervisor,
-    // server_loop::{
-    //     listen_for_incoming_connections_with_socket_path,
-    //     listen_for_incoming_connections_with_systemd_socket,
-    // },
-};
+use crate::{core::common::DEFAULT_CONFIG_PATH, server::supervisor::Supervisor};
 
 #[derive(Parser, Debug, Clone)]
 pub struct ServerArgs {
     #[command(subcommand)]
     subcmd: ServerCommand,
-
-    #[command(flatten)]
-    config_overrides: ServerConfigArgs,
 
     #[arg(long)]
     systemd: bool,
@@ -85,10 +75,15 @@ pub async fn handle_command(
         log::info!("Running in standalone mode");
     }
 
-    let config = read_config_from_path_with_arg_overrides(config_path, args.config_overrides)?;
+    let config_path = config_path.unwrap_or_else(|| PathBuf::from(DEFAULT_CONFIG_PATH));
 
     match args.subcmd {
-        ServerCommand::Listen => Supervisor::new(config, systemd_mode).await?.run().await,
+        ServerCommand::Listen => {
+            Supervisor::new(config_path, systemd_mode)
+                .await?
+                .run()
+                .await
+        }
         ServerCommand::SocketActivate => {
             if !args.systemd {
                 anyhow::bail!(concat!(
@@ -97,7 +92,10 @@ pub async fn handle_command(
                 ));
             }
 
-            Supervisor::new(config, systemd_mode).await?.run().await
+            Supervisor::new(config_path, systemd_mode)
+                .await?
+                .run()
+                .await
         }
     }
 }

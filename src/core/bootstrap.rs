@@ -12,7 +12,7 @@ use crate::{
         DEFAULT_CONFIG_PATH, DEFAULT_SOCKET_PATH, UnixUser, executable_is_suid_or_sgid,
     },
     server::{
-        config::{MysqlConfig, read_config_from_path},
+        config::{MysqlConfig, ServerConfig},
         session_handler,
     },
 };
@@ -244,7 +244,8 @@ fn run_forked_server(
     server_socket: StdUnixStream,
     unix_user: UnixUser,
 ) -> anyhow::Result<()> {
-    let config = read_config_from_path(Some(config_path))?;
+    let config = ServerConfig::read_config_from_path(&config_path)
+        .context("Failed to read server config in forked process")?;
 
     let result: anyhow::Result<()> = tokio::runtime::Builder::new_current_thread()
         .enable_all()

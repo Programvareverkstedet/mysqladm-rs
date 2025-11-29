@@ -44,6 +44,7 @@ use crate::server::{
 
 #[allow(dead_code)]
 pub struct Supervisor {
+    config_path: PathBuf,
     config: ServerConfig,
     systemd_mode: bool,
 
@@ -63,12 +64,15 @@ pub struct Supervisor {
 }
 
 impl Supervisor {
-    pub async fn new(config: ServerConfig, systemd_mode: bool) -> anyhow::Result<Self> {
+    pub async fn new(config_path: PathBuf, systemd_mode: bool) -> anyhow::Result<Self> {
         log::debug!("Starting server supervisor");
         log::debug!(
             "Running in tokio with {} worker threads",
             tokio::runtime::Handle::current().metrics().num_workers()
         );
+
+        let config = ServerConfig::read_config_from_path(&config_path)
+            .context("Failed to read server configuration")?;
 
         let mut watchdog_duration = None;
         let mut watchdog_micro_seconds = 0;
@@ -113,6 +117,7 @@ impl Supervisor {
         // let sigterm_cancel_token = CancellationToken::new();
 
         Ok(Self {
+            config_path,
             config,
             systemd_mode,
             // sighup_cancel_token,
