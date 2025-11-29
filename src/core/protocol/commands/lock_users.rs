@@ -4,8 +4,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 use crate::core::{
-    protocol::request_validation::{DbOrUser, NameValidationError, OwnerValidationError},
-    types::MySQLUser,
+    protocol::request_validation::{NameValidationError, OwnerValidationError},
+    types::{DbOrUser, MySQLUser},
 };
 
 pub type LockUsersRequest = Vec<MySQLUser>;
@@ -60,8 +60,12 @@ pub fn print_lock_users_output_status_json(output: &LockUsersResponse) {
 impl LockUserError {
     pub fn to_error_message(&self, username: &MySQLUser) -> String {
         match self {
-            LockUserError::SanitizationError(err) => err.to_error_message(username, DbOrUser::User),
-            LockUserError::OwnershipError(err) => err.to_error_message(username, DbOrUser::User),
+            LockUserError::SanitizationError(err) => {
+                err.to_error_message(DbOrUser::User(username.clone()))
+            }
+            LockUserError::OwnershipError(err) => {
+                err.to_error_message(DbOrUser::User(username.clone()))
+            }
             LockUserError::UserDoesNotExist => {
                 format!("User '{}' does not exist.", username)
             }

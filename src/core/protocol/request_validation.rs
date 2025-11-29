@@ -2,31 +2,7 @@ use indoc::indoc;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
-use crate::core::common::UnixUser;
-
-/// This enum is used to differentiate between database and user operations.
-/// Their output are very similar, but there are slight differences in the words used.
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum DbOrUser {
-    Database,
-    User,
-}
-
-impl DbOrUser {
-    pub fn lowercased(&self) -> &'static str {
-        match self {
-            DbOrUser::Database => "database",
-            DbOrUser::User => "user",
-        }
-    }
-
-    pub fn capitalized(&self) -> &'static str {
-        match self {
-            DbOrUser::Database => "Database",
-            DbOrUser::User => "User",
-        }
-    }
-}
+use crate::core::{common::UnixUser, types::DbOrUser};
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
 pub enum NameValidationError {
@@ -36,14 +12,14 @@ pub enum NameValidationError {
 }
 
 impl NameValidationError {
-    pub fn to_error_message(self, name: &str, db_or_user: DbOrUser) -> String {
+    pub fn to_error_message(self, db_or_user: DbOrUser) -> String {
         match self {
             NameValidationError::EmptyString => {
-                format!("{} name cannot be empty.", db_or_user.capitalized()).to_owned()
+                format!("{} name cannot be empty.", db_or_user.capitalized_noun()).to_owned()
             }
             NameValidationError::TooLong => format!(
                 "{} is too long. Maximum length is 64 characters.",
-                db_or_user.capitalized()
+                db_or_user.capitalized_noun()
             )
             .to_owned(),
             NameValidationError::InvalidCharacters => format!(
@@ -52,8 +28,8 @@ impl NameValidationError {
 
                   Only A-Z, a-z, 0-9, _ (underscore) and - (dash) are permitted.
                 "#},
-                db_or_user.lowercased(),
-                name
+                db_or_user.lowercased_noun(),
+                db_or_user.name(),
             )
             .to_owned(),
         }
@@ -61,7 +37,7 @@ impl NameValidationError {
 }
 
 impl OwnerValidationError {
-    pub fn to_error_message(self, name: &str, db_or_user: DbOrUser) -> String {
+    pub fn to_error_message(self, db_or_user: DbOrUser) -> String {
         let user = UnixUser::from_enviroment();
 
         let UnixUser {
@@ -85,10 +61,10 @@ impl OwnerValidationError {
                     - {}
                   {}
                 "#},
-                db_or_user.lowercased(),
-                name,
-                db_or_user.lowercased(),
-                db_or_user.lowercased(),
+                db_or_user.lowercased_noun(),
+                db_or_user.name(),
+                db_or_user.lowercased_noun(),
+                db_or_user.lowercased_noun(),
                 username,
                 groups
                     .into_iter()
@@ -99,8 +75,8 @@ impl OwnerValidationError {
             .to_owned(),
             OwnerValidationError::StringEmpty => format!(
                 "'{}' is not a valid {} name.",
-                name,
-                db_or_user.lowercased()
+                db_or_user.name(),
+                db_or_user.lowercased_noun()
             )
             .to_string(),
         }

@@ -91,3 +91,33 @@ impl From<String> for MySQLDatabase {
         MySQLDatabase(s)
     }
 }
+
+/// This enum is used to differentiate between database and user operations.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum DbOrUser {
+    Database(MySQLDatabase),
+    User(MySQLUser),
+}
+
+impl DbOrUser {
+    pub fn lowercased_noun(&self) -> &'static str {
+        match self {
+            DbOrUser::Database(_) => "database",
+            DbOrUser::User(_) => "user",
+        }
+    }
+
+    pub fn capitalized_noun(&self) -> &'static str {
+        match self {
+            DbOrUser::Database(_) => "Database",
+            DbOrUser::User(_) => "User",
+        }
+    }
+
+    pub fn name(&self) -> &str {
+        match self {
+            DbOrUser::Database(db) => db.as_str(),
+            DbOrUser::User(user) => user.as_str(),
+        }
+    }
+}

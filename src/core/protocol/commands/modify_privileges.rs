@@ -4,8 +4,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::core::{
     database_privileges::{DatabasePrivilegeRow, DatabasePrivilegeRowDiff, DatabasePrivilegesDiff},
-    protocol::request_validation::{DbOrUser, NameValidationError, OwnerValidationError},
-    types::{MySQLDatabase, MySQLUser},
+    protocol::request_validation::{NameValidationError, OwnerValidationError},
+    types::{DbOrUser, MySQLDatabase, MySQLUser},
 };
 
 pub type ModifyPrivilegesRequest = BTreeSet<DatabasePrivilegesDiff>;
@@ -54,16 +54,16 @@ impl ModifyDatabasePrivilegesError {
     pub fn to_error_message(&self, database_name: &MySQLDatabase, username: &MySQLUser) -> String {
         match self {
             ModifyDatabasePrivilegesError::DatabaseSanitizationError(err) => {
-                err.to_error_message(database_name, DbOrUser::Database)
+                err.to_error_message(DbOrUser::Database(database_name.clone()))
             }
             ModifyDatabasePrivilegesError::DatabaseOwnershipError(err) => {
-                err.to_error_message(database_name, DbOrUser::Database)
+                err.to_error_message(DbOrUser::Database(database_name.clone()))
             }
             ModifyDatabasePrivilegesError::UserSanitizationError(err) => {
-                err.to_error_message(username, DbOrUser::User)
+                err.to_error_message(DbOrUser::User(username.clone()))
             }
             ModifyDatabasePrivilegesError::UserOwnershipError(err) => {
-                err.to_error_message(username, DbOrUser::User)
+                err.to_error_message(DbOrUser::User(username.clone()))
             }
             ModifyDatabasePrivilegesError::DatabaseDoesNotExist => {
                 format!("Database '{}' does not exist.", database_name)

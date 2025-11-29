@@ -4,8 +4,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 use crate::core::{
-    protocol::request_validation::{DbOrUser, NameValidationError, OwnerValidationError},
-    types::MySQLUser,
+    protocol::request_validation::{NameValidationError, OwnerValidationError},
+    types::{DbOrUser, MySQLUser},
 };
 
 pub type CreateUsersRequest = Vec<MySQLUser>;
@@ -60,9 +60,11 @@ impl CreateUserError {
     pub fn to_error_message(&self, username: &MySQLUser) -> String {
         match self {
             CreateUserError::SanitizationError(err) => {
-                err.to_error_message(username, DbOrUser::User)
+                err.to_error_message(DbOrUser::User(username.clone()))
             }
-            CreateUserError::OwnershipError(err) => err.to_error_message(username, DbOrUser::User),
+            CreateUserError::OwnershipError(err) => {
+                err.to_error_message(DbOrUser::User(username.clone()))
+            }
             CreateUserError::UserAlreadyExists => {
                 format!("User '{}' already exists.", username)
             }

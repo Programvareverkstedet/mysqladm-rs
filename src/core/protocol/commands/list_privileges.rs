@@ -8,8 +8,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::core::{
     database_privileges::DatabasePrivilegeRow,
-    protocol::request_validation::{DbOrUser, NameValidationError, OwnerValidationError},
-    types::MySQLDatabase,
+    protocol::request_validation::{NameValidationError, OwnerValidationError},
+    types::{DbOrUser, MySQLDatabase},
 };
 
 pub type ListPrivilegesRequest = Option<Vec<MySQLDatabase>>;
@@ -29,10 +29,10 @@ impl GetDatabasesPrivilegeDataError {
     pub fn to_error_message(&self, database_name: &MySQLDatabase) -> String {
         match self {
             GetDatabasesPrivilegeDataError::SanitizationError(err) => {
-                err.to_error_message(database_name, DbOrUser::Database)
+                err.to_error_message(DbOrUser::Database(database_name.clone()))
             }
             GetDatabasesPrivilegeDataError::OwnershipError(err) => {
-                err.to_error_message(database_name, DbOrUser::Database)
+                err.to_error_message(DbOrUser::Database(database_name.clone()))
             }
             GetDatabasesPrivilegeDataError::DatabaseDoesNotExist => {
                 format!("Database '{}' does not exist.", database_name)

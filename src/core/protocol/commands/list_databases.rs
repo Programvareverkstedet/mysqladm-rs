@@ -4,8 +4,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     core::{
-        protocol::request_validation::{DbOrUser, NameValidationError, OwnerValidationError},
-        types::MySQLDatabase,
+        protocol::request_validation::{NameValidationError, OwnerValidationError},
+        types::{DbOrUser, MySQLDatabase},
     },
     server::sql::database_operations::DatabaseRow,
 };
@@ -26,10 +26,10 @@ impl ListDatabasesError {
     pub fn to_error_message(&self, database_name: &MySQLDatabase) -> String {
         match self {
             ListDatabasesError::SanitizationError(err) => {
-                err.to_error_message(database_name, DbOrUser::Database)
+                err.to_error_message(DbOrUser::Database(database_name.clone()))
             }
             ListDatabasesError::OwnershipError(err) => {
-                err.to_error_message(database_name, DbOrUser::Database)
+                err.to_error_message(DbOrUser::Database(database_name.clone()))
             }
             ListDatabasesError::DatabaseDoesNotExist => {
                 format!("Database '{}' does not exist.", database_name)

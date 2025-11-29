@@ -4,8 +4,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     core::{
-        protocol::request_validation::{DbOrUser, NameValidationError, OwnerValidationError},
-        types::MySQLUser,
+        protocol::request_validation::{NameValidationError, OwnerValidationError},
+        types::{DbOrUser, MySQLUser},
     },
     server::sql::user_operations::DatabaseUser,
 };
@@ -26,9 +26,11 @@ impl ListUsersError {
     pub fn to_error_message(&self, username: &MySQLUser) -> String {
         match self {
             ListUsersError::SanitizationError(err) => {
-                err.to_error_message(username, DbOrUser::User)
+                err.to_error_message(DbOrUser::User(username.clone()))
             }
-            ListUsersError::OwnershipError(err) => err.to_error_message(username, DbOrUser::User),
+            ListUsersError::OwnershipError(err) => {
+                err.to_error_message(DbOrUser::User(username.clone()))
+            }
             ListUsersError::UserDoesNotExist => {
                 format!("User '{}' does not exist.", username)
             }

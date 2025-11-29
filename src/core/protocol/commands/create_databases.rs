@@ -4,8 +4,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 use crate::core::{
-    protocol::request_validation::{DbOrUser, NameValidationError, OwnerValidationError},
-    types::MySQLDatabase,
+    protocol::request_validation::{NameValidationError, OwnerValidationError},
+    types::{DbOrUser, MySQLDatabase},
 };
 
 pub type CreateDatabasesRequest = Vec<MySQLDatabase>;
@@ -60,10 +60,10 @@ impl CreateDatabaseError {
     pub fn to_error_message(&self, database_name: &MySQLDatabase) -> String {
         match self {
             CreateDatabaseError::SanitizationError(err) => {
-                err.to_error_message(database_name, DbOrUser::Database)
+                err.to_error_message(DbOrUser::Database(database_name.clone()))
             }
             CreateDatabaseError::OwnershipError(err) => {
-                err.to_error_message(database_name, DbOrUser::Database)
+                err.to_error_message(DbOrUser::Database(database_name.clone()))
             }
             CreateDatabaseError::DatabaseAlreadyExists => {
                 format!("Database {} already exists.", database_name)
