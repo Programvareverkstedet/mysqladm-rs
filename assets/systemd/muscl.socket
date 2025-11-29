@@ -1,5 +1,5 @@
 [Unit]
-Description=MySQL administration tool for non-admin users
+Description=Muscl MySQL admin tool
 
 [Socket]
 ListenStream=/run/muscl/muscl.sock
