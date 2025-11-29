@@ -16,7 +16,6 @@ Group=muscl
 DynamicUser=yes
 
 ConfigurationDirectory=muscl
-# RuntimeDirectory=muscl
 
 # This is required to read unix user/group details.
 PrivateUsers=false

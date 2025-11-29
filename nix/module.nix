@@ -113,6 +113,17 @@ in
            "${lib.getExe' pkgs.coreutils "kill"} -HUP $MAINPID"
         ];
 
+        RuntimeDirectory = "muscl/root-mnt";
+        RuntimeDirectoryMode = "0700";
+        RootDirectory = "/run/muscl/root-mnt";
+        BindReadOnlyPaths = [
+          builtins.storeDir
+          "/etc"
+        ]
+        ++ lib.optionals (cfg.settings.mysql.socket_path != null) [
+          cfg.settings.mysql.socket_path
+        ];
+
         IPAddressDeny = "any";
         IPAddressAllow = [
           "127.0.0.0/8"
