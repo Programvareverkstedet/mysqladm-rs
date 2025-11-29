@@ -101,11 +101,16 @@ in
     systemd.sockets."muscl".wantedBy = [ "sockets.target" ];
 
     systemd.services."muscl" = {
-      restartTriggers = [ config.environment.etc."muscl/config.toml".source ];
+      reloadTriggers = [ config.environment.etc."muscl/config.toml".source ];
       serviceConfig = {
         ExecStart = [
           ""
           "${lib.getExe cfg.package} ${cfg.logLevel} server --systemd socket-activate"
+        ];
+
+        ExecReload = [
+           ""
+           "${lib.getExe' pkgs.coreutils "kill"} -HUP $MAINPID"
         ];
 
         IPAddressDeny = "any";

@@ -1,9 +1,9 @@
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, sync::Arc};
 
 use futures_util::{SinkExt, StreamExt};
 use indoc::concatdoc;
 use sqlx::{MySqlConnection, MySqlPool};
-use tokio::net::UnixStream;
+use tokio::{net::UnixStream, sync::RwLock};
 
 use crate::{
     core::{
@@ -33,7 +33,10 @@ use crate::{
 
 // TODO: don't use database connection unless necessary.
 
-pub async fn session_handler(socket: UnixStream, db_pool: MySqlPool) -> anyhow::Result<()> {
+pub async fn session_handler(
+    socket: UnixStream,
+    db_pool: Arc<RwLock<MySqlPool>>,
+) -> anyhow::Result<()> {
     let uid = match socket.peer_cred() {
         Ok(cred) => cred.uid(),
         Err(e) => {
@@ -80,12 +83,12 @@ pub async fn session_handler(socket: UnixStream, db_pool: MySqlPool) -> anyhow::
 pub async fn session_handler_with_unix_user(
     socket: UnixStream,
     unix_user: &UnixUser,
-    db_pool: MySqlPool,
+    db_pool: Arc<RwLock<MySqlPool>>,
 ) -> anyhow::Result<()> {
     let mut message_stream = create_server_to_client_message_stream(socket);
 
     log::debug!("Requesting database connection from pool");
-    let mut db_connection = match db_pool.acquire().await {
+    let mut db_connection = match db_pool.read().await.acquire().await {
         Ok(connection) => connection,
         Err(err) => {
             message_stream

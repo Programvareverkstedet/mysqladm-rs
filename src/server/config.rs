@@ -17,7 +17,7 @@ fn default_mysql_timeout() -> u64 {
     DEFAULT_TIMEOUT
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename = "mysql")]
 pub struct MysqlConfig {
     pub socket_path: Option<PathBuf>,
@@ -70,7 +70,7 @@ impl MysqlConfig {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct ServerConfig {
     pub socket_path: Option<PathBuf>,
     pub mysql: MysqlConfig,

@@ -5,6 +5,7 @@ Requires=muscl.socket
 [Service]
 Type=notify
 ExecStart=/usr/bin/muscl server --systemd socket-activate
+ExecReload=/usr/bin/kill -HUP $MAINPID
 
 WatchdogSec=15
 
@@ -15,7 +16,7 @@ Group=muscl
 DynamicUser=yes
 
 ConfigurationDirectory=muscl
-RuntimeDirectory=muscl
+# RuntimeDirectory=muscl
 
 # This is required to read unix user/group details.
 PrivateUsers=false

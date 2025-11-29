@@ -1,11 +1,11 @@
-use std::{fs, path::PathBuf, time::Duration};
+use std::{fs, path::PathBuf, sync::Arc, time::Duration};
 
 use anyhow::{Context, anyhow};
 use clap_verbosity_flag::Verbosity;
 use nix::libc::{EXIT_SUCCESS, exit};
 use sqlx::mysql::MySqlPoolOptions;
 use std::os::unix::net::UnixStream as StdUnixStream;
-use tokio::net::UnixStream as TokioUnixStream;
+use tokio::{net::UnixStream as TokioUnixStream, sync::RwLock};
 
 use crate::{
     core::common::{
@@ -254,6 +254,7 @@ fn run_forked_server(
         .block_on(async {
             let socket = TokioUnixStream::from_std(server_socket)?;
             let db_pool = construct_single_connection_mysql_pool(&config.mysql).await?;
+            let db_pool = Arc::new(RwLock::new(db_pool));
             session_handler::session_handler_with_unix_user(socket, &unix_user, db_pool).await?;
             Ok(())
         });
