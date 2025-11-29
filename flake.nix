@@ -103,6 +103,7 @@
         fileset = lib.fileset.unions [
           (craneLib.fileset.commonCargoSources ./.)
           ./assets
+          ./examples
         ];
       };
     in {
