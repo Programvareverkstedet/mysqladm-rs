@@ -1,3 +1,4 @@
+mod check_authorization;
 mod create_databases;
 mod create_users;
 mod drop_databases;
@@ -13,6 +14,7 @@ mod modify_privileges;
 mod passwd_user;
 mod unlock_users;
 
+pub use check_authorization::*;
 pub use create_databases::*;
 pub use create_users::*;
 pub use drop_databases::*;
@@ -60,6 +62,8 @@ pub fn create_client_to_server_message_stream(socket: UnixStream) -> ClientToSer
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Request {
+    CheckAuthorization(CheckAuthorizationRequest),
+
     CreateDatabases(CreateDatabasesRequest),
     DropDatabases(DropDatabasesRequest),
     ListDatabases(ListDatabasesRequest),
@@ -82,6 +86,8 @@ pub enum Request {
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Response {
+    CheckAuthorization(CheckAuthorizationResponse),
+
     // Specific data for specific commands
     CreateDatabases(CreateDatabasesResponse),
     DropDatabases(DropDatabasesResponse),

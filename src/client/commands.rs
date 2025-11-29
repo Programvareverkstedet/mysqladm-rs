@@ -1,3 +1,4 @@
+mod check_auth;
 mod create_db;
 mod create_user;
 mod drop_db;
@@ -10,6 +11,7 @@ mod show_privs;
 mod show_user;
 mod unlock_user;
 
+pub use check_auth::*;
 pub use create_db::*;
 pub use create_user::*;
 pub use drop_db::*;
@@ -28,6 +30,10 @@ use crate::core::protocol::{ClientToServerMessageStream, Response};
 
 #[derive(Parser, Debug, Clone)]
 pub enum ClientCommand {
+    /// Check whether you are authorized to manage the specified databases or users.
+    #[command()]
+    CheckAuth(CheckAuthArgs),
+
     /// Create one or more databases
     #[command()]
     CreateDb(CreateDbArgs),
@@ -141,6 +147,7 @@ pub async fn handle_command(
     server_connection: ClientToServerMessageStream,
 ) -> anyhow::Result<()> {
     match command {
+        ClientCommand::CheckAuth(args) => check_authorization(args, server_connection).await,
         ClientCommand::CreateDb(args) => create_databases(args, server_connection).await,
         ClientCommand::DropDb(args) => drop_databases(args, server_connection).await,
         ClientCommand::ShowDb(args) => show_databases(args, server_connection).await,

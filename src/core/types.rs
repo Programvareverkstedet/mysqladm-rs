@@ -92,8 +92,7 @@ impl From<String> for MySQLDatabase {
     }
 }
 
-/// This enum is used to differentiate between database and user operations.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum DbOrUser {
     Database(MySQLDatabase),
     User(MySQLUser),

@@ -13,17 +13,20 @@ use crate::{
             create_server_to_client_message_stream,
         },
     },
-    server::sql::{
-        database_operations::{
-            create_databases, drop_databases, list_all_databases_for_user, list_databases,
-        },
-        database_privilege_operations::{
-            apply_privilege_diffs, get_all_database_privileges, get_databases_privilege_data,
-        },
-        user_operations::{
-            create_database_users, drop_database_users, list_all_database_users_for_unix_user,
-            list_database_users, lock_database_users, set_password_for_database_user,
-            unlock_database_users,
+    server::{
+        authorization::check_authorization,
+        sql::{
+            database_operations::{
+                create_databases, drop_databases, list_all_databases_for_user, list_databases,
+            },
+            database_privilege_operations::{
+                apply_privilege_diffs, get_all_database_privileges, get_databases_privilege_data,
+            },
+            user_operations::{
+                create_database_users, drop_database_users, list_all_database_users_for_unix_user,
+                list_database_users, lock_database_users, set_password_for_database_user,
+                unlock_database_users,
+            },
         },
     },
 };
@@ -119,6 +122,8 @@ async fn session_handler_with_db_connection(
     stream.send(Response::Ready).await?;
     loop {
         // TODO: better error handling
+        // TODO: timeout for receiving requests
+        // TODO: cancel on request by supervisor
         let request = match stream.next().await {
             Some(Ok(request)) => request,
             Some(Err(e)) => return Err(e.into()),
@@ -138,6 +143,10 @@ async fn session_handler_with_db_connection(
         log::info!("Received request: {:#?}", request_to_display);
 
         let response = match request {
+            Request::CheckAuthorization(dbs_or_users) => {
+                let result = check_authorization(dbs_or_users, unix_user).await;
+                Response::CheckAuthorization(result)
+            }
             Request::CreateDatabases(databases_names) => {
                 let result = create_databases(databases_names, unix_user, db_connection).await;
                 Response::CreateDatabases(result)
