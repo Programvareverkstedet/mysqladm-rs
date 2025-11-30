@@ -40,7 +40,7 @@ pub async fn session_handler(
     let uid = match socket.peer_cred() {
         Ok(cred) => cred.uid(),
         Err(e) => {
-            log::error!("Failed to get peer credentials from socket: {}", e);
+            tracing::error!("Failed to get peer credentials from socket: {}", e);
             let mut message_stream = create_server_to_client_message_stream(socket);
             message_stream
                 .send(Response::Error(
@@ -56,12 +56,12 @@ pub async fn session_handler(
         }
     };
 
-    log::debug!("Validated peer UID: {}", uid);
+    tracing::debug!("Validated peer UID: {}", uid);
 
     let unix_user = match UnixUser::from_uid(uid) {
         Ok(user) => user,
         Err(e) => {
-            log::error!("Failed to get username from uid: {}", e);
+            tracing::error!("Failed to get username from uid: {}", e);
             let mut message_stream = create_server_to_client_message_stream(socket);
             message_stream
                 .send(Response::Error(
@@ -87,7 +87,7 @@ pub async fn session_handler_with_unix_user(
 ) -> anyhow::Result<()> {
     let mut message_stream = create_server_to_client_message_stream(socket);
 
-    log::debug!("Requesting database connection from pool");
+    tracing::debug!("Requesting database connection from pool");
     let mut db_connection = match db_pool.read().await.acquire().await {
         Ok(connection) => connection,
         Err(err) => {
@@ -104,12 +104,12 @@ pub async fn session_handler_with_unix_user(
             return Err(err.into());
         }
     };
-    log::debug!("Successfully acquired database connection from pool");
+    tracing::debug!("Successfully acquired database connection from pool");
 
     let result =
         session_handler_with_db_connection(message_stream, unix_user, &mut db_connection).await;
 
-    log::debug!("Releasing database connection back to pool");
+    tracing::debug!("Releasing database connection back to pool");
 
     result
 }
@@ -131,7 +131,7 @@ async fn session_handler_with_db_connection(
             Some(Ok(request)) => request,
             Some(Err(e)) => return Err(e.into()),
             None => {
-                log::warn!("Client disconnected without sending an exit message");
+                tracing::warn!("Client disconnected without sending an exit message");
                 break;
             }
         };
@@ -143,7 +143,7 @@ async fn session_handler_with_db_connection(
             }
             request => request.to_owned(),
         };
-        log::info!("Received request: {:#?}", request_to_display);
+        tracing::info!("Received request: {:#?}", request_to_display);
 
         let response = match request {
             Request::CheckAuthorization(dbs_or_users) => {
@@ -237,11 +237,11 @@ async fn session_handler_with_db_connection(
             }
             response => response.to_owned(),
         };
-        log::info!("Response: {:#?}", response_to_display);
+        tracing::info!("Response: {:#?}", response_to_display);
 
         stream.send(response).await?;
         stream.flush().await?;
-        log::debug!("Successfully processed request");
+        tracing::debug!("Successfully processed request");
     }
 
     Ok(())

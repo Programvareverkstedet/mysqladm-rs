@@ -6,6 +6,7 @@ use nix::libc::{EXIT_SUCCESS, exit};
 use sqlx::mysql::MySqlPoolOptions;
 use std::os::unix::net::UnixStream as StdUnixStream;
 use tokio::{net::UnixStream as TokioUnixStream, sync::RwLock};
+use tracing_subscriber::prelude::*;
 
 use crate::{
     core::common::{
@@ -83,9 +84,18 @@ pub fn bootstrap_server_connection_and_drop_privileges(
             "The executable should not be SUID or SGID when connecting to an external server"
         );
 
-        env_logger::Builder::new()
-            .filter_level(verbose.log_level_filter())
-            .init();
+        let subscriber = tracing_subscriber::Registry::default()
+            .with(verbose.tracing_level_filter())
+            .with(
+                tracing_subscriber::fmt::layer()
+                    .with_line_number(cfg!(debug_assertions))
+                    .with_target(cfg!(debug_assertions))
+                    .with_thread_ids(false)
+                    .with_thread_names(false),
+            );
+
+        tracing::subscriber::set_global_default(subscriber)
+            .context("Failed to set global default tracing subscriber")?;
 
         connect_to_external_server(server_socket_path)
     } else if cfg!(feature = "suid-sgid-mode") {
@@ -93,9 +103,18 @@ pub fn bootstrap_server_connection_and_drop_privileges(
         //       as we might be running with elevated privileges.
         let server_connection = bootstrap_internal_server_and_drop_privs(config)?;
 
-        env_logger::Builder::new()
-            .filter_level(verbose.log_level_filter())
-            .init();
+        let subscriber = tracing_subscriber::Registry::default()
+            .with(verbose.tracing_level_filter())
+            .with(
+                tracing_subscriber::fmt::layer()
+                    .with_line_number(cfg!(debug_assertions))
+                    .with_target(cfg!(debug_assertions))
+                    .with_thread_ids(false)
+                    .with_thread_names(false),
+            );
+
+        tracing::subscriber::set_global_default(subscriber)
+            .context("Failed to set global default tracing subscriber")?;
 
         Ok(server_connection)
     } else {
@@ -108,7 +127,7 @@ fn connect_to_external_server(
 ) -> anyhow::Result<StdUnixStream> {
     // TODO: ensure this is both readable and writable
     if let Some(socket_path) = server_socket_path {
-        log::debug!("Connecting to socket at {:?}", socket_path);
+        tracing::debug!("Connecting to socket at {:?}", socket_path);
         return match StdUnixStream::connect(socket_path) {
             Ok(socket) => Ok(socket),
             Err(e) => match e.kind() {
@@ -120,7 +139,7 @@ fn connect_to_external_server(
     }
 
     if fs::metadata(DEFAULT_SOCKET_PATH).is_ok() {
-        log::debug!("Connecting to default socket at {:?}", DEFAULT_SOCKET_PATH);
+        tracing::debug!("Connecting to default socket at {:?}", DEFAULT_SOCKET_PATH);
         return match StdUnixStream::connect(DEFAULT_SOCKET_PATH) {
             Ok(socket) => Ok(socket),
             Err(e) => match e.kind() {
@@ -140,7 +159,7 @@ fn connect_to_external_server(
 /// If the process is not running with elevated privileges, this function
 /// is a no-op.
 fn drop_privs() -> anyhow::Result<()> {
-    log::debug!("Dropping privileges");
+    tracing::debug!("Dropping privileges");
     let real_uid = nix::unistd::getuid();
     let real_gid = nix::unistd::getgid();
 
@@ -150,7 +169,7 @@ fn drop_privs() -> anyhow::Result<()> {
     debug_assert_eq!(nix::unistd::getuid(), real_uid);
     debug_assert_eq!(nix::unistd::getgid(), real_gid);
 
-    log::debug!("Privileges dropped successfully");
+    tracing::debug!("Privileges dropped successfully");
     Ok(())
 }
 
@@ -167,7 +186,7 @@ fn bootstrap_internal_server_and_drop_privs(
             return Err(anyhow::anyhow!("Config file not found or not readable"));
         }
 
-        log::debug!("Starting server with config at {:?}", config_path);
+        tracing::debug!("Starting server with config at {:?}", config_path);
         let socket = invoke_server_with_config(config_path)?;
         drop_privs()?;
         return Ok(socket);
@@ -178,7 +197,7 @@ fn bootstrap_internal_server_and_drop_privs(
         if !executable_is_suid_or_sgid()? {
             anyhow::bail!("Executable is not SUID/SGID - refusing to start internal sever");
         }
-        log::debug!("Starting server with default config at {:?}", config_path);
+        tracing::debug!("Starting server with default config at {:?}", config_path);
         let socket = invoke_server_with_config(config_path)?;
         drop_privs()?;
         return Ok(socket);
@@ -198,11 +217,11 @@ fn invoke_server_with_config(config_path: PathBuf) -> anyhow::Result<StdUnixStre
 
     match (unsafe { nix::unistd::fork() }).context("Failed to fork")? {
         nix::unistd::ForkResult::Parent { child } => {
-            log::debug!("Forked child process with PID {}", child);
+            tracing::debug!("Forked child process with PID {}", child);
             Ok(client_socket)
         }
         nix::unistd::ForkResult::Child => {
-            log::debug!("Running server in child process");
+            tracing::debug!("Running server in child process");
 
             match run_forked_server(config_path, server_socket, unix_user) {
                 Err(e) => Err(e),

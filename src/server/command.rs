@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use anyhow::Context;
 use clap::Parser;
 use clap_verbosity_flag::Verbosity;
-use systemd_journal_logger::JournalLog;
+use tracing_subscriber::prelude::*;
 
 use crate::{core::common::DEFAULT_CONFIG_PATH, server::supervisor::Supervisor};
 
@@ -50,29 +50,39 @@ pub async fn handle_command(
             false
         }
     };
+
     if systemd_mode {
-        JournalLog::new()
-            .context("Failed to initialize journald logging")?
-            .install()
-            .context("Failed to install journald logger")?;
+        let subscriber = tracing_subscriber::Registry::default()
+            .with(verbosity.tracing_level_filter())
+            .with(tracing_journald::layer()?);
 
-        log::set_max_level(verbosity.log_level_filter());
+        tracing::subscriber::set_global_default(subscriber)
+            .context("Failed to set global default tracing subscriber")?;
 
-        if verbosity.log_level_filter() >= log::LevelFilter::Trace {
-            log::warn!("{}", LOG_LEVEL_WARNING.trim());
+        if verbosity.tracing_level_filter() >= tracing::Level::TRACE {
+            tracing::warn!("{}", LOG_LEVEL_WARNING.trim());
         }
 
         if auto_detected_systemd_mode {
-            log::info!("Running in systemd mode, auto-detected");
+            tracing::info!("Running in systemd mode, auto-detected");
         } else {
-            log::info!("Running in systemd mode");
+            tracing::info!("Running in systemd mode");
         }
     } else {
-        env_logger::Builder::new()
-            .filter_level(verbosity.log_level_filter())
-            .init();
+        let subscriber = tracing_subscriber::Registry::default()
+            .with(verbosity.tracing_level_filter())
+            .with(
+                tracing_subscriber::fmt::layer()
+                    .with_line_number(cfg!(debug_assertions))
+                    .with_target(cfg!(debug_assertions))
+                    .with_thread_ids(false)
+                    .with_thread_names(false),
+            );
 
-        log::info!("Running in standalone mode");
+        tracing::subscriber::set_global_default(subscriber)
+            .context("Failed to set global default tracing subscriber")?;
+
+        tracing::info!("Running in standalone mode");
     }
 
     let config_path = config_path.unwrap_or_else(|| PathBuf::from(DEFAULT_CONFIG_PATH));

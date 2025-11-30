@@ -35,7 +35,7 @@ impl MysqlConfig {
     pub fn as_mysql_connect_options(&self) -> anyhow::Result<MySqlConnectOptions> {
         let mut options = MySqlConnectOptions::new()
             .database("mysql")
-            .log_statements(log::LevelFilter::Trace);
+            .log_statements(tracing::log::LevelFilter::Trace);
 
         if let Some(username) = &self.username {
             options = options.username(username);
@@ -63,7 +63,7 @@ impl MysqlConfig {
             .password
             .as_ref()
             .map(|_| "<REDACTED>".to_owned());
-        log::debug!(
+        tracing::debug!(
             "Connecting to MySQL server with parameters: {:#?}",
             display_config
         );
@@ -79,7 +79,7 @@ pub struct ServerConfig {
 impl ServerConfig {
     /// Reads the server configuration from the specified path, or the default path if none is provided.
     pub fn read_config_from_path(config_path: &Path) -> anyhow::Result<Self> {
-        log::debug!("Reading config file at {:?}", config_path);
+        tracing::debug!("Reading config file at {:?}", config_path);
 
         fs::read_to_string(config_path)
             .context(format!("Failed to read config file at {:?}", config_path))

@@ -56,8 +56,8 @@ pub struct Supervisor {
 
 impl Supervisor {
     pub async fn new(config_path: PathBuf, systemd_mode: bool) -> anyhow::Result<Self> {
-        log::debug!("Starting server supervisor");
-        log::debug!(
+        tracing::debug!("Starting server supervisor");
+        tracing::debug!(
             "Running in tokio with {} worker threads",
             tokio::runtime::Handle::current().metrics().num_workers()
         );
@@ -70,13 +70,13 @@ impl Supervisor {
         let watchdog_task =
             if systemd_mode && sd_notify::watchdog_enabled(true, &mut watchdog_micro_seconds) {
                 watchdog_duration = Some(Duration::from_micros(watchdog_micro_seconds));
-                log::debug!(
+                tracing::debug!(
                     "Systemd watchdog enabled with {} millisecond interval",
                     watchdog_micro_seconds.div_ceil(1000),
                 );
                 Some(spawn_watchdog_task(watchdog_duration.unwrap()))
             } else {
-                log::debug!("Systemd watchdog not enabled, skipping watchdog thread");
+                tracing::debug!("Systemd watchdog not enabled, skipping watchdog thread");
                 None
             };
 
@@ -133,7 +133,7 @@ impl Supervisor {
         })
     }
 
-    async fn stop_receiving_new_connections(&self) -> anyhow::Result<()> {
+    fn stop_receiving_new_connections(&self) -> anyhow::Result<()> {
         self.handler_task_tracker.close();
         self.supervisor_message_sender
             .send(SupervisorMessage::StopAcceptingNewConnections)
@@ -141,7 +141,7 @@ impl Supervisor {
         Ok(())
     }
 
-    async fn resume_receiving_new_connections(&self) -> anyhow::Result<()> {
+    fn resume_receiving_new_connections(&self) -> anyhow::Result<()> {
         self.handler_task_tracker.reopen();
         self.supervisor_message_sender
             .send(SupervisorMessage::ResumeAcceptingNewConnections)
@@ -194,30 +194,30 @@ impl Supervisor {
         // NOTE: despite closing the existing db pool, any already acquired connections will remain valid until dropped,
         //       so we don't need to close existing connections here.
         if self.config.lock().await.mysql != previous_config.mysql {
-            log::debug!("MySQL configuration has changed");
+            tracing::debug!("MySQL configuration has changed");
 
-            log::debug!("Restarting database connection pool with new configuration");
+            tracing::debug!("Restarting database connection pool with new configuration");
             self.restart_db_connection_pool().await?;
         }
 
         if self.config.lock().await.socket_path != previous_config.socket_path {
-            log::debug!("Socket path configuration has changed, reloading listener");
+            tracing::debug!("Socket path configuration has changed, reloading listener");
             if !listener_task_was_stopped {
                 listener_task_was_stopped = true;
-                log::debug!("Stop accepting new connections");
-                self.stop_receiving_new_connections().await?;
+                tracing::debug!("Stop accepting new connections");
+                self.stop_receiving_new_connections()?;
 
-                log::debug!("Waiting for existing connections to finish");
+                tracing::debug!("Waiting for existing connections to finish");
                 self.wait_for_existing_connections_to_finish().await?;
             }
 
-            log::debug!("Reloading listener with new socket path");
+            tracing::debug!("Reloading listener with new socket path");
             self.reload_listener().await?;
         }
 
         if listener_task_was_stopped {
-            log::debug!("Resuming listener task");
-            self.resume_receiving_new_connections().await?;
+            tracing::debug!("Resuming listener task");
+            self.resume_receiving_new_connections()?;
         }
 
         sd_notify::notify(false, &[sd_notify::NotifyState::Ready])?;
@@ -228,31 +228,28 @@ impl Supervisor {
     pub async fn shutdown(&self) -> anyhow::Result<()> {
         sd_notify::notify(false, &[sd_notify::NotifyState::Stopping])?;
 
-        log::debug!("Stop accepting new connections");
-        self.stop_receiving_new_connections().await?;
+        tracing::debug!("Stop accepting new connections");
+        self.stop_receiving_new_connections()?;
 
         let connection_count = self.handler_task_tracker.len();
-        log::debug!(
+        tracing::debug!(
             "Waiting for {} existing connections to finish",
             connection_count
         );
         self.wait_for_existing_connections_to_finish().await?;
 
-        log::debug!("Shutting down listener task");
+        tracing::debug!("Shutting down listener task");
         self.supervisor_message_sender
             .send(SupervisorMessage::Shutdown)
             .unwrap_or_else(|e| {
-                log::warn!(
-                    "Failed to send shutdown message to listener task: {}",
-                    e
-                );
+                tracing::warn!("Failed to send shutdown message to listener task: {}", e);
                 0
             });
 
-        log::debug!("Shutting down database connection pool");
+        tracing::debug!("Shutting down database connection pool");
         self.db_connection_pool.read().await.close().await;
 
-        log::debug!("Server shutdown complete");
+        tracing::debug!("Server shutdown complete");
 
         std::process::exit(0);
     }
@@ -266,19 +263,19 @@ impl Supervisor {
                   let mut rx = self.reload_message_receiver.resubscribe();
                   rx.recv().await
                 } => {
-                    log::info!("Reloading configuration");
+                    tracing::info!("Reloading configuration");
                     match self.reload().await {
                         Ok(()) => {
-                            log::info!("Configuration reloaded successfully");
+                            tracing::info!("Configuration reloaded successfully");
                         }
                         Err(e) => {
-                            log::error!("Failed to reload configuration: {}", e);
+                            tracing::error!("Failed to reload configuration: {}", e);
                         }
                     }
                 }
 
                 _ = self.shutdown_cancel_token.cancelled() => {
-                    log::info!("Shutting down server");
+                    tracing::info!("Shutting down server");
                     self.shutdown().await?;
                     break;
                 }
@@ -292,14 +289,14 @@ impl Supervisor {
 fn spawn_watchdog_task(duration: Duration) -> JoinHandle<()> {
     tokio::spawn(async move {
         let mut interval = interval(duration.div_f32(2.0));
-        log::debug!(
+        tracing::debug!(
             "Starting systemd watchdog task, pinging every {} milliseconds",
             duration.div_f32(2.0).as_millis()
         );
         loop {
             interval.tick().await;
             if let Err(err) = sd_notify::notify(false, &[sd_notify::NotifyState::Watchdog]) {
-                log::warn!("Failed to notify systemd watchdog: {}", err);
+                tracing::warn!("Failed to notify systemd watchdog: {}", err);
             }
         }
     })
@@ -323,7 +320,7 @@ fn spawn_status_notifier_task(task_tracker: TaskTracker) -> JoinHandle<()> {
             if let Err(e) =
                 sd_notify::notify(false, &[sd_notify::NotifyState::Status(message.as_str())])
             {
-                log::warn!("Failed to send systemd status notification: {}", e);
+                tracing::warn!("Failed to send systemd status notification: {}", e);
             }
         }
     })
@@ -334,11 +331,11 @@ async fn create_unix_listener_with_socket_path(
 ) -> anyhow::Result<TokioUnixListener> {
     let parent_directory = socket_path.parent().unwrap();
     if !parent_directory.exists() {
-        log::debug!("Creating directory {:?}", parent_directory);
+        tracing::debug!("Creating directory {:?}", parent_directory);
         fs::create_dir_all(parent_directory)?;
     }
 
-    log::info!("Listening on socket {:?}", socket_path);
+    tracing::info!("Listening on socket {:?}", socket_path);
 
     match fs::remove_file(socket_path.as_path()) {
         Ok(_) => {}
@@ -359,7 +356,7 @@ async fn create_unix_listener_with_systemd_socket() -> anyhow::Result<TokioUnixL
 
     debug_assert!(fd == 3, "Unexpected file descriptor from systemd: {}", fd);
 
-    log::debug!(
+    tracing::debug!(
         "Received file descriptor from systemd with id: '{}', assuming socket",
         fd
     );
@@ -390,7 +387,7 @@ async fn create_db_connection_pool(config: &MysqlConfig) -> anyhow::Result<MySql
     }?;
 
     let pool_opts = pool.options();
-    log::debug!(
+    tracing::debug!(
         "Successfully opened database connection pool with options (max_connections: {}, min_connections: {})",
         pool_opts.get_max_connections(),
         pool_opts.get_min_connections(),
@@ -414,11 +411,11 @@ fn spawn_signal_handler_task(
         loop {
             tokio::select! {
                 _ = sighup_stream.recv() => {
-                    log::info!("Received SIGHUP signal");
+                    tracing::info!("Received SIGHUP signal");
                     reload_sender.send(ReloadEvent).ok();
                 }
                 _ = sigterm_stream.recv() => {
-                    log::info!("Received SIGTERM signal");
+                    tracing::info!("Received SIGTERM signal");
                     shutdown_token.cancel();
                     break;
                 }
@@ -442,16 +439,16 @@ async fn listener_task(
             Ok(message) = supervisor_message_receiver.recv() => {
                 match message {
                     SupervisorMessage::StopAcceptingNewConnections => {
-                        log::info!("Listener task received stop accepting new connections message, stopping listener");
+                        tracing::info!("Listener task received stop accepting new connections message, stopping listener");
                         while let Ok(msg) = supervisor_message_receiver.try_recv() {
                             if let SupervisorMessage::ResumeAcceptingNewConnections = msg {
-                                log::info!("Listener task received resume accepting new connections message, resuming listener");
+                                tracing::info!("Listener task received resume accepting new connections message, resuming listener");
                                 break;
                             }
                         }
                     }
                     SupervisorMessage::Shutdown => {
-                        log::info!("Listener task received shutdown message, exiting listener task");
+                        tracing::info!("Listener task received shutdown message, exiting listener task");
                         break;
                     }
                     _ => {}
@@ -464,20 +461,20 @@ async fn listener_task(
             } => {
                 match accept_result {
                     Ok((conn, _addr)) => {
-                        log::debug!("Got new connection");
+                        tracing::debug!("Got new connection");
 
                         let db_pool_clone = db_pool.clone();
                         task_tracker.spawn(async {
                             match session_handler(conn, db_pool_clone).await {
                                 Ok(()) => {}
                                 Err(e) => {
-                                    log::error!("Failed to run server: {}", e);
+                                    tracing::error!("Failed to run server: {}", e);
                                 }
                             }
                         });
                     }
                     Err(e) => {
-                        log::error!("Failed to accept new connection: {}", e);
+                        tracing::error!("Failed to accept new connection: {}", e);
                     }
                 }
             }

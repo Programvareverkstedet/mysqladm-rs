@@ -31,7 +31,7 @@ fn get_unix_groups(user: &LibcUser) -> anyhow::Result<Vec<LibcGroup>> {
             Ok(Some(group)) => Some(group),
             Ok(None) => None,
             Err(e) => {
-                log::warn!(
+                tracing::warn!(
                     "Failed to look up group with GID {}: {}\nIgnoring...",
                     gid,
                     e

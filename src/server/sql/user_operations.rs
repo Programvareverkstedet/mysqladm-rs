@@ -45,7 +45,7 @@ async fn unsafe_user_exists(
     .map(|row| row.get::<bool, _>(0));
 
     if let Err(err) = &result {
-        log::error!("Failed to check if database user exists: {:?}", err);
+        tracing::error!("Failed to check if database user exists: {:?}", err);
     }
 
     result
@@ -88,7 +88,7 @@ pub async fn create_database_users(
             .map_err(|err| CreateUserError::MySqlError(err.to_string()));
 
         if let Err(err) = &result {
-            log::error!("Failed to create database user '{}': {:?}", &db_user, err);
+            tracing::error!("Failed to create database user '{}': {:?}", &db_user, err);
         }
 
         results.insert(db_user, result);
@@ -134,7 +134,7 @@ pub async fn drop_database_users(
             .map_err(|err| DropUserError::MySqlError(err.to_string()));
 
         if let Err(err) = &result {
-            log::error!("Failed to drop database user '{}': {:?}", &db_user, err);
+            tracing::error!("Failed to drop database user '{}': {:?}", &db_user, err);
         }
 
         results.insert(db_user, result);
@@ -177,7 +177,7 @@ pub async fn set_password_for_database_user(
     .map_err(|err| SetPasswordError::MySqlError(err.to_string()));
 
     if result.is_err() {
-        log::error!(
+        tracing::error!(
             "Failed to set password for database user '{}': <REDACTED>",
             &db_user,
         );
@@ -208,7 +208,7 @@ async fn database_user_is_locked_unsafe(
     .map(|row| row.get::<bool, _>(0));
 
     if let Err(err) = &result {
-        log::error!(
+        tracing::error!(
             "Failed to check if database user is locked '{}': {:?}",
             &db_user,
             err
@@ -269,7 +269,7 @@ pub async fn lock_database_users(
         .map_err(|err| LockUserError::MySqlError(err.to_string()));
 
         if let Err(err) = &result {
-            log::error!("Failed to lock database user '{}': {:?}", &db_user, err);
+            tracing::error!("Failed to lock database user '{}': {:?}", &db_user, err);
         }
 
         results.insert(db_user, result);
@@ -329,7 +329,7 @@ pub async fn unlock_database_users(
         .map_err(|err| UnlockUserError::MySqlError(err.to_string()));
 
         if let Err(err) = &result {
-            log::error!("Failed to unlock database user '{}': {:?}", &db_user, err);
+            tracing::error!("Failed to unlock database user '{}': {:?}", &db_user, err);
         }
 
         results.insert(db_user, result);
@@ -403,7 +403,7 @@ pub async fn list_database_users(
         .await;
 
         if let Err(err) = &result {
-            log::error!("Failed to list database user '{}': {:?}", &db_user, err);
+            tracing::error!("Failed to list database user '{}': {:?}", &db_user, err);
         }
 
         if let Ok(Some(user)) = result.as_mut() {
@@ -433,7 +433,7 @@ pub async fn list_all_database_users_for_unix_user(
     .map_err(|err| ListAllUsersError::MySqlError(err.to_string()));
 
     if let Err(err) = &result {
-        log::error!("Failed to list all database users: {:?}", err);
+        tracing::error!("Failed to list all database users: {:?}", err);
     }
 
     if let Ok(users) = result.as_mut() {
@@ -468,7 +468,7 @@ pub async fn append_databases_where_user_has_privileges(
     .await;
 
     if let Err(err) = &database_list {
-        log::error!(
+        tracing::error!(
             "Failed to list databases for user '{}': {:?}",
             &db_user.user,
             err

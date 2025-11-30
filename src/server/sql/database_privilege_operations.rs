@@ -50,7 +50,7 @@ fn get_mysql_row_priv_field(row: &MySqlRow, position: usize) -> Result<bool, sql
     match rev_yn(value) {
         Some(val) => Ok(val),
         _ => {
-            log::warn!(r#"Invalid value for privilege "{}": '{}'"#, field, value);
+            tracing::warn!(r#"Invalid value for privilege "{}": '{}'"#, field, value);
             Ok(false)
         }
     }
@@ -94,7 +94,7 @@ async fn unsafe_get_database_privileges(
     .await;
 
     if let Err(e) = &result {
-        log::error!(
+        tracing::error!(
             "Failed to get database privileges for '{}': {}",
             &database_name,
             e
@@ -124,7 +124,7 @@ pub async fn unsafe_get_database_privileges_for_db_user_pair(
     .await;
 
     if let Err(e) = &result {
-        log::error!(
+        tracing::error!(
             "Failed to get database privileges for '{}.{}': {}",
             &database_name,
             &user_name,
@@ -206,7 +206,7 @@ pub async fn get_all_database_privileges(
     .map_err(|e| GetAllDatabasesPrivilegeDataError::MySqlError(e.to_string()));
 
     if let Err(e) = &result {
-        log::error!("Failed to get all database privileges: {:?}", e);
+        tracing::error!("Failed to get all database privileges: {:?}", e);
     }
 
     result
@@ -298,7 +298,7 @@ async fn unsafe_apply_privilege_diff(
     };
 
     if let Err(e) = &result {
-        log::error!("Failed to apply database privilege diff: {}", e);
+        tracing::error!("Failed to apply database privilege diff: {}", e);
     }
 
     result
@@ -380,7 +380,7 @@ async fn validate_diff(
             }
         }
         DatabasePrivilegesDiff::Noop { .. } => {
-            log::warn!(
+            tracing::warn!(
                 "Server got sent a noop database privilege diff to validate, is the client buggy?"
             );
             Ok(())

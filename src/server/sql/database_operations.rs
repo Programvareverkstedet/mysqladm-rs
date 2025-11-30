@@ -33,7 +33,7 @@ pub(super) async fn unsafe_database_exists(
             .await;
 
     if let Err(err) = &result {
-        log::error!(
+        tracing::error!(
             "Failed to check if database '{}' exists: {:?}",
             &database_name,
             err
@@ -93,7 +93,7 @@ pub async fn create_databases(
                 .map_err(|err| CreateDatabaseError::MySqlError(err.to_string()));
 
         if let Err(err) = &result {
-            log::error!("Failed to create database '{}': {:?}", &database_name, err);
+            tracing::error!("Failed to create database '{}': {:?}", &database_name, err);
         }
 
         results.insert(database_name, result);
@@ -152,7 +152,7 @@ pub async fn drop_databases(
                 .map_err(|err| DropDatabaseError::MySqlError(err.to_string()));
 
         if let Err(err) = &result {
-            log::error!("Failed to drop database '{}': {:?}", &database_name, err);
+            tracing::error!("Failed to drop database '{}': {:?}", &database_name, err);
         }
 
         results.insert(database_name, result);
@@ -216,7 +216,7 @@ pub async fn list_databases(
         });
 
         if let Err(err) = &result {
-            log::error!("Failed to list database '{}': {:?}", &database_name, err);
+            tracing::error!("Failed to list database '{}': {:?}", &database_name, err);
         }
 
         results.insert(database_name, result);
@@ -243,7 +243,7 @@ pub async fn list_all_databases_for_user(
     .map_err(|err| ListAllDatabasesError::MySqlError(err.to_string()));
 
     if let Err(err) = &result {
-        log::error!(
+        tracing::error!(
             "Failed to list databases for user '{}': {:?}",
             unix_user.username,
             err
