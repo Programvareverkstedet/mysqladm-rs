@@ -38,8 +38,8 @@
       mkApp = program: { type = "app"; program = toString program; };
     in forAllSystems (system: pkgs: _: {
       muscl = mkApp (lib.getExe self.packages.${system}.muscl);
-      coverage = mkApp (pkgs.writeScript "muscl-coverage" ''
-        ${lib.getExe pkgs.python3} -m http.server -d "${self.packages.${system}.coverage}/html/src"
+      coverage = mkApp (pkgs.writeShellScript "muscl-coverage" ''
+        ${lib.getExe pkgs.python3} -m http.server -d "${self.packages.${system}.coverage}/html"
       '');
       vm = mkApp "${self.nixosConfigurations.vm.config.system.build.vm}/bin/run-nixos-vm";
     });
