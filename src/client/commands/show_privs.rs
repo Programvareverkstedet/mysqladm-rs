@@ -15,7 +15,7 @@ use crate::{
 
 #[derive(Parser, Debug, Clone)]
 pub struct ShowPrivsArgs {
-    /// The name of the database(s) to show
+    /// The MySQL database(s) to show privileges for
     #[arg(num_args = 0..)]
     name: Vec<MySQLDatabase>,
 

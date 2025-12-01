@@ -15,6 +15,7 @@ use crate::{
 
 #[derive(Parser, Debug, Clone)]
 pub struct DropUserArgs {
+    /// The MySQL user(s) to drop
     #[arg(num_args = 1..)]
     username: Vec<MySQLUser>,
 

@@ -26,7 +26,7 @@ use crate::{
 
 #[derive(Parser, Debug, Clone)]
 pub struct EditPrivsArgs {
-    /// The name of the database to edit privileges for
+    /// The MySQL database to edit privileges for
     pub name: Option<MySQLDatabase>,
 
     #[arg(

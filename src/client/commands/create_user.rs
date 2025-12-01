@@ -16,6 +16,7 @@ use crate::{
 
 #[derive(Parser, Debug, Clone)]
 pub struct CreateUserArgs {
+    /// The MySQL user(s) to create
     #[arg(num_args = 1..)]
     username: Vec<MySQLUser>,
 

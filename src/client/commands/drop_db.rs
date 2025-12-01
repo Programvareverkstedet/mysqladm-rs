@@ -15,7 +15,7 @@ use crate::{
 
 #[derive(Parser, Debug, Clone)]
 pub struct DropDbArgs {
-    /// The name of the database(s) to drop
+    /// The MySQL database(s) to drop
     #[arg(num_args = 1..)]
     name: Vec<MySQLDatabase>,
 

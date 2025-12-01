@@ -17,9 +17,11 @@ use crate::{
 
 #[derive(Parser, Debug, Clone)]
 pub struct PasswdUserArgs {
+    /// The MySQL user whose password is to be changed
     username: MySQLUser,
 
-    #[clap(short, long)]
+    /// Read the new password from a file instead of prompting for it
+    #[clap(short, long, value_name = "FILE")]
     password_file: Option<String>,
 
     /// Print the information as JSON

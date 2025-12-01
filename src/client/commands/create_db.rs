@@ -15,7 +15,7 @@ use crate::{
 
 #[derive(Parser, Debug, Clone)]
 pub struct CreateDbArgs {
-    /// The name of the database(s) to create
+    /// The MySQL database(s) to create
     #[arg(num_args = 1..)]
     name: Vec<MySQLDatabase>,
 

@@ -13,6 +13,7 @@ use crate::{
 
 #[derive(Parser, Debug, Clone)]
 pub struct ShowUserArgs {
+    /// The MySQL user(s) to show
     #[arg(num_args = 0..)]
     username: Vec<MySQLUser>,
 

@@ -15,6 +15,7 @@ use crate::{
 
 #[derive(Parser, Debug, Clone)]
 pub struct UnlockUserArgs {
+    /// The MySQL user(s) to unlock
     #[arg(num_args = 1..)]
     username: Vec<MySQLUser>,
 
