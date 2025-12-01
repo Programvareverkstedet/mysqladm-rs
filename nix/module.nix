@@ -116,7 +116,7 @@ in
       serviceConfig = {
         ExecStart = [
           ""
-          "${lib.getExe cfg.package} ${cfg.logLevel} server --systemd socket-activate"
+          "${lib.getExe cfg.package} ${cfg.logLevel} server --systemd --disable-landlock socket-activate"
         ];
 
         ExecReload = [

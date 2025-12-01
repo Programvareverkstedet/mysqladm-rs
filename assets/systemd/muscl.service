@@ -4,7 +4,7 @@ Requires=muscl.socket
 
 [Service]
 Type=notify
-ExecStart=/usr/bin/muscl server --systemd socket-activate
+ExecStart=/usr/bin/muscl server --systemd --disable-landlock socket-activate
 ExecReload=/usr/bin/kill -HUP $MAINPID
 
 WatchdogSec=15

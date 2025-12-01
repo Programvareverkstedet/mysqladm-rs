@@ -147,8 +147,10 @@ fn handle_server_command(args: &Args) -> anyhow::Result<Option<()>> {
                 "The executable should not be SUID or SGID when running the server manually"
             );
 
-            landlock_restrict_server(args.config.as_deref())
-                .context("Failed to apply Landlock restrictions to the server process")?;
+            if !command.disable_landlock {
+                landlock_restrict_server(args.config.as_deref())
+                    .context("Failed to apply Landlock restrictions to the server process")?;
+            }
 
             tokio_start_server(
                 args.config.to_owned(),

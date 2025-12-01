@@ -10,10 +10,13 @@ use crate::{core::common::DEFAULT_CONFIG_PATH, server::supervisor::Supervisor};
 #[derive(Parser, Debug, Clone)]
 pub struct ServerArgs {
     #[command(subcommand)]
-    subcmd: ServerCommand,
+    pub subcmd: ServerCommand,
 
     #[arg(long)]
-    systemd: bool,
+    pub systemd: bool,
+
+    #[arg(long)]
+    pub disable_landlock: bool,
 }
 
 #[derive(Parser, Debug, Clone)]
