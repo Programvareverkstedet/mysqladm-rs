@@ -159,7 +159,7 @@ fn connect_to_external_server(
 /// Drop privileges to the real user and group of the process.
 /// If the process is not running with elevated privileges, this function
 /// is a no-op.
-fn drop_privs() -> anyhow::Result<()> {
+pub fn drop_privs() -> anyhow::Result<()> {
     tracing::debug!("Dropping privileges");
     let real_uid = nix::unistd::getuid();
     let real_gid = nix::unistd::getgid();

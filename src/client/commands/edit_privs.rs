@@ -2,6 +2,7 @@ use std::collections::BTreeSet;
 
 use anyhow::Context;
 use clap::Parser;
+use clap_complete::ArgValueCompleter;
 use dialoguer::{Confirm, Editor};
 use futures_util::SinkExt;
 use nix::unistd::{User, getuid};
@@ -10,6 +11,7 @@ use tokio_stream::StreamExt;
 use crate::{
     client::commands::erroneous_server_response,
     core::{
+        completion::mysql_database_completer,
         database_privileges::{
             DatabasePrivilegeEditEntry, DatabasePrivilegeRow, DatabasePrivilegeRowDiff,
             DatabasePrivilegesDiff, create_or_modify_privilege_rows, diff_privileges,
@@ -27,6 +29,7 @@ use crate::{
 #[derive(Parser, Debug, Clone)]
 pub struct EditPrivsArgs {
     /// The MySQL database to edit privileges for
+    #[arg(add = ArgValueCompleter::new(mysql_database_completer))]
     pub name: Option<MySQLDatabase>,
 
     #[arg(

@@ -1,4 +1,5 @@
 use clap::Parser;
+use clap_complete::ArgValueCompleter;
 use futures_util::SinkExt;
 use prettytable::{Cell, Row, Table};
 use tokio_stream::StreamExt;
@@ -6,6 +7,7 @@ use tokio_stream::StreamExt;
 use crate::{
     client::commands::erroneous_server_response,
     core::{
+        completion::mysql_database_completer,
         protocol::{ClientToServerMessageStream, Request, Response},
         types::MySQLDatabase,
     },
@@ -14,7 +16,7 @@ use crate::{
 #[derive(Parser, Debug, Clone)]
 pub struct ShowDbArgs {
     /// The MySQL database(s) to show
-    #[arg(num_args = 0..)]
+    #[arg(num_args = 0.., add = ArgValueCompleter::new(mysql_database_completer))]
     name: Vec<MySQLDatabase>,
 
     /// Print the information as JSON

@@ -24,14 +24,18 @@ buildFunction {
 
   nativeBuildInputs = [ installShellFiles ];
   postInstall = let
+  # "$out/bin/${mainProgram}" generate-completions --shell "${shell}" --command "${command}" > "$TMP/muscl.${shell}"
     commands = lib.mapCartesianProduct ({ shell, command }: ''
-      "$out/bin/${mainProgram}" generate-completions --shell "${shell}" --command "${command}" > "$TMP/muscl.${shell}"
-      installShellCompletion "--${shell}" --cmd "${command}" "$TMP/muscl.${shell}"
+      COMPLETE=${shell} "$out/bin/${command}" > "$TMP/${command}.${shell}"
+      installShellCompletion "--${shell}" --cmd "${command}" "$TMP/${command}.${shell}"
     '') {
       shell = [ "bash" "zsh" "fish" ];
       command = [ "muscl" "mysql-dbadm" "mysql-useradm" ];
     };
-  in lib.concatStringsSep "\n" commands + ''
+  in ''
+    ln -sr "$out/bin/muscl" "$out/bin/mysql-dbadm"
+    ln -sr "$out/bin/muscl" "$out/bin/mysql-useradm"
+  '' + lib.concatStringsSep "\n" commands + ''
     install -Dm444 assets/systemd/muscl.socket -t "$out/lib/systemd/system"
     install -Dm644 assets/systemd/muscl.service -t "$out/lib/systemd/system"
     substituteInPlace "$out/lib/systemd/system/muscl.service" \

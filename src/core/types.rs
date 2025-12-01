@@ -1,4 +1,5 @@
 use std::{
+    ffi::OsString,
     fmt,
     ops::{Deref, DerefMut},
     str::FromStr,
@@ -49,6 +50,12 @@ impl From<String> for MySQLUser {
     }
 }
 
+impl From<MySQLUser> for OsString {
+    fn from(val: MySQLUser) -> Self {
+        val.0.into()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, Default)]
 pub struct MySQLDatabase(String);
 
@@ -89,6 +96,12 @@ impl From<&str> for MySQLDatabase {
 impl From<String> for MySQLDatabase {
     fn from(s: String) -> Self {
         MySQLDatabase(s)
+    }
+}
+
+impl From<MySQLDatabase> for OsString {
+    fn from(val: MySQLDatabase) -> Self {
+        val.0.into()
     }
 }
 

@@ -5,6 +5,7 @@ use sqlx::prelude::*;
 
 use serde::{Deserialize, Serialize};
 
+use crate::core::protocol::CompleteDatabaseNameResponse;
 use crate::core::types::MySQLDatabase;
 use crate::{
     core::{
@@ -41,6 +42,45 @@ pub(super) async fn unsafe_database_exists(
     }
 
     Ok(result?.is_some())
+}
+
+pub async fn complete_database_name(
+    database_prefix: String,
+    unix_user: &UnixUser,
+    connection: &mut MySqlConnection,
+) -> CompleteDatabaseNameResponse {
+    let result = sqlx::query(
+        r#"
+          SELECT `SCHEMA_NAME` AS `database`
+          FROM `information_schema`.`SCHEMATA`
+          WHERE `SCHEMA_NAME` NOT IN ('information_schema', 'performance_schema', 'mysql', 'sys')
+            AND `SCHEMA_NAME` REGEXP ?
+            AND `SCHEMA_NAME` LIKE ?
+        "#,
+    )
+    .bind(create_user_group_matching_regex(unix_user))
+    .bind(format!("{}%", database_prefix))
+    .fetch_all(connection)
+    .await;
+
+    match result {
+        Ok(rows) => rows
+            .into_iter()
+            .filter_map(|row| {
+                let database: String = row.try_get("database").ok()?;
+                Some(database.into())
+            })
+            .collect(),
+        Err(err) => {
+            tracing::error!(
+                "Failed to complete database name for prefix '{}' and user '{}': {:?}",
+                database_prefix,
+                unix_user.username,
+                err
+            );
+            vec![]
+        }
+    }
 }
 
 pub async fn create_databases(

@@ -51,6 +51,44 @@ async fn unsafe_user_exists(
     result
 }
 
+pub async fn complete_user_name(
+    user_prefix: String,
+    unix_user: &UnixUser,
+    connection: &mut MySqlConnection,
+) -> Vec<MySQLUser> {
+    let result = sqlx::query(
+        r#"
+          SELECT `User` AS `user`
+          FROM `mysql`.`user`
+          WHERE `User` REGEXP ?
+            AND `User` LIKE ?
+        "#,
+    )
+    .bind(create_user_group_matching_regex(unix_user))
+    .bind(format!("{}%", user_prefix))
+    .fetch_all(connection)
+    .await;
+
+    match result {
+        Ok(rows) => rows
+            .into_iter()
+            .filter_map(|row| {
+                let user: String = try_get_with_binary_fallback(&row, "user").ok()?;
+                Some(user.into())
+            })
+            .collect(),
+        Err(err) => {
+            tracing::error!(
+                "Failed to complete user name for prefix '{}' and user '{}': {:?}",
+                user_prefix,
+                unix_user.username,
+                err
+            );
+            vec![]
+        }
+    }
+}
+
 pub async fn create_database_users(
     db_users: Vec<MySQLUser>,
     unix_user: &UnixUser,

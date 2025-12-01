@@ -1,4 +1,5 @@
 use clap::Parser;
+use clap_complete::ArgValueCompleter;
 use futures_util::SinkExt;
 use prettytable::{Cell, Row, Table};
 use tokio_stream::StreamExt;
@@ -7,6 +8,7 @@ use crate::{
     client::commands::erroneous_server_response,
     core::{
         common::yn,
+        completion::mysql_database_completer,
         database_privileges::{DATABASE_PRIVILEGE_FIELDS, db_priv_field_human_readable_name},
         protocol::{ClientToServerMessageStream, Request, Response},
         types::MySQLDatabase,
@@ -16,7 +18,7 @@ use crate::{
 #[derive(Parser, Debug, Clone)]
 pub struct ShowPrivsArgs {
     /// The MySQL database(s) to show privileges for
-    #[arg(num_args = 0..)]
+    #[arg(num_args = 0.., add = ArgValueCompleter::new(mysql_database_completer))]
     name: Vec<MySQLDatabase>,
 
     /// Print the information as JSON

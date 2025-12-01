@@ -1,10 +1,12 @@
 use clap::Parser;
+use clap_complete::ArgValueCompleter;
 use futures_util::SinkExt;
 use tokio_stream::StreamExt;
 
 use crate::{
     client::commands::erroneous_server_response,
     core::{
+        completion::mysql_user_completer,
         protocol::{
             ClientToServerMessageStream, Request, Response, print_drop_users_output_status,
             print_drop_users_output_status_json,
@@ -16,7 +18,7 @@ use crate::{
 #[derive(Parser, Debug, Clone)]
 pub struct DropUserArgs {
     /// The MySQL user(s) to drop
-    #[arg(num_args = 1..)]
+    #[arg(num_args = 1.., add = ArgValueCompleter::new(mysql_user_completer))]
     username: Vec<MySQLUser>,
 
     /// Print the information as JSON

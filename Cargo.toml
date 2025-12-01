@@ -22,7 +22,7 @@ async-bincode = "0.8.0"
 bincode = "2.0.1"
 clap = { version = "4.5.53", features = ["derive"] }
 clap-verbosity-flag = { version = "3.0.4", features = [ "tracing" ] }
-clap_complete = "4.5.61"
+clap_complete = { version = "4.5.61", features = ["unstable-dynamic"] }
 derive_more = { version = "2.0.1", features = ["display", "error"] }
 dialoguer = "0.12.0"
 futures-util = "0.3.31"

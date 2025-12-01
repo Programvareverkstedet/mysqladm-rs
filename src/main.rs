@@ -3,7 +3,7 @@ extern crate prettytable;
 
 use anyhow::Context;
 use clap::{CommandFactory, Parser, ValueEnum};
-use clap_complete::{Shell, generate};
+use clap_complete::{CompleteEnv, Shell, generate};
 use clap_verbosity_flag::Verbosity;
 
 use std::path::PathBuf;
@@ -103,6 +103,10 @@ enum ToplevelCommands {
 
 /// **WARNING:** This function may be run with elevated privileges.
 fn main() -> anyhow::Result<()> {
+    if handle_dynamic_completion()?.is_some() {
+        return Ok(());
+    }
+
     #[cfg(feature = "mysql-admutils-compatibility")]
     if handle_mysql_admutils_command()?.is_some() {
         return Ok(());
@@ -127,6 +131,41 @@ fn main() -> anyhow::Result<()> {
     tokio_run_command(args.command, connection)?;
 
     Ok(())
+}
+
+/// **WARNING:** This function may be run with elevated privileges.
+fn handle_dynamic_completion() -> anyhow::Result<Option<()>> {
+    if std::env::var_os("COMPLETE").is_some() {
+        #[cfg(feature = "suid-sgid-mode")]
+        if executable_is_suid_or_sgid()? {
+            use crate::core::bootstrap::drop_privs;
+            drop_privs()?
+        }
+
+        let argv0 = std::env::args()
+            .next()
+            .and_then(|s| {
+                PathBuf::from(s)
+                    .file_name()
+                    .map(|s| s.to_string_lossy().to_string())
+            })
+            .ok_or(anyhow::anyhow!(
+                "Could not determine executable name for completion"
+            ))?;
+
+        let command = match argv0.as_str() {
+            "muscl" => Args::command(),
+            "mysql-dbadm" => mysql_dbadm::Command::command(),
+            "mysql-useradm" => mysql_useradm::Command::command(),
+            command => anyhow::bail!("Unknown executable name: `{}`", command),
+        };
+
+        CompleteEnv::with_factory(move || command.clone()).complete();
+
+        Ok(Some(()))
+    } else {
+        Ok(None)
+    }
 }
 
 /// **WARNING:** This function may be run with elevated privileges.

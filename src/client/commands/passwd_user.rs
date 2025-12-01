@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use anyhow::Context;
 use clap::Parser;
+use clap_complete::ArgValueCompleter;
 use dialoguer::Password;
 use futures_util::SinkExt;
 use tokio_stream::StreamExt;
@@ -9,6 +10,7 @@ use tokio_stream::StreamExt;
 use crate::{
     client::commands::erroneous_server_response,
     core::{
+        completion::mysql_user_completer,
         protocol::{
             ClientToServerMessageStream, ListUsersError, Request, Response,
             print_set_password_output_status,
@@ -20,6 +22,7 @@ use crate::{
 #[derive(Parser, Debug, Clone)]
 pub struct PasswdUserArgs {
     /// The MySQL user whose password is to be changed
+    #[arg(add = ArgValueCompleter::new(mysql_user_completer))]
     username: MySQLUser,
 
     /// Read the new password from a file instead of prompting for it

@@ -18,15 +18,16 @@ use crate::{
         authorization::check_authorization,
         sql::{
             database_operations::{
-                create_databases, drop_databases, list_all_databases_for_user, list_databases,
+                complete_database_name, create_databases, drop_databases,
+                list_all_databases_for_user, list_databases,
             },
             database_privilege_operations::{
                 apply_privilege_diffs, get_all_database_privileges, get_databases_privilege_data,
             },
             user_operations::{
-                create_database_users, drop_database_users, list_all_database_users_for_unix_user,
-                list_database_users, lock_database_users, set_password_for_database_user,
-                unlock_database_users,
+                complete_user_name, create_database_users, drop_database_users,
+                list_all_database_users_for_unix_user, list_database_users, lock_database_users,
+                set_password_for_database_user, unlock_database_users,
             },
         },
     },
@@ -170,6 +171,33 @@ async fn session_handler_with_db_connection(
             Request::CheckAuthorization(dbs_or_users) => {
                 let result = check_authorization(dbs_or_users, unix_user).await;
                 Response::CheckAuthorization(result)
+            }
+            Request::CompleteDatabaseName(partial_database_name) => {
+                // TODO: more correct validation here
+                if !partial_database_name
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+                {
+                    Response::CompleteDatabaseName(vec![])
+                } else {
+                    let result =
+                        complete_database_name(partial_database_name, unix_user, db_connection)
+                            .await;
+                    Response::CompleteDatabaseName(result)
+                }
+            }
+            Request::CompleteUserName(partial_user_name) => {
+                // TODO: more correct validation here
+                if !partial_user_name
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+                {
+                    Response::CompleteUserName(vec![])
+                } else {
+                    let result =
+                        complete_user_name(partial_user_name, unix_user, db_connection).await;
+                    Response::CompleteUserName(result)
+                }
             }
             Request::CreateDatabases(databases_names) => {
                 let result = create_databases(databases_names, unix_user, db_connection).await;
