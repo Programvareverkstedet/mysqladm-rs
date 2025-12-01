@@ -51,6 +51,6 @@ RestrictRealtime=true
 RestrictSUIDSGID=true
 SocketBindDeny=any
 SystemCallArchitectures=native
-SystemCallFilter=@system-service
+SystemCallFilter=@system-service @sandbox
 SystemCallFilter=~@privileged @resources
 UMask=0777

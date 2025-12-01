@@ -19,7 +19,7 @@ use crate::{
         common::executable_is_suid_or_sgid,
         protocol::{Response, create_client_to_server_message_stream},
     },
-    server::command::ServerArgs,
+    server::{command::ServerArgs, landlock::landlock_restrict_server},
 };
 
 #[cfg(feature = "mysql-admutils-compatibility")]
@@ -146,6 +146,10 @@ fn handle_server_command(args: &Args) -> anyhow::Result<Option<()>> {
                 !executable_is_suid_or_sgid()?,
                 "The executable should not be SUID or SGID when running the server manually"
             );
+
+            landlock_restrict_server(args.config.as_deref())
+                .context("Failed to apply Landlock restrictions to the server process")?;
+
             tokio_start_server(
                 args.config.to_owned(),
                 args.verbose.to_owned(),

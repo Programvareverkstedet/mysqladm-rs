@@ -14,6 +14,7 @@ use crate::{
     },
     server::{
         config::{MysqlConfig, ServerConfig},
+        landlock::landlock_restrict_server,
         session_handler,
     },
 };
@@ -222,6 +223,9 @@ fn invoke_server_with_config(config_path: PathBuf) -> anyhow::Result<StdUnixStre
         }
         nix::unistd::ForkResult::Child => {
             tracing::debug!("Running server in child process");
+
+            landlock_restrict_server(Some(config_path.as_path()))
+                .context("Failed to apply Landlock restrictions to the server process")?;
 
             match run_forked_server(config_path, server_socket, unix_user) {
                 Err(e) => Err(e),
