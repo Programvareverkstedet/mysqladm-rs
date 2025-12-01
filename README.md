@@ -80,6 +80,14 @@ To stop and remove the container, run the following command:
 docker stop mariadb
 ```
 
+## Filter logs by user with journalctl
+
+If you want to filter the server logs by user, you can use journalctl's built-in filtering capabilities.
+
+```bash
+journalctl -eu muscl F_USER=<username>
+```
+
 ## Compatibility mode with [mysql-admutils](https://git.pvv.ntnu.no/Projects/mysql-admutils)
 
 If you enable the feature flag `mysql-admutils-compatibility` (enabled by default), the output directory will contain two symlinks to the binary, `mysql-dbadm` and `mysql-useradm`. In the same fashion as busybox, the binary will react to its `argv[0]` and behave as if it was called with the corresponding name. While the internal functionality is written in rust, these modes strive to behave as similar as possible to the original programs.
