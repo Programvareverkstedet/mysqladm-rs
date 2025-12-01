@@ -5,7 +5,10 @@ use clap::Parser;
 use clap_verbosity_flag::Verbosity;
 use tracing_subscriber::prelude::*;
 
-use crate::{core::common::DEFAULT_CONFIG_PATH, server::supervisor::Supervisor};
+use crate::{
+    core::common::{ASCII_BANNER, DEFAULT_CONFIG_PATH},
+    server::supervisor::Supervisor,
+};
 
 #[derive(Parser, Debug, Clone)]
 pub struct ServerArgs {
@@ -46,6 +49,18 @@ const LOG_LEVEL_WARNING: &str = r#"
 ===================================================
 "#;
 
+pub fn trace_server_prelude() {
+    let message = [
+        ASCII_BANNER,
+        "",
+        "Hacked together by yours truly, Programvareverkstedet <projects@pvv.ntnu.no>",
+        "If you experience any bugs or turbulence, please give us a heads up :)",
+        "",
+    ]
+    .join("\n");
+    tracing::info!(message);
+}
+
 pub async fn handle_command(
     config_path: Option<PathBuf>,
     verbosity: Verbosity,
@@ -69,6 +84,8 @@ pub async fn handle_command(
         tracing::subscriber::set_global_default(subscriber)
             .context("Failed to set global default tracing subscriber")?;
 
+        trace_server_prelude();
+
         if verbosity.tracing_level_filter() >= tracing::Level::TRACE {
             tracing::warn!("{}", LOG_LEVEL_WARNING.trim());
         }
@@ -91,6 +108,8 @@ pub async fn handle_command(
 
         tracing::subscriber::set_global_default(subscriber)
             .context("Failed to set global default tracing subscriber")?;
+
+        trace_server_prelude();
 
         tracing::info!("Running in standalone mode");
     }

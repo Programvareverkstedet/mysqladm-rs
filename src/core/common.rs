@@ -1,4 +1,5 @@
 use anyhow::Context;
+use indoc::indoc;
 use nix::unistd::{Group as LibcGroup, User as LibcUser};
 
 #[cfg(not(target_os = "macos"))]
@@ -6,6 +7,16 @@ use std::ffi::CString;
 
 pub const DEFAULT_CONFIG_PATH: &str = "/etc/muscl/config.toml";
 pub const DEFAULT_SOCKET_PATH: &str = "/run/muscl/muscl.sock";
+
+pub const ASCII_BANNER: &str = indoc! {
+  r#"
+                                __
+     ____ ___  __  ____________/ /
+    / __ `__ \/ / / / ___/ ___/ /
+   / / / / / / /_/ (__  ) /__/ /
+  /_/ /_/ /_/\__,_/____/\___/_/
+  "#
+};
 
 #[derive(Debug, Clone)]
 pub struct UnixUser {
