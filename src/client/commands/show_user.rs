@@ -20,6 +20,10 @@ pub struct ShowUserArgs {
     /// Print the information as JSON
     #[arg(short, long)]
     json: bool,
+
+    /// Return a non-zero exit code if any of the results were erroneous
+    #[arg(short, long)]
+    fail: bool,
 }
 
 pub async fn show_users(
@@ -37,12 +41,14 @@ pub async fn show_users(
         anyhow::bail!(err);
     }
 
+    let mut contained_errors = false;
     let users = match server_connection.next().await {
         Some(Ok(Response::ListUsers(users))) => users
             .into_iter()
             .filter_map(|(username, result)| match result {
                 Ok(user) => Some(user),
                 Err(err) => {
+                    contained_errors = true;
                     eprintln!("{}", err.to_error_message(&username));
                     eprintln!("Skipping...");
                     None
@@ -87,6 +93,10 @@ pub async fn show_users(
             ]);
         }
         table.printstd();
+    }
+
+    if args.fail && contained_errors {
+        std::process::exit(1);
     }
 
     Ok(())

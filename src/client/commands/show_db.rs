@@ -20,6 +20,10 @@ pub struct ShowDbArgs {
     /// Print the information as JSON
     #[arg(short, long)]
     json: bool,
+
+    /// Return a non-zero exit code if any of the results were erroneous
+    #[arg(short, long)]
+    fail: bool,
 }
 
 pub async fn show_databases(
@@ -36,12 +40,14 @@ pub async fn show_databases(
 
     // TODO: collect errors for json output.
 
+    let mut contained_errors = false;
     let database_list = match server_connection.next().await {
         Some(Ok(Response::ListDatabases(databases))) => databases
             .into_iter()
             .filter_map(|(database_name, result)| match result {
                 Ok(database_row) => Some(database_row),
                 Err(err) => {
+                    contained_errors = true;
                     eprintln!("{}", err.to_error_message(&database_name));
                     eprintln!("Skipping...");
                     println!();
@@ -74,6 +80,10 @@ pub async fn show_databases(
             table.add_row(row![db.database]);
         }
         table.printstd();
+    }
+
+    if args.fail && contained_errors {
+        std::process::exit(1);
     }
 
     Ok(())

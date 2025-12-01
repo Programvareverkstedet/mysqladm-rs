@@ -22,6 +22,10 @@ pub struct ShowPrivsArgs {
     /// Print the information as JSON
     #[arg(short, long)]
     json: bool,
+
+    /// Return a non-zero exit code if any of the results were erroneous
+    #[arg(short, long)]
+    fail: bool,
 }
 
 pub async fn show_database_privileges(
@@ -35,12 +39,14 @@ pub async fn show_database_privileges(
     };
     server_connection.send(message).await?;
 
+    let mut contained_errors = false;
     let privilege_data = match server_connection.next().await {
         Some(Ok(Response::ListPrivileges(databases))) => databases
             .into_iter()
             .filter_map(|(database_name, result)| match result {
                 Ok(privileges) => Some(privileges),
                 Err(err) => {
+                    contained_errors = true;
                     eprintln!("{}", err.to_error_message(&database_name));
                     eprintln!("Skipping...");
                     println!();
@@ -94,6 +100,10 @@ pub async fn show_database_privileges(
             ]);
         }
         table.printstd();
+    }
+
+    if args.fail && contained_errors {
+        std::process::exit(1);
     }
 
     Ok(())
