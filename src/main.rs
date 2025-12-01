@@ -71,18 +71,22 @@ enum Command {
     #[command(flatten)]
     Client(client::commands::ClientCommand),
 
+    /// Run the server
     #[command(hide = true)]
     Server(server::command::ServerArgs),
 
+    /// Generate shell completions for the program.
     #[command(hide = true)]
     GenerateCompletions(GenerateCompletionArgs),
 }
 
 #[derive(Parser, Debug, Clone)]
 struct GenerateCompletionArgs {
+    /// Which shell to generate completions for.
     #[arg(long, default_value = "bash")]
     shell: Shell,
 
+    /// Which top-level command to generate completions for.
     #[arg(long, default_value = "muscl")]
     command: ToplevelCommands,
 }

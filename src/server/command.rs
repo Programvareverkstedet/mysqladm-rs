@@ -12,18 +12,25 @@ pub struct ServerArgs {
     #[command(subcommand)]
     pub subcmd: ServerCommand,
 
+    /// Enable systemd mode
     #[arg(long)]
     pub systemd: bool,
 
+    /// Disable Landlock sandboxing.
+    ///
+    /// This is useful if you are planning to reload the server's configuration.
     #[arg(long)]
     pub disable_landlock: bool,
 }
 
 #[derive(Parser, Debug, Clone)]
 pub enum ServerCommand {
+    /// Start the server and listen for incoming connections on the unix socket
+    /// specified in the configuration file.
     #[command()]
     Listen,
 
+    /// Start the server using systemd socket activation.
     #[command()]
     SocketActivate,
 }
