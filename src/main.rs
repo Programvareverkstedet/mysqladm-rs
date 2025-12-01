@@ -47,6 +47,7 @@ struct Args {
         short,
         long,
         value_name = "PATH",
+        value_hint = clap::ValueHint::FilePath,
         global = true,
         hide_short_help = true
     )]
@@ -57,6 +58,7 @@ struct Args {
         short,
         long,
         value_name = "PATH",
+        value_hint = clap::ValueHint::FilePath,
         global = true,
         hide_short_help = true
     )]

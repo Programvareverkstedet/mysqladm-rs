@@ -43,7 +43,12 @@ pub struct EditPrivsArgs {
     pub json: bool,
 
     /// Specify the text editor to use for editing privileges
-    #[arg(short, long)]
+    #[arg(
+      short,
+      long,
+      value_name = "COMMAND",
+      value_hint = clap::ValueHint::CommandString,
+    )]
     pub editor: Option<String>,
 
     /// Disable interactive confirmation before saving changes
