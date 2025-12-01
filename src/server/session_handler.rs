@@ -4,6 +4,7 @@ use futures_util::{SinkExt, StreamExt};
 use indoc::concatdoc;
 use sqlx::{MySqlConnection, MySqlPool};
 use tokio::{net::UnixStream, sync::RwLock};
+use tracing::Instrument;
 
 use crate::{
     core::{
@@ -77,13 +78,22 @@ pub async fn session_handler(
         }
     };
 
-    tracing::info!("Accepted connection from user: {}", unix_user);
+    let span = tracing::info_span!("user_session", user = %unix_user);
 
-    let result = session_handler_with_unix_user(socket, &unix_user, db_pool).await;
+    (async move {
+        tracing::info!("Accepted connection from user: {}", unix_user);
 
-    tracing::info!("Finished handling requests for connection from user: {}", unix_user);
+        let result = session_handler_with_unix_user(socket, &unix_user, db_pool).await;
 
-    result
+        tracing::info!(
+            "Finished handling requests for connection from user: {}",
+            unix_user,
+        );
+
+        result
+    })
+    .instrument(span)
+    .await
 }
 
 pub async fn session_handler_with_unix_user(
