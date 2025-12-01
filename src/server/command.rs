@@ -6,7 +6,7 @@ use clap_verbosity_flag::Verbosity;
 use tracing_subscriber::prelude::*;
 
 use crate::{
-    core::common::{ASCII_BANNER, DEFAULT_CONFIG_PATH},
+    core::common::{ASCII_BANNER, DEFAULT_CONFIG_PATH, KIND_REGARDS},
     server::supervisor::Supervisor,
 };
 
@@ -50,14 +50,7 @@ const LOG_LEVEL_WARNING: &str = r#"
 "#;
 
 pub fn trace_server_prelude() {
-    let message = [
-        ASCII_BANNER,
-        "",
-        "Hacked together by yours truly, Programvareverkstedet <projects@pvv.ntnu.no>",
-        "If you experience any bugs or turbulence, please give us a heads up :)",
-        "",
-    ]
-    .join("\n");
+    let message = [ASCII_BANNER, "", KIND_REGARDS, ""].join("\n");
     tracing::info!(message);
 }
 

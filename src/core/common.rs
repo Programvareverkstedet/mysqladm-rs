@@ -19,6 +19,11 @@ pub const ASCII_BANNER: &str = indoc! {
   "#
 };
 
+pub const KIND_REGARDS: &str = concat!(
+    "Hacked together by yours truly, Programvareverkstedet <projects@pvv.ntnu.no>\n",
+    "If you experience any bugs or turbulence, please give us a heads up :)",
+);
+
 #[derive(Debug, Clone)]
 pub struct UnixUser {
     pub username: String,

@@ -16,7 +16,7 @@ use futures_util::StreamExt;
 use crate::{
     core::{
         bootstrap::bootstrap_server_connection_and_drop_privileges,
-        common::executable_is_suid_or_sgid,
+        common::{ASCII_BANNER, KIND_REGARDS, executable_is_suid_or_sgid},
         protocol::{Response, create_client_to_server_message_stream},
     },
     server::{command::ServerArgs, landlock::landlock_restrict_server},
@@ -37,7 +37,15 @@ mod core;
 /// You are only allowed to manage databases and users that are prefixed with
 /// either your username, or a group that you are a member of.
 #[derive(Parser, Debug)]
-#[command(bin_name = "muscl", version, about, disable_help_subcommand = true)]
+#[command(
+  bin_name = "muscl",
+  author = "Programvareverkstedet <projects@pvv.ntnu.no>",
+  version,
+  about,
+  disable_help_subcommand = true,
+  before_long_help = ASCII_BANNER,
+  after_long_help = KIND_REGARDS,
+)]
 struct Args {
     #[command(subcommand)]
     command: Command,
