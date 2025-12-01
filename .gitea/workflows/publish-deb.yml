@@ -37,7 +37,7 @@ jobs:
       - name: Upload deb package artifact
         uses: actions/upload-artifact@v3
         with:
-          name: rustadm-rs.deb
+          name: muscl.deb
           path: target/debian/*.deb
           if-no-files-found: error
           retention-days: 30
