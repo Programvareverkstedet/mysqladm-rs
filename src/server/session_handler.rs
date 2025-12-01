@@ -77,7 +77,13 @@ pub async fn session_handler(
         }
     };
 
-    session_handler_with_unix_user(socket, &unix_user, db_pool).await
+    tracing::info!("Accepted connection from user: {}", unix_user);
+
+    let result = session_handler_with_unix_user(socket, &unix_user, db_pool).await;
+
+    tracing::info!("Finished handling requests for connection from user: {}", unix_user);
+
+    result
 }
 
 pub async fn session_handler_with_unix_user(
@@ -143,7 +149,12 @@ async fn session_handler_with_db_connection(
             }
             request => request.to_owned(),
         };
-        tracing::info!("Received request: {:#?}", request_to_display);
+
+        if request_to_display != Request::Exit {
+            tracing::info!("Received request: {:#?}", request_to_display);
+        } else {
+            tracing::debug!("Received request: {:#?}", request_to_display);
+        }
 
         let response = match request {
             Request::CheckAuthorization(dbs_or_users) => {
@@ -237,7 +248,7 @@ async fn session_handler_with_db_connection(
             }
             response => response.to_owned(),
         };
-        tracing::info!("Response: {:#?}", response_to_display);
+        tracing::debug!("Response: {:#?}", response_to_display);
 
         stream.send(response).await?;
         stream.flush().await?;

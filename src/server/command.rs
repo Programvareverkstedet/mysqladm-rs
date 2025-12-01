@@ -91,9 +91,9 @@ pub async fn handle_command(
         }
 
         if auto_detected_systemd_mode {
-            tracing::info!("Running in systemd mode, auto-detected");
+            tracing::debug!("Running in systemd mode, auto-detected");
         } else {
-            tracing::info!("Running in systemd mode");
+            tracing::debug!("Running in systemd mode");
         }
     } else {
         let subscriber = tracing_subscriber::Registry::default()
@@ -111,7 +111,7 @@ pub async fn handle_command(
 
         trace_server_prelude();
 
-        tracing::info!("Running in standalone mode");
+        tracing::debug!("Running in standalone mode");
     }
 
     let config_path = config_path.unwrap_or_else(|| PathBuf::from(DEFAULT_CONFIG_PATH));

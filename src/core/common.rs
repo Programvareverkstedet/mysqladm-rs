@@ -4,6 +4,7 @@ use nix::unistd::{Group as LibcGroup, User as LibcUser};
 
 #[cfg(not(target_os = "macos"))]
 use std::ffi::CString;
+use std::fmt;
 
 pub const DEFAULT_CONFIG_PATH: &str = "/etc/muscl/config.toml";
 pub const DEFAULT_SOCKET_PATH: &str = "/run/muscl/muscl.sock";
@@ -22,6 +23,12 @@ pub const ASCII_BANNER: &str = indoc! {
 pub struct UnixUser {
     pub username: String,
     pub groups: Vec<String>,
+}
+
+impl fmt::Display for UnixUser {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.username)
+    }
 }
 
 // TODO: these functions are somewhat critical, and should have integration tests
