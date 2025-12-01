@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use anyhow::Context;
 use clap::Parser;
 use dialoguer::Password;
@@ -21,8 +23,12 @@ pub struct PasswdUserArgs {
     username: MySQLUser,
 
     /// Read the new password from a file instead of prompting for it
-    #[clap(short, long, value_name = "FILE")]
-    password_file: Option<String>,
+    #[clap(short, long, value_name = "PATH", conflicts_with = "stdin")]
+    password_file: Option<PathBuf>,
+
+    /// Read the new password from stdin instead of prompting for it
+    #[clap(short = 'i', long, conflicts_with = "password_file")]
+    stdin: bool,
 
     /// Print the information as JSON
     #[arg(short, long)]
@@ -71,6 +77,12 @@ pub async fn passwd_user(
             .context("Failed to read password file")?
             .trim()
             .to_string()
+    } else if args.stdin {
+        let mut buffer = String::new();
+        std::io::stdin()
+            .read_line(&mut buffer)
+            .context("Failed to read password from stdin")?;
+        buffer.trim().to_string()
     } else {
         read_password_from_stdin_with_double_check(&args.username)?
     };
