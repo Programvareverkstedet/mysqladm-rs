@@ -17,6 +17,8 @@ DynamicUser=yes
 
 ConfigurationDirectory=muscl
 
+ImportCredential=muscl_mysql_password
+
 # This is required to read unix user/group details.
 PrivateUsers=false
 

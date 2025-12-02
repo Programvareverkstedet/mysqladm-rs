@@ -45,6 +45,28 @@ FLUSH PRIVILEGES;
 
 Now you should add the login credentials to the muscl configuration file, typically located at `/etc/muscl/config.toml`.
 
+### Setting the myscl password with `systemd-creds`
+
+The debian package assumes that you will provide the password for `muscl`'s database user with `systemd-creds`.
+
+You can add the password like this (run as root):
+
+```bash
+# Unless you already have a working credential store, you need to set it up first
+mkdir -p /etc/credstore.encrypted
+systemd-creds setup
+
+# Now set the muscl mysql password
+# Be careful not to leave the password in your shell history!
+systemd-creds encrypt --name=muscl_mysql_password <(echo "<strong_password_here>") /etc/credstore.encrypted/muscl_mysql_password
+```
+
+If you are running systemd older than version 254 (see `systemctl --version`), you might have to override the service to point to the path of the credential manually, because `ImportCredential=` is not supported. Run `systemctl edit muscl.service` and add the following line:
+
+```ini
+LoadEncyptedCredential=muscl_mysql_password:/etc/credstore.encrypted/muscl_mysql_password
+```
+
 ### NixOS
 
 For NixOS, there is a module available via the nix flake. You can include it in your configuration like this:

@@ -85,9 +85,9 @@ assets = [
         "755",
     ],
     [
-        "example-config.toml",
+        "assets/debian/config.toml",
         "etc/muscl/config.toml",
-        "600",
+        "644",
     ],
     [
         "assets/completions/_*",

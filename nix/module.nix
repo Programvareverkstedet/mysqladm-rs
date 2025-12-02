@@ -135,6 +135,7 @@ in
           cfg.settings.mysql.socket_path
         ];
 
+        ImportCredential = "";
         LoadCredential = lib.mkIf (cfg.settings.mysql.passwordFile != null) [
           "mysql-password:${cfg.settings.mysql.passwordFile}"
         ];

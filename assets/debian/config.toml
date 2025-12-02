@@ -1,0 +1,23 @@
+[mysql]
+# Hostname and port of the database.
+host = "localhost"
+port = 3306
+
+# The path to the unix socket of the database.
+# If you uncomment this line, the host and port will be ignored
+
+# socket_path = "/run/mysql/mysql.sock"
+
+# The username and password for the database connection.
+# The username and password can be omitted if you are connecting
+# to the database using socket based authentication.
+# However, the vendored systemd service is running as DynamicUser,
+# so these need to be specified by default unless you override the
+# systemd unit.
+username = "muscl"
+# This file gets created by systemd automatically, given you have set
+# the password with `systemd-creds`.
+password_file = "/run/credentials/muscl.service/muscl_mysql_password"
+
+# Database connection timeout in seconds
+timeout = 2

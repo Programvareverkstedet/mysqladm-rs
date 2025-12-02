@@ -1,6 +1,7 @@
 # Rust
 /target
 config.toml
+!assets/debian/config.toml
 
 # Nix
 /.direnv/
