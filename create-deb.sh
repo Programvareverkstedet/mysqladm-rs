@@ -4,16 +4,16 @@ cargo build --release
 
 mkdir -p assets/completions
 
-./target/release/muscl generate-completions --shell bash > assets/completions/muscl.bash
-./target/release/muscl generate-completions --shell zsh > assets/completions/_muscl
-./target/release/muscl generate-completions --shell fish > assets/completions/muscl.fish
+COMPLETE=bash ./target/release/muscl > assets/completions/muscl.bash
+COMPLETE=zsh ./target/release/muscl > assets/completions/_muscl
+COMPLETE=fish ./target/release/muscl > assets/completions/muscl.fish
 
-./target/release/muscl generate-completions --shell bash --command mysql-dbadm > assets/completions/mysql-dbadm.bash
-./target/release/muscl generate-completions --shell zsh --command mysql-dbadm > assets/completions/_mysql-dbadm
-./target/release/muscl generate-completions --shell fish --command mysql-dbadm > assets/completions/mysql-dbadm.fish
+COMPLETE=bash ./target/release/mysql-dbadm > assets/completions/mysql-dbadm.bash
+COMPLETE=zsh ./target/release/mysql-dbadm > assets/completions/_mysql-dbadm
+COMPLETE=fish ./target/release/mysql-dbadm > assets/completions/mysql-dbadm.fish
 
-./target/release/muscl generate-completions --shell bash --command mysql-useradm > assets/completions/mysql-useradm.bash
-./target/release/muscl generate-completions --shell zsh --command mysql-useradm > assets/completions/_mysql-useradm
-./target/release/muscl generate-completions --shell fish --command mysql-useradm > assets/completions/mysql-useradm.fish
+COMPLETE=bash ./target/release/mysql-useradm > assets/completions/mysql-useradm.bash
+COMPLETE=zsh ./target/release/mysql-useradm > assets/completions/_mysql-useradm
+COMPLETE=fish ./target/release/mysql-useradm > assets/completions/mysql-useradm.fish
 
 cargo deb
