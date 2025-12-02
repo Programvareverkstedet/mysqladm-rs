@@ -30,6 +30,21 @@ This software is designed for multi-user servers, like tilde servers, university
 
 **TODO:** write this section once the package has been pushed to the gitea package repository.
 
+### Creating a database user
+
+In order for the daemon to be able to do anything interesting on the mysql server, it needs
+a database user with sufficient privileges. You can create such a user by running the following commands
+on the mysql server as root (or another user with sufficient privileges):
+
+```sql
+CREATE USER `muscl`@`%` IDENTIFIED BY '<strong_password_here>';
+GRANT SELECT, INSERT, UPDATE, DELETE ON `mysql`.* TO `muscl`@`%`;
+GRANT GRANT OPTION, CREATE, DROP ON *.* TO 'muscl'@'%';
+FLUSH PRIVILEGES;
+```
+
+Now you should add the login credentials to the muscl configuration file, typically located at `/etc/muscl/config.toml`.
+
 ### NixOS
 
 For NixOS, there is a module available via the nix flake. You can include it in your configuration like this:
