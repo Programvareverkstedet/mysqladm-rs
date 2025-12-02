@@ -13,7 +13,7 @@ socket_path = "/run/muscl/muscl.sock"
 host = "localhost"
 port = 3306
 
-# The path to the unix socket of the databse.
+# The path to the unix socket of the database.
 # If you uncomment this line, the host and port will be ignored
 
 # socket_path = "/run/mysql/mysql.sock"
