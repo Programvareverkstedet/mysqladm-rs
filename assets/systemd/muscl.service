@@ -51,6 +51,10 @@ RestrictRealtime=true
 RestrictSUIDSGID=true
 SocketBindDeny=any
 SystemCallArchitectures=native
-SystemCallFilter=@system-service @sandbox
+
+SystemCallFilter=@system-service
+# This is needed for landlock
+# SystemCallFilter=@sandbox
 SystemCallFilter=~@privileged @resources
+
 UMask=0777
