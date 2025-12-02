@@ -61,10 +61,11 @@ systemd-creds setup
 systemd-creds encrypt --name=muscl_mysql_password <(echo "<strong_password_here>") /etc/credstore.encrypted/muscl_mysql_password
 ```
 
-If you are running systemd older than version 254 (see `systemctl --version`), you might have to override the service to point to the path of the credential manually, because `ImportCredential=` is not supported. Run `systemctl edit muscl.service` and add the following line:
+If you are running systemd older than version 254 (see `systemctl --version`), you might have to override the service to point to the path of the credential manually, because `ImportCredential=` is not supported. Run `systemctl edit muscl.service` and add the following lines:
 
 ```ini
-LoadEncyptedCredential=muscl_mysql_password:/etc/credstore.encrypted/muscl_mysql_password
+[Service]
+LoadCredentialEncrypted=muscl_mysql_password:/etc/credstore.encrypted/muscl_mysql_password
 ```
 
 ### NixOS
