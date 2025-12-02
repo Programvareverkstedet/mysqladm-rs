@@ -41,7 +41,15 @@ impl MysqlConfig {
             options = options.username(username);
         }
 
-        if let Some(password) = &self.password {
+        if let Some(password_file) = &self.password_file {
+            let password = fs::read_to_string(password_file)
+                .with_context(|| {
+                    format!("Failed to read MySQL password file at {:?}", password_file)
+                })?
+                .trim()
+                .to_owned();
+            options = options.password(&password);
+        } else if let Some(password) = &self.password {
             options = options.password(password);
         }
 
