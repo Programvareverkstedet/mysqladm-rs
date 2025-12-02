@@ -37,7 +37,7 @@ jobs:
       - name: Upload deb package artifact
         uses: actions/upload-artifact@v3
         with:
-          name: muscl.deb
+          name: muscl-deb.zip
           path: target/debian/*.deb
           if-no-files-found: error
           retention-days: 30
