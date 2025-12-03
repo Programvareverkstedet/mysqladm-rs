@@ -45,6 +45,7 @@ pub fn print_lock_users_output_status_json(output: &LockUsersResponse) {
                 name.to_string(),
                 json!({
                   "status": "error",
+                  "type": err.error_type(),
                   "error": err.to_error_message(name),
                 }),
             ),
@@ -75,6 +76,16 @@ impl LockUserError {
             LockUserError::MySqlError(err) => {
                 format!("MySQL error: {}", err)
             }
+        }
+    }
+
+    pub fn error_type(&self) -> &'static str {
+        match self {
+            LockUserError::SanitizationError(_) => "sanitization-error",
+            LockUserError::OwnershipError(_) => "ownership-error",
+            LockUserError::UserDoesNotExist => "user-does-not-exist",
+            LockUserError::UserIsAlreadyLocked => "user-is-already-locked",
+            LockUserError::MySqlError(_) => "mysql-error",
         }
     }
 }

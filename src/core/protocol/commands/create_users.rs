@@ -44,6 +44,7 @@ pub fn print_create_users_output_status_json(output: &CreateUsersResponse) {
                 name.to_string(),
                 json!({
                   "status": "error",
+                  "type": err.error_type(),
                   "error": err.to_error_message(name),
                 }),
             ),
@@ -71,6 +72,15 @@ impl CreateUserError {
             CreateUserError::MySqlError(err) => {
                 format!("MySQL error: {}", err)
             }
+        }
+    }
+
+    pub fn error_type(&self) -> &'static str {
+        match self {
+            CreateUserError::SanitizationError(_) => "sanitization-error",
+            CreateUserError::OwnershipError(_) => "ownership-error",
+            CreateUserError::UserAlreadyExists => "user-already-exists",
+            CreateUserError::MySqlError(_) => "mysql-error",
         }
     }
 }

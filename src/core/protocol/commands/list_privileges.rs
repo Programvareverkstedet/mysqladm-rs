@@ -89,6 +89,7 @@ pub fn print_list_privileges_output_status_json(output: &ListPrivilegesResponse)
                 name.to_string(),
                 json!({
                   "status": "error",
+                  "type": err.error_type(),
                   "error": err.to_error_message(name),
                 }),
             ),
@@ -124,6 +125,15 @@ impl GetDatabasesPrivilegeDataError {
             GetDatabasesPrivilegeDataError::MySqlError(err) => {
                 format!("MySQL error: {}", err)
             }
+        }
+    }
+
+    pub fn error_type(&self) -> &'static str {
+        match self {
+            GetDatabasesPrivilegeDataError::SanitizationError(_) => "sanitization-error",
+            GetDatabasesPrivilegeDataError::OwnershipError(_) => "ownership-error",
+            GetDatabasesPrivilegeDataError::DatabaseDoesNotExist => "database-does-not-exist",
+            GetDatabasesPrivilegeDataError::MySqlError(_) => "mysql-error",
         }
     }
 }

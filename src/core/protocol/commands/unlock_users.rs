@@ -45,6 +45,7 @@ pub fn print_unlock_users_output_status_json(output: &UnlockUsersResponse) {
                 name.to_string(),
                 json!({
                   "status": "error",
+                  "type": err.error_type(),
                   "error": err.to_error_message(name),
                 }),
             ),
@@ -75,6 +76,16 @@ impl UnlockUserError {
             UnlockUserError::MySqlError(err) => {
                 format!("MySQL error: {}", err)
             }
+        }
+    }
+
+    pub fn error_type(&self) -> &'static str {
+        match self {
+            UnlockUserError::SanitizationError(_) => "sanitization-error",
+            UnlockUserError::OwnershipError(_) => "ownership-error",
+            UnlockUserError::UserDoesNotExist => "user-does-not-exist",
+            UnlockUserError::UserIsAlreadyUnlocked => "user-is-already-unlocked",
+            UnlockUserError::MySqlError(_) => "mysql-error",
         }
     }
 }

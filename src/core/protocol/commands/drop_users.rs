@@ -44,6 +44,7 @@ pub fn print_drop_users_output_status_json(output: &DropUsersResponse) {
                 name.to_string(),
                 json!({
                   "status": "error",
+                  "type": err.error_type(),
                   "error": err.to_error_message(name),
                 }),
             ),
@@ -71,6 +72,15 @@ impl DropUserError {
             DropUserError::MySqlError(err) => {
                 format!("MySQL error: {}", err)
             }
+        }
+    }
+
+    pub fn error_type(&self) -> &'static str {
+        match self {
+            DropUserError::SanitizationError(_) => "sanitization-error",
+            DropUserError::OwnershipError(_) => "ownership-error",
+            DropUserError::UserDoesNotExist => "user-does-not-exist",
+            DropUserError::MySqlError(_) => "mysql-error",
         }
     }
 }

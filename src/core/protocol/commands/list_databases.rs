@@ -63,6 +63,7 @@ pub fn print_list_databases_output_status_json(output: &ListDatabasesResponse) {
                 name.to_string(),
                 json!({
                   "status": "error",
+                  "type": err.error_type(),
                   "error": err.to_error_message(name),
                 }),
             ),
@@ -90,6 +91,15 @@ impl ListDatabasesError {
             ListDatabasesError::MySqlError(err) => {
                 format!("MySQL error: {}", err)
             }
+        }
+    }
+
+    pub fn error_type(&self) -> &'static str {
+        match self {
+            ListDatabasesError::SanitizationError(_) => "sanitization-error",
+            ListDatabasesError::OwnershipError(_) => "ownership-error",
+            ListDatabasesError::DatabaseDoesNotExist => "database-does-not-exist",
+            ListDatabasesError::MySqlError(_) => "mysql-error",
         }
     }
 }

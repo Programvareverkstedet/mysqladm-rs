@@ -44,6 +44,7 @@ pub fn print_create_databases_output_status_json(output: &CreateDatabasesRespons
                 name.to_string(),
                 json!({
                   "status": "error",
+                  "type": err.error_type(),
                   "error": err.to_error_message(name),
                 }),
             ),
@@ -71,6 +72,15 @@ impl CreateDatabaseError {
             CreateDatabaseError::MySqlError(err) => {
                 format!("MySQL error: {}", err)
             }
+        }
+    }
+
+    pub fn error_type(&self) -> &'static str {
+        match self {
+            CreateDatabaseError::SanitizationError(_) => "sanitization-error",
+            CreateDatabaseError::OwnershipError(_) => "ownership-error",
+            CreateDatabaseError::DatabaseAlreadyExists => "database-already-exists",
+            CreateDatabaseError::MySqlError(_) => "mysql-error",
         }
     }
 }

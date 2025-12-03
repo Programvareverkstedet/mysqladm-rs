@@ -79,6 +79,31 @@ impl ModifyDatabasePrivilegesError {
             }
         }
     }
+
+    #[allow(dead_code)]
+    pub fn error_type(&self) -> &'static str {
+        match self {
+            ModifyDatabasePrivilegesError::DatabaseSanitizationError(_) => {
+                "database-sanitization-error"
+            }
+            ModifyDatabasePrivilegesError::DatabaseOwnershipError(_) => "database-ownership-error",
+            ModifyDatabasePrivilegesError::UserSanitizationError(_) => "user-sanitization-error",
+            ModifyDatabasePrivilegesError::UserOwnershipError(_) => "user-ownership-error",
+            ModifyDatabasePrivilegesError::DatabaseDoesNotExist => "database-does-not-exist",
+            ModifyDatabasePrivilegesError::DiffDoesNotApply(err) => match err {
+                DiffDoesNotApplyError::RowAlreadyExists(_, _) => {
+                    "diff-does-not-apply/row-already-exists"
+                }
+                DiffDoesNotApplyError::RowDoesNotExist(_, _) => {
+                    "diff-does-not-apply/row-does-not-exist"
+                }
+                DiffDoesNotApplyError::RowPrivilegeChangeDoesNotApply(_, _) => {
+                    "diff-does-not-apply/row-privilege-change-does-not-apply"
+                }
+            },
+            ModifyDatabasePrivilegesError::MySqlError(_) => "mysql-error",
+        }
+    }
 }
 
 impl DiffDoesNotApplyError {

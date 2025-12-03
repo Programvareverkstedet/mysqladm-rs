@@ -48,6 +48,7 @@ pub fn print_check_authorization_output_status_json(output: &CheckAuthorizationR
                 db_or_user.name().to_string(),
                 json!({
                   "status": "error",
+                  "type": err.error_type(),
                   "error": err.to_error_message(db_or_user),
                 }),
             ),
@@ -75,6 +76,14 @@ impl CheckAuthorizationError {
               //         msg
               //     )
               // }
+        }
+    }
+
+    pub fn error_type(&self) -> &'static str {
+        match self {
+            CheckAuthorizationError::SanitizationError(_) => "sanitization-error",
+            CheckAuthorizationError::OwnershipError(_) => "ownership-error",
+            // CheckAuthorizationError::AuthorizationHandlerError(_) => "authorization-handler-error",
         }
     }
 }

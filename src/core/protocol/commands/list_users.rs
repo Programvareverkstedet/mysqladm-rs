@@ -78,6 +78,7 @@ pub fn print_list_users_output_status_json(output: &ListUsersResponse) {
                 name.to_string(),
                 json!({
                   "status": "error",
+                  "type": err.error_type(),
                   "error": err.to_error_message(name),
                 }),
             ),
@@ -105,6 +106,15 @@ impl ListUsersError {
             ListUsersError::MySqlError(err) => {
                 format!("MySQL error: {}", err)
             }
+        }
+    }
+
+    pub fn error_type(&self) -> &'static str {
+        match self {
+            ListUsersError::SanitizationError(_) => "sanitization-error",
+            ListUsersError::OwnershipError(_) => "ownership-error",
+            ListUsersError::UserDoesNotExist => "user-does-not-exist",
+            ListUsersError::MySqlError(_) => "mysql-error",
         }
     }
 }

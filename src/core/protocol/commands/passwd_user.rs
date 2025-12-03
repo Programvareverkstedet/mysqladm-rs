@@ -46,4 +46,14 @@ impl SetPasswordError {
             }
         }
     }
+
+    #[allow(dead_code)]
+    pub fn error_type(&self) -> &'static str {
+        match self {
+            SetPasswordError::SanitizationError(_) => "sanitization-error",
+            SetPasswordError::OwnershipError(_) => "ownership-error",
+            SetPasswordError::UserDoesNotExist => "user-does-not-exist",
+            SetPasswordError::MySqlError(_) => "mysql-error",
+        }
+    }
 }

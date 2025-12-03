@@ -47,6 +47,7 @@ pub fn print_drop_databases_output_status_json(output: &DropDatabasesResponse) {
                 name.to_string(),
                 json!({
                   "status": "error",
+                  "type": err.error_type(),
                   "error": err.to_error_message(name),
                 }),
             ),
@@ -74,6 +75,15 @@ impl DropDatabaseError {
             DropDatabaseError::MySqlError(err) => {
                 format!("MySQL error: {}", err)
             }
+        }
+    }
+
+    pub fn error_type(&self) -> &'static str {
+        match self {
+            DropDatabaseError::SanitizationError(_) => "sanitization-error",
+            DropDatabaseError::OwnershipError(_) => "ownership-error",
+            DropDatabaseError::DatabaseDoesNotExist => "database-does-not-exist",
+            DropDatabaseError::MySqlError(_) => "mysql-error",
         }
     }
 }
