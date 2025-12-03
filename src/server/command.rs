@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use anyhow::Context;
 use clap::Parser;
-use clap_verbosity_flag::Verbosity;
+use clap_verbosity_flag::{InfoLevel, Verbosity};
 use tracing_subscriber::prelude::*;
 
 use crate::{
@@ -56,7 +56,7 @@ pub fn trace_server_prelude() {
 
 pub async fn handle_command(
     config_path: Option<PathBuf>,
-    verbosity: Verbosity,
+    verbosity: Verbosity<InfoLevel>,
     args: ServerArgs,
 ) -> anyhow::Result<()> {
     let mut auto_detected_systemd_mode = false;

@@ -16,16 +16,14 @@ in
     };
 
     logLevel = lib.mkOption {
-      type = lib.types.enum [ "quiet" "error" "warn" "info" "debug" "trace" ];
+      type = lib.types.enum [ "quiet" "info" "debug" "trace" ];
       default = "info";
       description = "Log level for muscl";
       apply = level: {
         "quiet" = "-q";
-        "error" = "";
-        "warn" = "-v";
-        "info" = "-vv";
-        "debug" = "-vvv";
-        "trace" = "-vvvv";
+        "info" = "";
+        "debug" = "-v";
+        "trace" = "-vv";
       }.${level};
     };
 

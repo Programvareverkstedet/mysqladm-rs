@@ -4,7 +4,7 @@ extern crate prettytable;
 use anyhow::Context;
 use clap::{CommandFactory, Parser, ValueEnum};
 use clap_complete::{CompleteEnv, Shell, generate};
-use clap_verbosity_flag::Verbosity;
+use clap_verbosity_flag::{InfoLevel, Verbosity};
 
 use std::path::PathBuf;
 
@@ -73,7 +73,7 @@ struct Args {
     config: Option<PathBuf>,
 
     #[command(flatten)]
-    verbose: Verbosity,
+    verbose: Verbosity<InfoLevel>
 }
 
 #[derive(Parser, Debug, Clone)]
@@ -252,7 +252,7 @@ const MIN_TOKIO_WORKER_THREADS: usize = 4;
 /// Start a long-lived server using Tokio.
 fn tokio_start_server(
     config_path: Option<PathBuf>,
-    verbosity: Verbosity,
+    verbosity: Verbosity<InfoLevel>,
     args: ServerArgs,
 ) -> anyhow::Result<()> {
     let worker_thread_count = std::cmp::max(num_cpus::get(), MIN_TOKIO_WORKER_THREADS);

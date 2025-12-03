@@ -1,7 +1,7 @@
 use std::{fs, path::PathBuf, sync::Arc, time::Duration};
 
 use anyhow::{Context, anyhow};
-use clap_verbosity_flag::Verbosity;
+use clap_verbosity_flag::{InfoLevel, Verbosity};
 use nix::libc::{EXIT_SUCCESS, exit};
 use sqlx::mysql::MySqlPoolOptions;
 use std::os::unix::net::UnixStream as StdUnixStream;
@@ -77,7 +77,7 @@ fn will_connect_to_external_server(
 pub fn bootstrap_server_connection_and_drop_privileges(
     server_socket_path: Option<PathBuf>,
     config: Option<PathBuf>,
-    verbose: Verbosity,
+    verbose: Verbosity<InfoLevel>,
 ) -> anyhow::Result<StdUnixStream> {
     if will_connect_to_external_server(server_socket_path.as_ref(), config.as_ref())? {
         assert!(
