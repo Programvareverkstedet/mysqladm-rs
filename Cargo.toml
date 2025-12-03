@@ -87,6 +87,16 @@ assets = [
         "755",
     ],
     [
+        "target/release/mysql-useradm",
+        "usr/bin/",
+        "755",
+    ],
+    [
+        "target/release/mysql-dbadm",
+        "usr/bin/",
+        "755",
+    ],
+    [
         "assets/debian/config.toml",
         "etc/muscl/config.toml",
         "644",
