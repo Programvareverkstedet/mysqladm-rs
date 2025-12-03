@@ -1,4 +1,5 @@
 use clap::Parser;
+use clap_complete::ArgValueCompleter;
 use futures_util::{SinkExt, StreamExt};
 use std::os::unix::net::UnixStream as StdUnixStream;
 use std::path::PathBuf;
@@ -17,6 +18,7 @@ use crate::{
     },
     core::{
         bootstrap::bootstrap_server_connection_and_drop_privileges,
+        completion::mysql_database_completer,
         database_privileges::DatabasePrivilegeRow,
         protocol::{
             ClientToServerMessageStream, GetDatabasesPrivilegeDataError, Request, Response,
@@ -128,20 +130,21 @@ pub struct CreateArgs {
 #[derive(Parser)]
 pub struct DatabaseDropArgs {
     /// The name of the DATABASE(s) to drop.
-    #[arg(num_args = 1..)]
+    #[arg(num_args = 1.., add = ArgValueCompleter::new(mysql_database_completer))]
     name: Vec<MySQLDatabase>,
 }
 
 #[derive(Parser)]
 pub struct DatabaseShowArgs {
     /// The name of the DATABASE(s) to show.
-    #[arg(num_args = 0..)]
+    #[arg(num_args = 0.., add = ArgValueCompleter::new(mysql_database_completer))]
     name: Vec<MySQLDatabase>,
 }
 
 #[derive(Parser)]
 pub struct EditPermArgs {
     /// The name of the DATABASE to edit permissions for.
+    #[arg(add = ArgValueCompleter::new(mysql_database_completer))]
     pub database: MySQLDatabase,
 }
 

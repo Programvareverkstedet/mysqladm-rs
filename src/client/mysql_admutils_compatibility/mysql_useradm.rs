@@ -1,4 +1,5 @@
 use clap::Parser;
+use clap_complete::ArgValueCompleter;
 use futures_util::{SinkExt, StreamExt};
 use std::path::PathBuf;
 
@@ -17,6 +18,7 @@ use crate::{
     },
     core::{
         bootstrap::bootstrap_server_connection_and_drop_privileges,
+        completion::mysql_user_completer,
         protocol::{
             ClientToServerMessageStream, Request, Response, create_client_to_server_message_stream,
         },
@@ -91,21 +93,21 @@ pub struct CreateArgs {
 #[derive(Parser)]
 pub struct DeleteArgs {
     /// The name of the USER(s) to delete.
-    #[arg(num_args = 1..)]
+    #[arg(num_args = 1.., add = ArgValueCompleter::new(mysql_user_completer))]
     name: Vec<MySQLUser>,
 }
 
 #[derive(Parser)]
 pub struct PasswdArgs {
     /// The name of the USER(s) to change the password for.
-    #[arg(num_args = 1..)]
+    #[arg(num_args = 1.., add = ArgValueCompleter::new(mysql_user_completer))]
     name: Vec<MySQLUser>,
 }
 
 #[derive(Parser)]
 pub struct ShowArgs {
     /// The name of the USER(s) to show.
-    #[arg(num_args = 0..)]
+    #[arg(num_args = 0.., add = ArgValueCompleter::new(mysql_user_completer))]
     name: Vec<MySQLUser>,
 }
 
