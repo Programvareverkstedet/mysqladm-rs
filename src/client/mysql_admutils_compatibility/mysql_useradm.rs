@@ -146,7 +146,20 @@ fn tokio_run_command(command: Command, server_connection: StdUnixStream) -> anyh
         .unwrap()
         .block_on(async {
             let tokio_socket = TokioUnixStream::from_std(server_connection)?;
-            let message_stream = create_client_to_server_message_stream(tokio_socket);
+            let mut message_stream = create_client_to_server_message_stream(tokio_socket);
+
+            while let Some(Ok(message)) = message_stream.next().await {
+                match message {
+                    Response::Error(err) => {
+                        anyhow::bail!("{}", err);
+                    }
+                    Response::Ready => break,
+                    message => {
+                        eprintln!("Unexpected message from server: {:?}", message);
+                    }
+                }
+            }
+
             match command {
                 Command::Create(args) => create_user(args, message_stream).await,
                 Command::Delete(args) => drop_users(args, message_stream).await,
