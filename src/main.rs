@@ -2,8 +2,8 @@
 extern crate prettytable;
 
 use anyhow::Context;
-use clap::{CommandFactory, Parser, ValueEnum, crate_version};
-use clap_complete::{CompleteEnv, Shell, generate};
+use clap::{CommandFactory, Parser, crate_version};
+use clap_complete::CompleteEnv;
 use clap_verbosity_flag::{InfoLevel, Verbosity};
 
 use std::path::PathBuf;
@@ -117,29 +117,6 @@ enum Command {
     /// Run the server
     #[command(hide = true)]
     Server(server::command::ServerArgs),
-
-    /// Generate shell completions for the program.
-    #[command(hide = true)]
-    GenerateCompletions(GenerateCompletionArgs),
-}
-
-#[derive(Parser, Debug, Clone)]
-struct GenerateCompletionArgs {
-    /// Which shell to generate completions for.
-    #[arg(long, default_value = "bash")]
-    shell: Shell,
-
-    /// Which top-level command to generate completions for.
-    #[arg(long, default_value = "muscl")]
-    command: ToplevelCommands,
-}
-
-#[cfg(feature = "mysql-admutils-compatibility")]
-#[derive(ValueEnum, Debug, Clone)]
-enum ToplevelCommands {
-    Muscl,
-    MysqlDbadm,
-    MysqlUseradm,
 }
 
 /// **WARNING:** This function may be run with elevated privileges.
@@ -156,10 +133,6 @@ fn main() -> anyhow::Result<()> {
     let args: Args = Args::parse();
 
     if handle_server_command(&args)?.is_some() {
-        return Ok(());
-    }
-
-    if handle_generate_completions_command(&args)?.is_some() {
         return Ok(());
     }
 
@@ -249,37 +222,6 @@ fn handle_server_command(args: &Args) -> anyhow::Result<Option<()>> {
     }
 }
 
-/// **WARNING:** This function may be run with elevated privileges.
-fn handle_generate_completions_command(args: &Args) -> anyhow::Result<Option<()>> {
-    match args.command {
-        Command::GenerateCompletions(ref completion_args) => {
-            assert!(
-                !executable_is_suid_or_sgid()?,
-                "The executable should not be SUID or SGID when generating completions"
-            );
-            let mut cmd = match completion_args.command {
-                ToplevelCommands::Muscl => Args::command(),
-                #[cfg(feature = "mysql-admutils-compatibility")]
-                ToplevelCommands::MysqlDbadm => mysql_dbadm::Args::command(),
-                #[cfg(feature = "mysql-admutils-compatibility")]
-                ToplevelCommands::MysqlUseradm => mysql_useradm::Args::command(),
-            };
-
-            let binary_name = cmd.get_bin_name().unwrap().to_owned();
-
-            generate(
-                completion_args.shell,
-                &mut cmd,
-                binary_name,
-                &mut std::io::stdout(),
-            );
-
-            Ok(Some(()))
-        }
-        _ => Ok(None),
-    }
-}
-
 const MIN_TOKIO_WORKER_THREADS: usize = 4;
 
 /// Start a long-lived server using Tokio.
@@ -331,7 +273,6 @@ fn tokio_run_command(command: Command, server_connection: StdUnixStream) -> anyh
                     client::commands::handle_command(client_args, message_stream).await
                 }
                 Command::Server(_) => unreachable!(),
-                Command::GenerateCompletions(_) => unreachable!(),
             }
         })
 }
