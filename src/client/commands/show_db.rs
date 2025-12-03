@@ -1,14 +1,16 @@
 use clap::Parser;
 use clap_complete::ArgValueCompleter;
 use futures_util::SinkExt;
-use prettytable::{Cell, Row, Table};
 use tokio_stream::StreamExt;
 
 use crate::{
     client::commands::erroneous_server_response,
     core::{
         completion::mysql_database_completer,
-        protocol::{ClientToServerMessageStream, Request, Response},
+        protocol::{
+            ClientToServerMessageStream, Request, Response, print_list_databases_output_status,
+            print_list_databases_output_status_json,
+        },
         types::MySQLDatabase,
     },
 };
@@ -40,25 +42,13 @@ pub async fn show_databases(
 
     server_connection.send(message).await?;
 
-    // TODO: collect errors for json output.
-
-    let mut contained_errors = false;
-    let database_list = match server_connection.next().await {
-        Some(Ok(Response::ListDatabases(databases))) => databases
-            .into_iter()
-            .filter_map(|(database_name, result)| match result {
-                Ok(database_row) => Some(database_row),
-                Err(err) => {
-                    contained_errors = true;
-                    eprintln!("{}", err.to_error_message(&database_name));
-                    eprintln!("Skipping...");
-                    println!();
-                    None
-                }
-            })
-            .collect::<Vec<_>>(),
+    let databases = match server_connection.next().await {
+        Some(Ok(Response::ListDatabases(databases))) => databases,
         Some(Ok(Response::ListAllDatabases(database_list))) => match database_list {
-            Ok(list) => list,
+            Ok(list) => list
+                .into_iter()
+                .map(|db| (db.database.clone(), Ok(db)))
+                .collect(),
             Err(err) => {
                 server_connection.send(Request::Exit).await?;
                 return Err(
@@ -72,19 +62,12 @@ pub async fn show_databases(
     server_connection.send(Request::Exit).await?;
 
     if args.json {
-        println!("{}", serde_json::to_string_pretty(&database_list)?);
-    } else if database_list.is_empty() {
-        println!("No databases to show.");
+        print_list_databases_output_status_json(&databases);
     } else {
-        let mut table = Table::new();
-        table.add_row(Row::new(vec![Cell::new("Database")]));
-        for db in database_list {
-            table.add_row(row![db.database]);
-        }
-        table.printstd();
+        print_list_databases_output_status(&databases);
     }
 
-    if args.fail && contained_errors {
+    if args.fail && databases.values().any(|res| res.is_err()) {
         std::process::exit(1);
     }
 

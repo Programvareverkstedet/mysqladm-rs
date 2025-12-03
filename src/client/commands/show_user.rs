@@ -1,4 +1,3 @@
-use anyhow::Context;
 use clap::Parser;
 use clap_complete::ArgValueCompleter;
 use futures_util::SinkExt;
@@ -8,7 +7,10 @@ use crate::{
     client::commands::erroneous_server_response,
     core::{
         completion::mysql_user_completer,
-        protocol::{ClientToServerMessageStream, Request, Response},
+        protocol::{
+            ClientToServerMessageStream, Request, Response, print_list_users_output_status,
+            print_list_users_output_status_json,
+        },
         types::MySQLUser,
     },
 };
@@ -43,22 +45,13 @@ pub async fn show_users(
         anyhow::bail!(err);
     }
 
-    let mut contained_errors = false;
     let users = match server_connection.next().await {
-        Some(Ok(Response::ListUsers(users))) => users
-            .into_iter()
-            .filter_map(|(username, result)| match result {
-                Ok(user) => Some(user),
-                Err(err) => {
-                    contained_errors = true;
-                    eprintln!("{}", err.to_error_message(&username));
-                    eprintln!("Skipping...");
-                    None
-                }
-            })
-            .collect::<Vec<_>>(),
+        Some(Ok(Response::ListUsers(users))) => users,
         Some(Ok(Response::ListAllUsers(users))) => match users {
-            Ok(users) => users,
+            Ok(users) => users
+                .into_iter()
+                .map(|user| (user.user.clone(), Ok(user)))
+                .collect(),
             Err(err) => {
                 server_connection.send(Request::Exit).await?;
                 return Err(
@@ -72,32 +65,12 @@ pub async fn show_users(
     server_connection.send(Request::Exit).await?;
 
     if args.json {
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&users).context("Failed to serialize users to JSON")?
-        );
-    } else if users.is_empty() {
-        println!("No users to show.");
+        print_list_users_output_status_json(&users);
     } else {
-        let mut table = prettytable::Table::new();
-        table.add_row(row![
-            "User",
-            "Password is set",
-            "Locked",
-            "Databases where user has privileges"
-        ]);
-        for user in users {
-            table.add_row(row![
-                user.user,
-                user.has_password,
-                user.is_locked,
-                user.databases.join("\n")
-            ]);
-        }
-        table.printstd();
+        print_list_users_output_status(&users);
     }
 
-    if args.fail && contained_errors {
+    if args.fail && users.values().any(|result| result.is_err()) {
         std::process::exit(1);
     }
 
