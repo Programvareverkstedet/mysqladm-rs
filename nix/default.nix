@@ -29,6 +29,9 @@ buildFunction {
         export PATH="$out/bin:$PATH"
         export COMPLETE="${shell}"
         "${command}" > "$TMP/${command}.${shell}"
+
+        # See https://github.com/clap-rs/clap/issues/1764
+        sed -i 's/muscl/${command}/g' "$TMP/${command}.${shell}"
       )
       installShellCompletion "--${shell}" --cmd "${command}" "$TMP/${command}.${shell}"
     '') {
