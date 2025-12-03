@@ -160,6 +160,8 @@
             enable = true;
             defaultEditor = true;
           };
+
+          environment.systemPackages = with pkgs; [ jq ];
         })
       ];
     };
