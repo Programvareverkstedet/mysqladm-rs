@@ -3,6 +3,30 @@ use anyhow::anyhow;
 #[cfg(feature = "mysql-admutils-compatibility")]
 use std::{env, os::unix::fs::symlink, path::PathBuf};
 
+fn get_git_commit() -> Option<String> {
+    let repo = git2::Repository::discover(".").ok()?;
+    let head = repo.head().ok()?;
+    let commit = head.peel_to_commit().ok()?;
+    Some(commit.id().to_string())
+}
+
+fn embed_build_time_info() {
+    let commit = option_env!("GIT_COMMIT")
+        .map(|s| s.to_string())
+        .or_else(get_git_commit)
+        .unwrap_or_else(|| "unknown".to_string());
+
+    let build_profile = std::env::var("OUT_DIR")
+        .unwrap_or_else(|_| "unknown".to_string())
+        .split(std::path::MAIN_SEPARATOR)
+        .nth_back(3)
+        .unwrap_or("unknown")
+        .to_string();
+
+    println!("cargo:rustc-env=GIT_COMMIT={}", commit);
+    println!("cargo:rustc-env=BUILD_PROFILE={}", build_profile);
+}
+
 fn generate_mysql_admutils_symlinks() -> anyhow::Result<()> {
     // NOTE: This is slightly illegal, and depends on implementation details.
     //       But it is only here for ease of testing the compatibility layer,
@@ -41,6 +65,8 @@ fn generate_mysql_admutils_symlinks() -> anyhow::Result<()> {
 fn main() -> anyhow::Result<()> {
     #[cfg(feature = "mysql-admutils-compatibility")]
     generate_mysql_admutils_symlinks()?;
+
+    embed_build_time_info();
 
     Ok(())
 }

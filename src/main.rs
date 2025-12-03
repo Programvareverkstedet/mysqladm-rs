@@ -2,7 +2,7 @@
 extern crate prettytable;
 
 use anyhow::Context;
-use clap::{CommandFactory, Parser, ValueEnum};
+use clap::{CommandFactory, Parser, ValueEnum, crate_version};
 use clap_complete::{CompleteEnv, Shell, generate};
 use clap_verbosity_flag::{InfoLevel, Verbosity};
 
@@ -30,6 +30,38 @@ mod server;
 mod client;
 mod core;
 
+const fn long_version() -> &'static str {
+    macro_rules! feature {
+        ($title:expr, $flag:expr) => {
+            if cfg!(feature = $flag) {
+                concat!($title, ": enabled")
+            } else {
+                concat!($title, ": disabled")
+            }
+        };
+    }
+    const_format::concatcp!(
+        crate_version!(),
+        "\n",
+        "build profile: ",
+        env!("BUILD_PROFILE"),
+        "\n",
+        "commit: ",
+        env!("GIT_COMMIT"),
+        "\n\n",
+        "[features]\n",
+        feature!("SUID/SGID mode", "suid-sgid-mode"),
+        "\n",
+        feature!(
+            "mysql-admutils compatibility",
+            "mysql-admutils-compatibility"
+        ),
+        "\n",
+    )
+}
+
+const LONG_VERSION: &str = long_version();
+
 /// Database administration tool for non-admin users to manage their own MySQL databases and users.
 ///
 /// This tool allows you to manage users and databases in MySQL.
@@ -45,6 +77,7 @@ mod core;
   disable_help_subcommand = true,
   before_long_help = ASCII_BANNER,
   after_long_help = KIND_REGARDS,
+  long_version = LONG_VERSION,
 )]
 struct Args {
     #[command(subcommand)]
@@ -73,7 +106,7 @@ struct Args {
     config: Option<PathBuf>,
 
     #[command(flatten)]
-    verbose: Verbosity<InfoLevel>
+    verbose: Verbosity<InfoLevel>,
 }
 
 #[derive(Parser, Debug, Clone)]
