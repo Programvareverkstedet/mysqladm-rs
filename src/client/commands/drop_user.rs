@@ -1,5 +1,6 @@
 use clap::Parser;
 use clap_complete::ArgValueCompleter;
+use dialoguer::Confirm;
 use futures_util::SinkExt;
 use tokio_stream::StreamExt;
 
@@ -24,6 +25,10 @@ pub struct DropUserArgs {
     /// Print the information as JSON
     #[arg(short, long)]
     json: bool,
+
+    /// Automatically confirm action without prompting
+    #[arg(short, long)]
+    yes: bool,
 }
 
 pub async fn drop_users(
@@ -32,6 +37,24 @@ pub async fn drop_users(
 ) -> anyhow::Result<()> {
     if args.username.is_empty() {
         anyhow::bail!("No usernames provided");
+    }
+
+    if !args.yes {
+        let confirmation = Confirm::new()
+            .with_prompt(format!(
+                "Are you sure you want to drop the users?\n\n{}\n\nThis action cannot be undone",
+                args.username
+                    .iter()
+                    .map(|d| format!("- {}", d))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            ))
+            .interact()?;
+
+        if !confirmation {
+            println!("Aborting drop operation.");
+            return Ok(());
+        }
     }
 
     let message = Request::DropUsers(args.username.to_owned());

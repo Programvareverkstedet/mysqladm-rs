@@ -1,5 +1,6 @@
 use clap::Parser;
 use clap_complete::ArgValueCompleter;
+use dialoguer::Confirm;
 use futures_util::SinkExt;
 use tokio_stream::StreamExt;
 
@@ -24,6 +25,10 @@ pub struct DropDbArgs {
     /// Print the information as JSON
     #[arg(short, long)]
     json: bool,
+
+    /// Automatically confirm action without prompting
+    #[arg(short, long)]
+    yes: bool,
 }
 
 pub async fn drop_databases(
@@ -32,6 +37,24 @@ pub async fn drop_databases(
 ) -> anyhow::Result<()> {
     if args.name.is_empty() {
         anyhow::bail!("No database names provided");
+    }
+
+    if !args.yes {
+        let confirmation = Confirm::new()
+            .with_prompt(format!(
+                "Are you sure you want to drop the databases?\n\n{}\n\nThis action cannot be undone",
+                args.name
+                    .iter()
+                    .map(|d| format!("- {}", d))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            ))
+            .interact()?;
+
+        if !confirmation {
+            println!("Aborting drop operation.");
+            return Ok(());
+        }
     }
 
     let message = Request::DropDatabases(args.name.to_owned());
