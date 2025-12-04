@@ -7,6 +7,18 @@ on:
       #   type: string
       #   required: true
 
+      # debian_distribution
+      #   description: "Which distribution of debian to publish for"
+      #   type: string
+      #   default: trixie
+      #   required: true
+
+      # repository_component
+      #   description: "Which apt repository component to publish for
+      #   type: string
+      #   default: main
+      #   required: true
+
       rust_toolchain:
         description: "Whether to build the package with stable rust"
         type: choice
@@ -53,4 +65,4 @@ jobs:
       #     curl \
       #       --user your_username:your_password_or_token \
       #       --upload-file target/debian/*.deb \
-      #       https://git.pvv.ntnu.no/api/packages/testuser/debian/pool/bionic/main/upload
+      #       https://git.pvv.ntnu.no/api/packages/${{ github.repository_owner }}/debian/pool/${{ inputs.debian_distribution }}/${{ inputs.repository_component }}/upload
