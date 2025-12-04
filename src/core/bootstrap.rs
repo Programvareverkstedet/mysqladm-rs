@@ -10,7 +10,7 @@ use tracing_subscriber::prelude::*;
 
 use crate::{
     core::common::{
-        DEFAULT_CONFIG_PATH, DEFAULT_SOCKET_PATH, UnixUser, executable_is_suid_or_sgid,
+        DEFAULT_CONFIG_PATH, DEFAULT_SOCKET_PATH, UnixUser, executing_in_suid_sgid_mode,
     },
     server::{
         config::{MysqlConfig, ServerConfig},
@@ -81,7 +81,7 @@ pub fn bootstrap_server_connection_and_drop_privileges(
 ) -> anyhow::Result<StdUnixStream> {
     if will_connect_to_external_server(server_socket_path.as_ref(), config.as_ref())? {
         assert!(
-            !executable_is_suid_or_sgid()?,
+            !executing_in_suid_sgid_mode()?,
             "The executable should not be SUID or SGID when connecting to an external server"
         );
 
@@ -178,7 +178,7 @@ fn bootstrap_internal_server_and_drop_privs(
     config_path: Option<PathBuf>,
 ) -> anyhow::Result<StdUnixStream> {
     if let Some(config_path) = config_path {
-        if !executable_is_suid_or_sgid()? {
+        if !executing_in_suid_sgid_mode()? {
             anyhow::bail!("Executable is not SUID/SGID - refusing to start internal sever");
         }
 
@@ -195,7 +195,7 @@ fn bootstrap_internal_server_and_drop_privs(
 
     let config_path = PathBuf::from(DEFAULT_CONFIG_PATH);
     if fs::metadata(&config_path).is_ok() {
-        if !executable_is_suid_or_sgid()? {
+        if !executing_in_suid_sgid_mode()? {
             anyhow::bail!("Executable is not SUID/SGID - refusing to start internal sever");
         }
         tracing::debug!("Starting server with default config at {:?}", config_path);

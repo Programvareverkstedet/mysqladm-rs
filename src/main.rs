@@ -16,7 +16,7 @@ use futures_util::StreamExt;
 use crate::{
     core::{
         bootstrap::bootstrap_server_connection_and_drop_privileges,
-        common::{ASCII_BANNER, KIND_REGARDS, executable_is_suid_or_sgid},
+        common::{ASCII_BANNER, KIND_REGARDS, executing_in_suid_sgid_mode},
         protocol::{Response, create_client_to_server_message_stream},
     },
     server::{command::ServerArgs, landlock::landlock_restrict_server},
@@ -151,7 +151,7 @@ fn main() -> anyhow::Result<()> {
 fn handle_dynamic_completion() -> anyhow::Result<Option<()>> {
     if std::env::var_os("COMPLETE").is_some() {
         #[cfg(feature = "suid-sgid-mode")]
-        if executable_is_suid_or_sgid()? {
+        if executing_in_suid_sgid_mode()? {
             use crate::core::bootstrap::drop_privs;
             drop_privs()?
         }
@@ -202,7 +202,7 @@ fn handle_server_command(args: &Args) -> anyhow::Result<Option<()>> {
     match args.command {
         Command::Server(ref command) => {
             assert!(
-                !executable_is_suid_or_sgid()?,
+                !executing_in_suid_sgid_mode()?,
                 "The executable should not be SUID or SGID when running the server manually"
             );
 

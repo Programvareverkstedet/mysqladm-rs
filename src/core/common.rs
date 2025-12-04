@@ -67,28 +67,20 @@ fn get_unix_groups(user: &LibcUser) -> anyhow::Result<Vec<LibcGroup>> {
     Ok(groups)
 }
 
-/// Check if the current executable is SUID or SGID.
-///
-/// If the check fails, an error is returned.
+/// Check if the current executable is running in SUID/SGID mode
 #[cfg(feature = "suid-sgid-mode")]
-pub fn executable_is_suid_or_sgid() -> anyhow::Result<bool> {
-    use std::{fs, os::unix::fs::PermissionsExt};
-    let result = std::env::current_exe()
-        .context("Failed to get current executable path")
-        .and_then(|executable| {
-            fs::metadata(executable).context("Failed to get executable metadata")
-        })
-        .context("Failed to check SUID/SGID bits on executable")
-        .map(|metadata| {
-            let mode = metadata.permissions().mode();
-            mode & 0o4000 != 0 || mode & 0o2000 != 0
-        })?;
-    Ok(result)
+pub fn executing_in_suid_sgid_mode() -> anyhow::Result<bool> {
+    let euid = nix::unistd::geteuid();
+    let uid = nix::unistd::getuid();
+    let egid = nix::unistd::getegid();
+    let gid = nix::unistd::getgid();
+
+    Ok(euid != uid || egid != gid)
 }
 
 #[cfg(not(feature = "suid-sgid-mode"))]
 #[inline]
-pub fn executable_is_suid_or_sgid() -> anyhow::Result<bool> {
+pub fn executing_in_suid_sgid_mode() -> anyhow::Result<bool> {
     Ok(false)
 }
 

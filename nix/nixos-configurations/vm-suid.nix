@@ -90,7 +90,7 @@ nixpkgs.lib.nixosSystem {
         defaultEditor = true;
       };
 
-      environment.systemPackages = with pkgs; [ jq ];
+      environment.systemPackages = with pkgs; [ jq pkgs.muscl ];
     })
   ];
 }
