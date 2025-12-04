@@ -116,11 +116,6 @@ assets = [
         "usr/share/fish/vendor_completions.d/",
         "644",
     ],
-    [
-        "assets/systemd/*",
-        "etc/systemd/system/",
-        "644",
-    ],
 ]
 systemd-units = [
     { unit-name = "muscl", unit-scripts = "assets/systemd", enable = true },
