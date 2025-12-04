@@ -16,4 +16,11 @@ impl GetAllDatabasesPrivilegeDataError {
             GetAllDatabasesPrivilegeDataError::MySqlError(err) => format!("MySQL error: {}", err),
         }
     }
+
+    #[allow(dead_code)]
+    pub fn error_type(&self) -> String {
+        match self {
+            GetAllDatabasesPrivilegeDataError::MySqlError(_) => "mysql-error".to_string(),
+        }
+    }
 }

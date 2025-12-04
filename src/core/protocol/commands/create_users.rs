@@ -75,12 +75,14 @@ impl CreateUserError {
         }
     }
 
-    pub fn error_type(&self) -> &'static str {
+    pub fn error_type(&self) -> String {
         match self {
-            CreateUserError::SanitizationError(_) => "sanitization-error",
-            CreateUserError::OwnershipError(_) => "ownership-error",
-            CreateUserError::UserAlreadyExists => "user-already-exists",
-            CreateUserError::MySqlError(_) => "mysql-error",
+            CreateUserError::SanitizationError(err) => {
+                format!("sanitization-error/{}", err.error_type())
+            }
+            CreateUserError::OwnershipError(err) => format!("ownership-error/{}", err.error_type()),
+            CreateUserError::UserAlreadyExists => "user-already-exists".to_string(),
+            CreateUserError::MySqlError(_) => "mysql-error".to_string(),
         }
     }
 }

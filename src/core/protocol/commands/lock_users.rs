@@ -79,13 +79,15 @@ impl LockUserError {
         }
     }
 
-    pub fn error_type(&self) -> &'static str {
+    pub fn error_type(&self) -> String {
         match self {
-            LockUserError::SanitizationError(_) => "sanitization-error",
-            LockUserError::OwnershipError(_) => "ownership-error",
-            LockUserError::UserDoesNotExist => "user-does-not-exist",
-            LockUserError::UserIsAlreadyLocked => "user-is-already-locked",
-            LockUserError::MySqlError(_) => "mysql-error",
+            LockUserError::SanitizationError(err) => {
+                format!("sanitization-error/{}", err.error_type())
+            }
+            LockUserError::OwnershipError(err) => format!("ownership-error/{}", err.error_type()),
+            LockUserError::UserDoesNotExist => "user-does-not-exist".to_string(),
+            LockUserError::UserIsAlreadyLocked => "user-is-already-locked".to_string(),
+            LockUserError::MySqlError(_) => "mysql-error".to_string(),
         }
     }
 }

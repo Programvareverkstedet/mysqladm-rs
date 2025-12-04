@@ -79,13 +79,15 @@ impl UnlockUserError {
         }
     }
 
-    pub fn error_type(&self) -> &'static str {
+    pub fn error_type(&self) -> String {
         match self {
-            UnlockUserError::SanitizationError(_) => "sanitization-error",
-            UnlockUserError::OwnershipError(_) => "ownership-error",
-            UnlockUserError::UserDoesNotExist => "user-does-not-exist",
-            UnlockUserError::UserIsAlreadyUnlocked => "user-is-already-unlocked",
-            UnlockUserError::MySqlError(_) => "mysql-error",
+            UnlockUserError::SanitizationError(err) => {
+                format!("sanitization-error/{}", err.error_type())
+            }
+            UnlockUserError::OwnershipError(err) => format!("ownership-error/{}", err.error_type()),
+            UnlockUserError::UserDoesNotExist => "user-does-not-exist".to_string(),
+            UnlockUserError::UserIsAlreadyUnlocked => "user-is-already-unlocked".to_string(),
+            UnlockUserError::MySqlError(_) => "mysql-error".to_string(),
         }
     }
 }

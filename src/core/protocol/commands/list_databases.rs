@@ -94,12 +94,16 @@ impl ListDatabasesError {
         }
     }
 
-    pub fn error_type(&self) -> &'static str {
+    pub fn error_type(&self) -> String {
         match self {
-            ListDatabasesError::SanitizationError(_) => "sanitization-error",
-            ListDatabasesError::OwnershipError(_) => "ownership-error",
-            ListDatabasesError::DatabaseDoesNotExist => "database-does-not-exist",
-            ListDatabasesError::MySqlError(_) => "mysql-error",
+            ListDatabasesError::SanitizationError(err) => {
+                format!("sanitization-error/{}", err.error_type())
+            }
+            ListDatabasesError::OwnershipError(err) => {
+                format!("ownership-error/{}", err.error_type())
+            }
+            ListDatabasesError::DatabaseDoesNotExist => "database-does-not-exist".to_string(),
+            ListDatabasesError::MySqlError(_) => "mysql-error".to_string(),
         }
     }
 }

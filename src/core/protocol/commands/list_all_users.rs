@@ -15,4 +15,11 @@ impl ListAllUsersError {
             ListAllUsersError::MySqlError(err) => format!("MySQL error: {}", err),
         }
     }
+
+    #[allow(dead_code)]
+    pub fn error_type(&self) -> String {
+        match self {
+            ListAllUsersError::MySqlError(_) => "mysql-error".to_string(),
+        }
+    }
 }

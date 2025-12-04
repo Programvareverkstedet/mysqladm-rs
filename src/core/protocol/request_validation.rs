@@ -34,6 +34,14 @@ impl NameValidationError {
             .to_owned(),
         }
     }
+
+    pub fn error_type(&self) -> &'static str {
+        match self {
+            NameValidationError::EmptyString => "empty-string",
+            NameValidationError::InvalidCharacters => "invalid-characters",
+            NameValidationError::TooLong => "too-long",
+        }
+    }
 }
 
 impl OwnerValidationError {
@@ -79,6 +87,13 @@ impl OwnerValidationError {
                 db_or_user.lowercased_noun()
             )
             .to_string(),
+        }
+    }
+
+    pub fn error_type(&self) -> &'static str {
+        match self {
+            OwnerValidationError::NoMatch => "no-match",
+            OwnerValidationError::StringEmpty => "string-empty",
         }
     }
 }

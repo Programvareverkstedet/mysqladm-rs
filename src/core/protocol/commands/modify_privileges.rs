@@ -81,27 +81,27 @@ impl ModifyDatabasePrivilegesError {
     }
 
     #[allow(dead_code)]
-    pub fn error_type(&self) -> &'static str {
+    pub fn error_type(&self) -> String {
         match self {
-            ModifyDatabasePrivilegesError::DatabaseSanitizationError(_) => {
-                "database-sanitization-error"
+            ModifyDatabasePrivilegesError::DatabaseSanitizationError(err) => {
+                format!("database-sanitization-error/{}", err.error_type())
             }
-            ModifyDatabasePrivilegesError::DatabaseOwnershipError(_) => "database-ownership-error",
-            ModifyDatabasePrivilegesError::UserSanitizationError(_) => "user-sanitization-error",
-            ModifyDatabasePrivilegesError::UserOwnershipError(_) => "user-ownership-error",
-            ModifyDatabasePrivilegesError::DatabaseDoesNotExist => "database-does-not-exist",
-            ModifyDatabasePrivilegesError::DiffDoesNotApply(err) => match err {
-                DiffDoesNotApplyError::RowAlreadyExists(_, _) => {
-                    "diff-does-not-apply/row-already-exists"
-                }
-                DiffDoesNotApplyError::RowDoesNotExist(_, _) => {
-                    "diff-does-not-apply/row-does-not-exist"
-                }
-                DiffDoesNotApplyError::RowPrivilegeChangeDoesNotApply(_, _) => {
-                    "diff-does-not-apply/row-privilege-change-does-not-apply"
-                }
-            },
-            ModifyDatabasePrivilegesError::MySqlError(_) => "mysql-error",
+            ModifyDatabasePrivilegesError::DatabaseOwnershipError(err) => {
+                format!("database-ownership-error/{}", err.error_type())
+            }
+            ModifyDatabasePrivilegesError::UserSanitizationError(err) => {
+                format!("user-sanitization-error/{}", err.error_type())
+            }
+            ModifyDatabasePrivilegesError::UserOwnershipError(err) => {
+                format!("user-ownership-error/{}", err.error_type())
+            }
+            ModifyDatabasePrivilegesError::DatabaseDoesNotExist => {
+                "database-does-not-exist".to_string()
+            }
+            ModifyDatabasePrivilegesError::DiffDoesNotApply(err) => {
+                format!("diff-does-not-apply/{}", err.error_type())
+            }
+            ModifyDatabasePrivilegesError::MySqlError(_) => "mysql-error".to_string(),
         }
     }
 }
@@ -126,6 +126,16 @@ impl DiffDoesNotApplyError {
                     "Could not apply privilege change {:?} to row {:?}",
                     diff, row
                 )
+            }
+        }
+    }
+
+    pub fn error_type(&self) -> String {
+        match self {
+            DiffDoesNotApplyError::RowAlreadyExists(_, _) => "row-already-exists".to_string(),
+            DiffDoesNotApplyError::RowDoesNotExist(_, _) => "row-does-not-exist".to_string(),
+            DiffDoesNotApplyError::RowPrivilegeChangeDoesNotApply(_, _) => {
+                "row-privilege-change-does-not-apply".to_string()
             }
         }
     }

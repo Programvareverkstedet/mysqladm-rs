@@ -109,12 +109,14 @@ impl ListUsersError {
         }
     }
 
-    pub fn error_type(&self) -> &'static str {
+    pub fn error_type(&self) -> String {
         match self {
-            ListUsersError::SanitizationError(_) => "sanitization-error",
-            ListUsersError::OwnershipError(_) => "ownership-error",
-            ListUsersError::UserDoesNotExist => "user-does-not-exist",
-            ListUsersError::MySqlError(_) => "mysql-error",
+            ListUsersError::SanitizationError(err) => {
+                format!("sanitization-error/{}", err.error_type())
+            }
+            ListUsersError::OwnershipError(err) => format!("ownership-error/{}", err.error_type()),
+            ListUsersError::UserDoesNotExist => "user-does-not-exist".to_string(),
+            ListUsersError::MySqlError(_) => "mysql-error".to_string(),
         }
     }
 }

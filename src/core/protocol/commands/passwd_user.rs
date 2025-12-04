@@ -48,12 +48,16 @@ impl SetPasswordError {
     }
 
     #[allow(dead_code)]
-    pub fn error_type(&self) -> &'static str {
+    pub fn error_type(&self) -> String {
         match self {
-            SetPasswordError::SanitizationError(_) => "sanitization-error",
-            SetPasswordError::OwnershipError(_) => "ownership-error",
-            SetPasswordError::UserDoesNotExist => "user-does-not-exist",
-            SetPasswordError::MySqlError(_) => "mysql-error",
+            SetPasswordError::SanitizationError(err) => {
+                format!("sanitization-error/{}", err.error_type())
+            }
+            SetPasswordError::OwnershipError(err) => {
+                format!("ownership-error/{}", err.error_type())
+            }
+            SetPasswordError::UserDoesNotExist => "user-does-not-exist".to_string(),
+            SetPasswordError::MySqlError(_) => "mysql-error".to_string(),
         }
     }
 }

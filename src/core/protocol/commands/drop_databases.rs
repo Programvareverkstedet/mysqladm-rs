@@ -78,12 +78,16 @@ impl DropDatabaseError {
         }
     }
 
-    pub fn error_type(&self) -> &'static str {
+    pub fn error_type(&self) -> String {
         match self {
-            DropDatabaseError::SanitizationError(_) => "sanitization-error",
-            DropDatabaseError::OwnershipError(_) => "ownership-error",
-            DropDatabaseError::DatabaseDoesNotExist => "database-does-not-exist",
-            DropDatabaseError::MySqlError(_) => "mysql-error",
+            DropDatabaseError::SanitizationError(err) => {
+                format!("sanitization-error/{}", err.error_type())
+            }
+            DropDatabaseError::OwnershipError(err) => {
+                format!("ownership-error/{}", err.error_type())
+            }
+            DropDatabaseError::DatabaseDoesNotExist => "database-does-not-exist".to_string(),
+            DropDatabaseError::MySqlError(_) => "mysql-error".to_string(),
         }
     }
 }

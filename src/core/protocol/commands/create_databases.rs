@@ -75,12 +75,16 @@ impl CreateDatabaseError {
         }
     }
 
-    pub fn error_type(&self) -> &'static str {
+    pub fn error_type(&self) -> String {
         match self {
-            CreateDatabaseError::SanitizationError(_) => "sanitization-error",
-            CreateDatabaseError::OwnershipError(_) => "ownership-error",
-            CreateDatabaseError::DatabaseAlreadyExists => "database-already-exists",
-            CreateDatabaseError::MySqlError(_) => "mysql-error",
+            CreateDatabaseError::SanitizationError(err) => {
+                format!("sanitization-error/{}", err.error_type())
+            }
+            CreateDatabaseError::OwnershipError(err) => {
+                format!("ownership-error/{}", err.error_type())
+            }
+            CreateDatabaseError::DatabaseAlreadyExists => "database-already-exists".to_string(),
+            CreateDatabaseError::MySqlError(_) => "mysql-error".to_string(),
         }
     }
 }

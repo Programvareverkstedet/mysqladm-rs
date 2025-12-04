@@ -15,4 +15,11 @@ impl ListAllDatabasesError {
             ListAllDatabasesError::MySqlError(err) => format!("MySQL error: {}", err),
         }
     }
+
+    #[allow(dead_code)]
+    pub fn error_type(&self) -> String {
+        match self {
+            ListAllDatabasesError::MySqlError(_) => "mysql-error".to_string(),
+        }
+    }
 }

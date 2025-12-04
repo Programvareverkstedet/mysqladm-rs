@@ -128,12 +128,18 @@ impl GetDatabasesPrivilegeDataError {
         }
     }
 
-    pub fn error_type(&self) -> &'static str {
+    pub fn error_type(&self) -> String {
         match self {
-            GetDatabasesPrivilegeDataError::SanitizationError(_) => "sanitization-error",
-            GetDatabasesPrivilegeDataError::OwnershipError(_) => "ownership-error",
-            GetDatabasesPrivilegeDataError::DatabaseDoesNotExist => "database-does-not-exist",
-            GetDatabasesPrivilegeDataError::MySqlError(_) => "mysql-error",
+            GetDatabasesPrivilegeDataError::SanitizationError(err) => {
+                format!("sanitization-error/{}", err.error_type())
+            }
+            GetDatabasesPrivilegeDataError::OwnershipError(err) => {
+                format!("ownership-error/{}", err.error_type())
+            }
+            GetDatabasesPrivilegeDataError::DatabaseDoesNotExist => {
+                "database-does-not-exist".to_string()
+            }
+            GetDatabasesPrivilegeDataError::MySqlError(_) => "mysql-error".to_string(),
         }
     }
 }

@@ -75,12 +75,14 @@ impl DropUserError {
         }
     }
 
-    pub fn error_type(&self) -> &'static str {
+    pub fn error_type(&self) -> String {
         match self {
-            DropUserError::SanitizationError(_) => "sanitization-error",
-            DropUserError::OwnershipError(_) => "ownership-error",
-            DropUserError::UserDoesNotExist => "user-does-not-exist",
-            DropUserError::MySqlError(_) => "mysql-error",
+            DropUserError::SanitizationError(err) => {
+                format!("sanitization-error/{}", err.error_type())
+            }
+            DropUserError::OwnershipError(err) => format!("ownership-error/{}", err.error_type()),
+            DropUserError::UserDoesNotExist => "user-does-not-exist".to_string(),
+            DropUserError::MySqlError(_) => "mysql-error".to_string(),
         }
     }
 }

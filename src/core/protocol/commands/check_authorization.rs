@@ -79,11 +79,14 @@ impl CheckAuthorizationError {
         }
     }
 
-    pub fn error_type(&self) -> &'static str {
+    pub fn error_type(&self) -> String {
         match self {
-            CheckAuthorizationError::SanitizationError(_) => "sanitization-error",
-            CheckAuthorizationError::OwnershipError(_) => "ownership-error",
-            // CheckAuthorizationError::AuthorizationHandlerError(_) => "authorization-handler-error",
+            CheckAuthorizationError::SanitizationError(err) => {
+                format!("sanitization-error/{}", err.error_type())
+            }
+            CheckAuthorizationError::OwnershipError(err) => {
+                format!("ownership-error/{}", err.error_type())
+            } // CheckAuthorizationError::AuthorizationHandlerError(_) => "authorization-handler-error".to_string(),
         }
     }
 }
