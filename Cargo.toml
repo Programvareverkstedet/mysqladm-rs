@@ -80,6 +80,7 @@ depends = "$auto"
 license-file = ["LICENSE", "0"]
 maintainer = "Programvareverkstedet <projects@pvv.ntnu.no>"
 copyright = "Copyright (c) 2025, Programvareverkstedet"
+changelog = "CHANGELOG.md"
 assets = [
     [
         "target/release/muscl",
