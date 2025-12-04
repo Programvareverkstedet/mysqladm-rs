@@ -18,7 +18,8 @@ use crate::{
 #[derive(Parser, Debug, Clone)]
 pub struct ShowUserArgs {
     /// The MySQL user(s) to show
-    #[arg(num_args = 0.., add = ArgValueCompleter::new(mysql_user_completer))]
+    #[arg(num_args = 0..)]
+    #[cfg_attr(not(feature = "suid-sgid-mode"), arg(add = ArgValueCompleter::new(mysql_user_completer)))]
     username: Vec<MySQLUser>,
 
     /// Print the information as JSON

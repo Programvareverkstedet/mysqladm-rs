@@ -130,21 +130,23 @@ pub struct CreateArgs {
 #[derive(Parser)]
 pub struct DatabaseDropArgs {
     /// The name of the DATABASE(s) to drop.
-    #[arg(num_args = 1.., add = ArgValueCompleter::new(mysql_database_completer))]
+    #[arg(num_args = 1..)]
+    #[cfg_attr(not(feature = "suid-sgid-mode"), arg(add = ArgValueCompleter::new(mysql_database_completer)))]
     name: Vec<MySQLDatabase>,
 }
 
 #[derive(Parser)]
 pub struct DatabaseShowArgs {
     /// The name of the DATABASE(s) to show.
-    #[arg(num_args = 0.., add = ArgValueCompleter::new(mysql_database_completer))]
+    #[arg(num_args = 0..)]
+    #[cfg_attr(not(feature = "suid-sgid-mode"), arg(add = ArgValueCompleter::new(mysql_database_completer)))]
     name: Vec<MySQLDatabase>,
 }
 
 #[derive(Parser)]
 pub struct EditPermArgs {
     /// The name of the DATABASE to edit permissions for.
-    #[arg(add = ArgValueCompleter::new(mysql_database_completer))]
+    #[cfg_attr(not(feature = "suid-sgid-mode"), arg(add = ArgValueCompleter::new(mysql_database_completer)))]
     pub database: MySQLDatabase,
 }
 

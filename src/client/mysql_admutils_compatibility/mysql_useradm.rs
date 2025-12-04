@@ -93,21 +93,24 @@ pub struct CreateArgs {
 #[derive(Parser)]
 pub struct DeleteArgs {
     /// The name of the USER(s) to delete.
-    #[arg(num_args = 1.., add = ArgValueCompleter::new(mysql_user_completer))]
+    #[arg(num_args = 1..)]
+    #[cfg_attr(not(feature = "suid-sgid-mode"), arg(add = ArgValueCompleter::new(mysql_user_completer)))]
     name: Vec<MySQLUser>,
 }
 
 #[derive(Parser)]
 pub struct PasswdArgs {
     /// The name of the USER(s) to change the password for.
-    #[arg(num_args = 1.., add = ArgValueCompleter::new(mysql_user_completer))]
+    #[arg(num_args = 1..)]
+    #[cfg_attr(not(feature = "suid-sgid-mode"), arg(add = ArgValueCompleter::new(mysql_user_completer)))]
     name: Vec<MySQLUser>,
 }
 
 #[derive(Parser)]
 pub struct ShowArgs {
     /// The name of the USER(s) to show.
-    #[arg(num_args = 0.., add = ArgValueCompleter::new(mysql_user_completer))]
+    #[arg(num_args = 0..)]
+    #[cfg_attr(not(feature = "suid-sgid-mode"), arg(add = ArgValueCompleter::new(mysql_user_completer)))]
     name: Vec<MySQLUser>,
 }
 

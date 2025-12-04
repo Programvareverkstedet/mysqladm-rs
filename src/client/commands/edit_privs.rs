@@ -29,7 +29,7 @@ use crate::{
 #[derive(Parser, Debug, Clone)]
 pub struct EditPrivsArgs {
     /// The MySQL database to edit privileges for
-    #[arg(add = ArgValueCompleter::new(mysql_database_completer))]
+    #[cfg_attr(not(feature = "suid-sgid-mode"), arg(add = ArgValueCompleter::new(mysql_database_completer)))]
     pub name: Option<MySQLDatabase>,
 
     #[arg(
