@@ -45,7 +45,7 @@ fn generate_mysql_admutils_symlinks() -> anyhow::Result<()> {
 
     if !target_profile_dir.join("mysql-useradm").exists() {
         symlink(
-            target_profile_dir.join("muscl"),
+            PathBuf::from("./muscl"),
             target_profile_dir.join("mysql-useradm"),
         )
         .ok();
@@ -53,7 +53,7 @@ fn generate_mysql_admutils_symlinks() -> anyhow::Result<()> {
 
     if !target_profile_dir.join("mysql-dbadm").exists() {
         symlink(
-            target_profile_dir.join("muscl"),
+            PathBuf::from("./muscl"),
             target_profile_dir.join("mysql-dbadm"),
         )
         .ok();
