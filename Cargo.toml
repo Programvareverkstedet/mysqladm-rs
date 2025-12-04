@@ -147,6 +147,7 @@ assets = [
     ],
 ]
 preserve-symlinks = true
+maintainer-scripts = "debian/"
 systemd-units = [
     { unit-name = "muscl", unit-scripts = "assets/systemd", enable = true },
 ]
