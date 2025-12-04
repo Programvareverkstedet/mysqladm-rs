@@ -13,18 +13,6 @@ on:
         default: "1"
         required: true
 
-      debian_distribution:
-        description: "Which distributions of debian to publish for"
-        type: string
-        default: trixie,bookworm
-        required: true
-
-      # repository_component
-      #   description: "Which apt repository component to publish for
-      #   type: string
-      #   default: main
-      #   required: true
-
       rust_toolchain:
         description: "Whether to build the package with stable rust"
         type: choice
@@ -37,10 +25,12 @@ on:
 # TODO: dynamic matrix builds when...
 #       https://github.com/go-gitea/gitea/issues/25179
 jobs:
-  build-trixie:
-    name: "Build and publish for Debian Trixie"
-    runs-on: debian-trixie
-    if: contains(github.event.inputs.debian_distribution, 'trixie')
+  build-deb:
+    strategy:
+      matrix:
+        os: [debian-trixie, debian-bookworm, ubuntu-noble, ubuntu-jammy]
+    name: Build and publish for ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v3
 
@@ -70,7 +60,7 @@ jobs:
       - name: Upload deb package artifact
         uses: actions/upload-artifact@v3
         with:
-          name: muscl-trixie-deb.zip
+          name: muscl-deb-${{ matrix.os }}.zip
           path: target/debian/*.deb
           if-no-files-found: error
           retention-days: 30
@@ -83,47 +73,8 @@ jobs:
       #
       # - name: Publish deb package
       #   run: |
+      #     # TODO: remove ubuntu-/debian- prefix from os.matrix
       #     curl \
       #       --user your_username:your_password_or_token \
       #       --upload-file target/debian/*.deb \
-      #       https://git.pvv.ntnu.no/api/packages/${{ github.repository_owner }}/debian/pool/${{ inputs.debian_distribution }}/${{ inputs.repository_component }}/upload
-
-  build-bookworm:
-    name: "Build and publish for Debian Bookworm"
-    runs-on: debian-bookworm
-    if: contains(github.event.inputs.debian_distribution, 'bookworm')
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Install rust toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-            toolchain: ${{ inputs.rust_toolchain }}
-            override: true
-
-      - name: Install cargo-deb
-        run: cargo install cargo-deb
-
-      - name: Build deb package
-        env:
-          CREATE_DEB_DEBUG: "1"
-        run: |
-          CREATE_DEB_ARGS=(
-            --deb-revision "${{ inputs.deb_revision }}"
-          )
-
-          if [ "${{ inputs.deb_version }}" != "" ]; then
-            CREATE_DEB_ARGS+=("--deb-version" "${{ inputs.deb_version }}")
-          fi
-
-          ./create-deb.sh "${CREATE_DEB_ARGS[@]}"
-
-      - name: Upload deb package artifact
-        uses: actions/upload-artifact@v3
-        with:
-          name: muscl-bookworm-deb.zip
-          path: target/debian/*.deb
-          if-no-files-found: error
-          retention-days: 30
-          # Already compressed
-          compression: 0
+      #       https://git.pvv.ntnu.no/api/packages/${{ github.repository_owner }}/debian/pool/${{ os.matrix }}/${{ inputs.repository_component }}/upload
