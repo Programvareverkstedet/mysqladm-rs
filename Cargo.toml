@@ -119,6 +119,9 @@ assets = [
     ],
 ]
 preserve-symlinks = true
+conf-files = [
+    "etc/muscl/config.toml"
+]
 systemd-units = [
     { unit-name = "muscl", unit-scripts = "assets/systemd", enable = true },
 ]
