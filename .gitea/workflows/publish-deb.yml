@@ -1,4 +1,5 @@
-name: "publish-deb"
+name: "Publish Debian package"
+run-name: "Publish Debian package"
 on:
   workflow_dispatch:
     inputs:
