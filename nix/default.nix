@@ -1,26 +1,63 @@
 {
   lib
 , rustPlatform
+, stdenv
+, installShellFiles
+, versionCheckHook
+
 , cargoToml
 , cargoLock
 , src
-, installShellFiles
 
 , useCrane ? false
 , craneLib ? null
+, suidSgidSupport ? false
 }:
 let
   mainProgram = (lib.head cargoToml.bin).name;
   buildFunction = if useCrane then craneLib.buildPackage else rustPlatform.buildRustPackage;
-  cargoLock' = if useCrane then cargoLock else { lockFile = cargoLock; };
-  pname = if useCrane then "${cargoToml.package.name}-crane" else cargoToml.package.name;
-in
-buildFunction {
-  pname = pname;
-  version = cargoToml.package.version;
-  inherit src;
 
-  cargoLock = cargoLock';
+  pnameCraneSuffix = lib.optionalString useCrane "-crane";
+  pnameSuidSuffix = lib.optionalString suidSgidSupport "-suid";
+  pname = "${cargoToml.package.name}${pnameSuidSuffix}${pnameCraneSuffix}";
+
+  rustPlatformArgs = {
+    buildFeatures = lib.optional suidSgidSupport "suid-sgid-mode";
+    cargoLock.lockFile = cargoLock;
+
+    doCheck = true;
+    useNextest = true;
+    nativeCheckInputs = [
+      versionCheckHook
+    ];
+    cargoCheckFeatures = lib.optional suidSgidSupport "suid-sgid-mode";
+
+    postCheck = lib.optionalString (stdenv.buildPlatform.system == stdenv.hostPlatform.system && suidSgidSupport) ''
+      ./target/${stdenv.hostPlatform.rust.rustcTarget}/release/muscl --version | grep "SUID/SGID mode: enabled"
+    '';
+  };
+
+  craneArgs = {
+    cargoLock = cargoLock;
+    cargoExtraArgs = lib.escapeShellArgs [ "--features" (lib.concatStringsSep "," (lib.optional suidSgidSupport "suid-sgid-mode")) ];
+    cargoArtifacts = craneLib.buildDepsOnly {
+      inherit pname;
+      inherit (cargoToml.package) version;
+      src = lib.fileset.toSource {
+        root = ../.;
+        fileset = lib.fileset.unions [
+          (craneLib.fileset.cargoTomlAndLock ../.)
+        ];
+      };
+
+      cargoLock = cargoLock;
+    };
+  };
+in
+buildFunction ({
+  inherit pname;
+  inherit (cargoToml.package) version;
+  inherit src;
 
   nativeBuildInputs = [ installShellFiles ];
   postInstall = let
@@ -29,10 +66,9 @@ buildFunction {
         export PATH="$out/bin:$PATH"
         export COMPLETE="${shell}"
         "${command}" > "$TMP/${command}.${shell}"
-
-        # See https://github.com/clap-rs/clap/issues/1764
-        sed -i 's/muscl/${command}/g' "$TMP/${command}.${shell}"
       )
+      # See https://github.com/clap-rs/clap/issues/1764
+      sed -i 's/muscl/${command}/g' "$TMP/${command}.${shell}"
       installShellCompletion "--${shell}" --cmd "${command}" "$TMP/${command}.${shell}"
     '') {
       shell = [ "bash" "zsh" "fish" ];
@@ -56,3 +92,6 @@ buildFunction {
     inherit mainProgram;
   };
 }
+//
+(if useCrane then craneArgs else rustPlatformArgs)
+)
