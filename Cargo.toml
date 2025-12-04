@@ -7,8 +7,9 @@ authors = [
   "oysteikt@pvv.ntnu.no",
   "felixalb@pvv.ntnu.no",
 ]
+homepage = "https://git.pvv.ntnu.no/Projects/muscl"
 repository = "https://git.pvv.ntnu.no/Projects/muscl"
-documentation = "https://pages.pvv.ntnu.no/Projects/muscl/main/docs/muscl/"
+documentation = "https://pages.pvv.ntnu.no/Projects/muscl/main/docs/muscl"
 description = "A command-line utility for MySQL administration for non-admin users"
 categories = ["command-line-interface", "command-line-utilities"]
 keywords = ["mysql", "cli", "administration"]
@@ -80,6 +81,33 @@ depends = "$auto"
 license-file = ["LICENSE", "0"]
 maintainer = "Programvareverkstedet <projects@pvv.ntnu.no>"
 copyright = "Copyright (c) 2025, Programvareverkstedet"
+# NOTE: try to keep this in sync with README, and keep an 80 char limit.
+extended-description = """
+
+Muscl is a CLI tool that let's unprivileged users perform administrative
+operations on a MySQL DBMS, given the are authorized to perform the action
+on the database or database user in question. The default authorization
+mechanism is to only let the user perform these actions on databases and
+database users that are prefixed with their username, or with the name of any
+unix group that the user is a part of. i.e. `<user>_mydb`, `<user>_mydbuser`,
+or `<group>_myotherdb`.
+
+The available administrative actions include:
+
+- creating/listing/modifying/deleting databases and database users
+- modifying privileges for a database user on a database
+- changing the passwords of the database users
+- locking and unlocking database users
+- ... more to come
+
+The software is designed to be run as a client and a server. The server has
+administrative access to the mysql server, and is responsible for authorizing
+any requests from the clients.
+
+This software is designed for multi-user servers, like tilde servers,
+university servers, etc.\
+"""
+
 changelog = "CHANGELOG.md"
 assets = [
     [
@@ -119,9 +147,6 @@ assets = [
     ],
 ]
 preserve-symlinks = true
-conf-files = [
-    "etc/muscl/config.toml"
-]
 systemd-units = [
     { unit-name = "muscl", unit-scripts = "assets/systemd", enable = true },
 ]
