@@ -1,8 +1,25 @@
 # Installation and configuration
 
-## Installing with deb on Debian/Ubuntu
+## Installing with deb on Debian
 
-**TODO:** write this section once the package has been pushed to the gitea package repository.
+You can install muscl by adding the muscl apt repository and installing the package:
+
+```bash
+# Check the version of your Debian installation
+VERSION_CODENAME=$(lsb_release -cs)
+
+# Add the repository
+echo "deb [signed-by=/etc/apt/keyrings/pvvgit-projects.asc] https://git.pvv.ntnu.no/api/packages/Projects/debian $VERSION_CODENAME main" | sudo tee -a /etc/apt/sources.list.d/gitea.list
+
+# Pull the repository key
+sudo curl https://git.pvv.ntnu.no/api/packages/Projects/debian/repository.key -o /etc/apt/keyrings/pvvgit-projects.asc
+
+# Update package lists
+sudo apt update
+
+# Install muscl
+sudo apt install muscl
+```
 
 ## Creating a database user
 
