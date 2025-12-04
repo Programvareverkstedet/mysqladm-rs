@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+set -euo pipefail
+
 cargo build --release
 
 mkdir -p assets/completions
@@ -24,4 +26,8 @@ mkdir -p assets/completions
 sed -i 's/muscl/mysql-dbadm/g' assets/completions/{mysql-dbadm.bash,mysql-dbadm.fish,_mysql-dbadm}
 sed -i 's/muscl/mysql-useradm/g' assets/completions/{mysql-useradm.bash,mysql-useradm.fish,_mysql-useradm}
 
-cargo deb --no-build
+DEFAULT_CARGO_DEB_ARGS=(
+  --no-build
+)
+
+cargo deb "${DEFAULT_CARGO_DEB_ARGS[@]}" "$@"

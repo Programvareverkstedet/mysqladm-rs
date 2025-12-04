@@ -2,10 +2,15 @@ name: "publish-deb"
 on:
   workflow_dispatch:
     inputs:
-      # version:
-      #   description: "Version to publish"
-      #   type: string
-      #   required: true
+      deb_version:
+        description: "Version to publish"
+        type: string
+
+      deb_revision:
+        description: "Debian package revision"
+        type: string
+        default: "1"
+        required: true
 
       # debian_distribution
       #   description: "Which distribution of debian to publish for"
@@ -44,7 +49,10 @@ jobs:
         run: cargo install cargo-deb
 
       - name: Build deb package
-        run: ./create-deb.sh
+        run: |
+          ./create-deb.sh \
+            ${{ inputs.deb_version != "" && "--deb-version " + inputs.deb_version || "" }} \
+            ${{ inputs.deb_revision != "" && "--deb-revision " + inputs.deb_revision || "" }}
 
       - name: Upload deb package artifact
         uses: actions/upload-artifact@v3
