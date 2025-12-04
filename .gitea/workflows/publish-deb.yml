@@ -13,11 +13,11 @@ on:
         default: "1"
         required: true
 
-      # debian_distribution
-      #   description: "Which distribution of debian to publish for"
-      #   type: string
-      #   default: trixie
-      #   required: true
+      debian_distribution:
+        description: "Which distributions of debian to publish for"
+        type: string
+        default: trixie,bookworm
+        required: true
 
       # repository_component
       #   description: "Which apt repository component to publish for
@@ -34,9 +34,13 @@ on:
           - beta
         default: stable
 
+# TODO: dynamic matrix builds when...
+#       https://github.com/go-gitea/gitea/issues/25179
 jobs:
-  build:
-    runs-on: ubuntu-latest
+  build-trixie:
+    name: "Build and publish for Debian Trixie"
+    runs-on: debian-trixie
+    if: contains(github.event.inputs.debian_distribution, 'trixie')
     steps:
       - uses: actions/checkout@v3
 
@@ -66,7 +70,7 @@ jobs:
       - name: Upload deb package artifact
         uses: actions/upload-artifact@v3
         with:
-          name: muscl-deb.zip
+          name: muscl-trixie-deb.zip
           path: target/debian/*.deb
           if-no-files-found: error
           retention-days: 30
@@ -83,3 +87,43 @@ jobs:
       #       --user your_username:your_password_or_token \
       #       --upload-file target/debian/*.deb \
       #       https://git.pvv.ntnu.no/api/packages/${{ github.repository_owner }}/debian/pool/${{ inputs.debian_distribution }}/${{ inputs.repository_component }}/upload
+
+  build-bookworm:
+    name: "Build and publish for Debian Bookworm"
+    runs-on: debian-bookworm
+    if: contains(github.event.inputs.debian_distribution, 'bookworm')
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+            toolchain: ${{ inputs.rust_toolchain }}
+            override: true
+
+      - name: Install cargo-deb
+        run: cargo install cargo-deb
+
+      - name: Build deb package
+        env:
+          CREATE_DEB_DEBUG: "1"
+        run: |
+          CREATE_DEB_ARGS=(
+            --deb-revision "${{ inputs.deb_revision }}"
+          )
+
+          if [ "${{ inputs.deb_version }}" != "" ]; then
+            CREATE_DEB_ARGS+=("--deb-version" "${{ inputs.deb_version }}")
+          fi
+
+          ./create-deb.sh "${CREATE_DEB_ARGS[@]}"
+
+      - name: Upload deb package artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: muscl-bookworm-deb.zip
+          path: target/debian/*.deb
+          if-no-files-found: error
+          retention-days: 30
+          # Already compressed
+          compression: 0
