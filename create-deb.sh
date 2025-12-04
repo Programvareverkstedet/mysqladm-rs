@@ -18,10 +18,10 @@ mkdir -p assets/completions
   COMPLETE=bash mysql-useradm > assets/completions/mysql-useradm.bash
   COMPLETE=zsh mysql-useradm > assets/completions/_mysql-useradm
   COMPLETE=fish mysql-useradm > assets/completions/mysql-useradm.fish
-
-  # See https://github.com/clap-rs/clap/issues/1764
-  sed -i 's/muscl/mysql-dbadm/g' assets/completions/{mysql-dbadm.bash,mysql-dbadm.fish,_mysql-dbadm}
-  sed -i 's/muscl/mysql-useradm/g' assets/completions/{mysql-useradm.bash,mysql-useradm.fish,_mysql-useradm}
 )
 
-cargo deb
+# See https://github.com/clap-rs/clap/issues/1764
+sed -i 's/muscl/mysql-dbadm/g' assets/completions/{mysql-dbadm.bash,mysql-dbadm.fish,_mysql-dbadm}
+sed -i 's/muscl/mysql-useradm/g' assets/completions/{mysql-useradm.bash,mysql-useradm.fish,_mysql-useradm}
+
+cargo deb --no-build
