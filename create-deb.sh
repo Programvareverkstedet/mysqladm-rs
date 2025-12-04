@@ -2,6 +2,20 @@
 
 set -euo pipefail
 
+if [[ "${CREATE_DEB_DEBUG:-}" == "1" ]]; then
+  set -x
+fi
+
+if ! command -v cargo &> /dev/null; then
+  echo "cargo could not be found" >&2
+  exit 1
+fi
+
+if ! command -v cargo-deb &> /dev/null; then
+  echo "cargo-deb could not be found" >&2
+  exit 1
+fi
+
 cargo build --release
 
 mkdir -p assets/completions

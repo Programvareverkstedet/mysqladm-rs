@@ -49,10 +49,18 @@ jobs:
         run: cargo install cargo-deb
 
       - name: Build deb package
+        env:
+          CREATE_DEB_DEBUG: "1"
         run: |
-          ./create-deb.sh \
-            ${{ inputs.deb_version != "" && "--deb-version " + inputs.deb_version || "" }} \
-            ${{ inputs.deb_revision != "" && "--deb-revision " + inputs.deb_revision || "" }}
+          CREATE_DEB_ARGS=(
+            --deb-revision "${{ inputs.deb_revision }}"
+          )
+
+          if [ "${{ inputs.deb_version }}" != "" ]; then
+            CREATE_DEB_ARGS+=("--deb-version" "${{ inputs.deb_version }}")
+          fi
+
+          ./create-deb.sh "${CREATE_DEB_ARGS[@]}"
 
       - name: Upload deb package artifact
         uses: actions/upload-artifact@v3
