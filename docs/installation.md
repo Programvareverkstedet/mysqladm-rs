@@ -65,3 +65,9 @@ For backwards compatibility reasons, it is possible to run the program without a
 In order to do this, you should set either the SUID/SGID bit and preferably make the executable owned by a non-privileged user.
 If the database is running on the same machine, the user/group will need access to write and read from the database socket.
 Otherwise, the only requirement is that the user/group is able to read the config file (typically `/etc/muscl/config.toml`).
+
+## A note on minimum version requirements
+
+The muscl server will work with older versions of systemd, but the recommended version is 254 or newer.
+
+For full landlock support (disabled by default), you need a linux kernel version 6.7 or newer.
