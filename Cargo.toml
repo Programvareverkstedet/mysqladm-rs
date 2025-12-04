@@ -118,6 +118,7 @@ assets = [
         "644",
     ],
 ]
+preserve-symlinks = true
 systemd-units = [
     { unit-name = "muscl", unit-scripts = "assets/systemd", enable = true },
 ]
