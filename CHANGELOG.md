@@ -34,7 +34,7 @@ This is the initial release of `muscl`.
   - Prompting for passwords will now hide what you write
   - Allow providing passwords through files and stdin
 - Respect `$VISUAL` in addition to `$EDITOR` when launching the privilege editor.
-- Use a constant template for the privilege editor instead of providing random privileges on first use.
+- Use a commented example line in the template for the privilege editor on first use.
 - Display the diff before committing privilege changes.
 - Generally more detailed error reporting:
   - On entering database or user names you do not own, suggest valid names
