@@ -38,6 +38,7 @@ use crate::{
         common::{create_user_group_matching_regex, try_get_with_binary_fallback},
         input_sanitization::{quote_identifier, validate_name, validate_ownership_by_unix_user},
         sql::database_operations::unsafe_database_exists,
+        sql::user_operations::unsafe_user_exists,
     },
 };
 
@@ -442,6 +443,17 @@ pub async fn apply_privilege_diffs(
             results.insert(
                 key,
                 Err(ModifyDatabasePrivilegesError::DatabaseDoesNotExist),
+            );
+            continue;
+        }
+
+        if !unsafe_user_exists(diff.get_user_name(), connection)
+            .await
+            .unwrap()
+        {
+            results.insert(
+                key,
+                Err(ModifyDatabasePrivilegesError::UserDoesNotExist),
             );
             continue;
         }

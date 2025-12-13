@@ -20,6 +20,7 @@ pub enum ModifyDatabasePrivilegesError {
     UserSanitizationError(NameValidationError),
     UserOwnershipError(OwnerValidationError),
     DatabaseDoesNotExist,
+    UserDoesNotExist,
     DiffDoesNotApply(DiffDoesNotApplyError),
     MySqlError(String),
 }
@@ -68,6 +69,9 @@ impl ModifyDatabasePrivilegesError {
             ModifyDatabasePrivilegesError::DatabaseDoesNotExist => {
                 format!("Database '{}' does not exist.", database_name)
             }
+            ModifyDatabasePrivilegesError::UserDoesNotExist => {
+                format!("User '{}' does not exist.", username)
+            }
             ModifyDatabasePrivilegesError::DiffDoesNotApply(diff) => {
                 format!(
                     "Could not apply privilege change:\n{}",
@@ -97,6 +101,9 @@ impl ModifyDatabasePrivilegesError {
             }
             ModifyDatabasePrivilegesError::DatabaseDoesNotExist => {
                 "database-does-not-exist".to_string()
+            }
+            ModifyDatabasePrivilegesError::UserDoesNotExist => {
+                "user-does-not-exist".to_string()
             }
             ModifyDatabasePrivilegesError::DiffDoesNotApply(err) => {
                 format!("diff-does-not-apply/{}", err.error_type())

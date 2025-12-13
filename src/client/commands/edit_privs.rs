@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use anyhow::Context;
 use clap::Parser;
@@ -22,7 +22,7 @@ use crate::{
             ClientToServerMessageStream, Request, Response,
             print_modify_database_privileges_output_status,
         },
-        types::MySQLDatabase,
+        types::{MySQLDatabase, MySQLUser},
     },
 };
 
@@ -57,6 +57,64 @@ pub struct EditPrivsArgs {
     /// Disable interactive confirmation before saving changes
     #[arg(short, long)]
     pub yes: bool,
+}
+
+async fn users_exist(
+    server_connection: &mut ClientToServerMessageStream,
+    privilege_diff: &BTreeSet<DatabasePrivilegesDiff>,
+) -> anyhow::Result<BTreeMap<MySQLUser, bool>> {
+    let user_list = privilege_diff
+        .iter()
+        .map(|diff| diff.get_user_name().clone())
+        .collect();
+
+    let message = Request::ListUsers(Some(user_list));
+    server_connection.send(message).await?;
+
+    let result = match server_connection.next().await {
+        Some(Ok(Response::ListUsers(user_map))) => user_map,
+        response => {
+            erroneous_server_response(response)?;
+            // Unreachable, but needed to satisfy the type checker
+            BTreeMap::new()
+        }
+    };
+
+    let result = result
+        .into_iter()
+        .map(|(user, user_result)| (user, user_result.is_ok()))
+        .collect();
+
+    Ok(result)
+}
+
+async fn databases_exist(
+    server_connection: &mut ClientToServerMessageStream,
+    privilege_diff: &BTreeSet<DatabasePrivilegesDiff>,
+) -> anyhow::Result<BTreeMap<MySQLDatabase, bool>> {
+    let database_list = privilege_diff
+        .iter()
+        .map(|diff| diff.get_database_name().clone())
+        .collect();
+
+    let message = Request::ListDatabases(Some(database_list));
+    server_connection.send(message).await?;
+
+    let result = match server_connection.next().await {
+        Some(Ok(Response::ListDatabases(database_map))) => database_map,
+        response => {
+            erroneous_server_response(response)?;
+            // Unreachable, but needed to satisfy the type checker
+            BTreeMap::new()
+        }
+    };
+
+    let result = result
+        .into_iter()
+        .map(|(database, db_result)| (database, db_result.is_ok()))
+        .collect();
+
+    Ok(result)
 }
 
 pub async fn edit_database_privileges(
@@ -100,7 +158,31 @@ pub async fn edit_database_privileges(
             edit_privileges_with_editor(&existing_privilege_rows, args.name.as_ref())?;
         diff_privileges(&existing_privilege_rows, &privileges_to_change)
     };
-    let diffs = reduce_privilege_diffs(&existing_privilege_rows, diffs)?;
+
+    let user_existence_map = users_exist(&mut server_connection, &diffs).await?;
+    let database_existence_map = databases_exist(&mut server_connection, &diffs).await?;
+
+    let diffs = reduce_privilege_diffs(&existing_privilege_rows, diffs)?
+        .into_iter()
+        .filter(|diff| {
+            let database_name = diff.get_database_name();
+            let username = diff.get_user_name();
+
+            if let Some(false) = database_existence_map.get(database_name) {
+                println!("Database '{}' does not exist.", database_name);
+                println!("Skipping...");
+                return false;
+            }
+
+            if let Some(false) = user_existence_map.get(username) {
+                println!("User '{}' does not exist.", username);
+                println!("Skipping...");
+                return false;
+            }
+
+            true
+        })
+        .collect::<BTreeSet<_>>();
 
     if diffs.is_empty() {
         println!("No changes to make.");

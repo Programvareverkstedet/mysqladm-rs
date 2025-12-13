@@ -26,7 +26,7 @@ use crate::{
 };
 
 // NOTE: this function is unsafe because it does no input validation.
-async fn unsafe_user_exists(
+pub(super) async fn unsafe_user_exists(
     db_user: &str,
     connection: &mut MySqlConnection,
 ) -> Result<bool, sqlx::Error> {
