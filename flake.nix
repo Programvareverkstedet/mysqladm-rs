@@ -49,12 +49,14 @@
         ${lib.getExe pkgs.python3} -m http.server -d "${self.packages.${system}.coverage}/html"
       '') "Serve code coverage report at http://localhost:8000";
 
-      vm = mkVm "vm" "Start a NixOS VM with muscl installed";
+      vm = mkVm "vm" "Start a NixOS VM with muscl and mariadb installed";
+      vm-mysql = mkVm "vm-mysql" "Start a NixOS VM with muscl and mysql installed";
       vm-suid = mkVm "vm-suid" "Start a NixOS VM with muscl as SUID/SGID installed";
     });
 
     nixosConfigurations = {
-      vm = import ./nix/nixos-configurations/vm.nix { inherit self nixpkgs; };
+      vm = import ./nix/nixos-configurations/vm.nix { inherit self nixpkgs; useMariadb = true; };
+      vm-mysql = import ./nix/nixos-configurations/vm.nix { inherit self nixpkgs; useMariadb = false; };
       vm-suid = import ./nix/nixos-configurations/vm-suid.nix { inherit self nixpkgs; };
     };
 

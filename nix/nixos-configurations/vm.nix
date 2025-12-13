@@ -1,4 +1,4 @@
-{ self, nixpkgs, ... }:
+{ self, nixpkgs, useMariadb ? true, ... }:
 nixpkgs.lib.nixosSystem {
   system = "x86_64-linux";
   pkgs = import nixpkgs {
@@ -49,7 +49,8 @@ nixpkgs.lib.nixosSystem {
 
       services.mysql = {
         enable = true;
-        package = pkgs.mariadb;
+        package = if useMariadb then pkgs.mariadb else pkgs.mysql84;
+        dataDir = if useMariadb then "/var/lib/mariadb" else "/var/lib/mysql";
       };
       services.muscl = {
         enable = true;
