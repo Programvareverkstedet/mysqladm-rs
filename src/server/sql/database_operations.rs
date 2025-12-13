@@ -48,6 +48,7 @@ pub async fn complete_database_name(
     database_prefix: String,
     unix_user: &UnixUser,
     connection: &mut MySqlConnection,
+    _db_is_mariadb: bool,
 ) -> CompleteDatabaseNameResponse {
     let result = sqlx::query(
         r#"
@@ -87,6 +88,7 @@ pub async fn create_databases(
     database_names: Vec<MySQLDatabase>,
     unix_user: &UnixUser,
     connection: &mut MySqlConnection,
+    _db_is_mariadb: bool,
 ) -> CreateDatabasesResponse {
     let mut results = BTreeMap::new();
 
@@ -146,6 +148,7 @@ pub async fn drop_databases(
     database_names: Vec<MySQLDatabase>,
     unix_user: &UnixUser,
     connection: &mut MySqlConnection,
+    _db_is_mariadb: bool,
 ) -> DropDatabasesResponse {
     let mut results = BTreeMap::new();
 
@@ -218,6 +221,7 @@ pub async fn list_databases(
     database_names: Vec<MySQLDatabase>,
     unix_user: &UnixUser,
     connection: &mut MySqlConnection,
+    _db_is_mariadb: bool,
 ) -> ListDatabasesResponse {
     let mut results = BTreeMap::new();
 
@@ -268,6 +272,7 @@ pub async fn list_databases(
 pub async fn list_all_databases_for_user(
     unix_user: &UnixUser,
     connection: &mut MySqlConnection,
+    _db_is_mariadb: bool,
 ) -> ListAllDatabasesResponse {
     let result = sqlx::query_as::<_, DatabaseRow>(
         r#"

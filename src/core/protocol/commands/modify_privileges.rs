@@ -102,9 +102,7 @@ impl ModifyDatabasePrivilegesError {
             ModifyDatabasePrivilegesError::DatabaseDoesNotExist => {
                 "database-does-not-exist".to_string()
             }
-            ModifyDatabasePrivilegesError::UserDoesNotExist => {
-                "user-does-not-exist".to_string()
-            }
+            ModifyDatabasePrivilegesError::UserDoesNotExist => "user-does-not-exist".to_string(),
             ModifyDatabasePrivilegesError::DiffDoesNotApply(err) => {
                 format!("diff-does-not-apply/{}", err.error_type())
             }

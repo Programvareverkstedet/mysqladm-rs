@@ -38,6 +38,7 @@ use crate::{
 pub async fn session_handler(
     socket: UnixStream,
     db_pool: Arc<RwLock<MySqlPool>>,
+    db_is_mariadb: bool,
 ) -> anyhow::Result<()> {
     let uid = match socket.peer_cred() {
         Ok(cred) => cred.uid(),
@@ -84,7 +85,8 @@ pub async fn session_handler(
     (async move {
         tracing::info!("Accepted connection from user: {}", unix_user);
 
-        let result = session_handler_with_unix_user(socket, &unix_user, db_pool).await;
+        let result =
+            session_handler_with_unix_user(socket, &unix_user, db_pool, db_is_mariadb).await;
 
         tracing::info!(
             "Finished handling requests for connection from user: {}",
@@ -101,6 +103,7 @@ pub async fn session_handler_with_unix_user(
     socket: UnixStream,
     unix_user: &UnixUser,
     db_pool: Arc<RwLock<MySqlPool>>,
+    db_is_mariadb: bool,
 ) -> anyhow::Result<()> {
     let mut message_stream = create_server_to_client_message_stream(socket);
 
@@ -123,8 +126,13 @@ pub async fn session_handler_with_unix_user(
     };
     tracing::debug!("Successfully acquired database connection from pool");
 
-    let result =
-        session_handler_with_db_connection(message_stream, unix_user, &mut db_connection).await;
+    let result = session_handler_with_db_connection(
+        message_stream,
+        unix_user,
+        &mut db_connection,
+        db_is_mariadb,
+    )
+    .await;
 
     tracing::debug!("Releasing database connection back to pool");
 
@@ -138,6 +146,7 @@ async fn session_handler_with_db_connection(
     mut stream: ServerToClientMessageStream,
     unix_user: &UnixUser,
     db_connection: &mut MySqlConnection,
+    db_is_mariadb: bool,
 ) -> anyhow::Result<()> {
     stream.send(Response::Ready).await?;
     loop {
@@ -180,9 +189,13 @@ async fn session_handler_with_db_connection(
                 {
                     Response::CompleteDatabaseName(vec![])
                 } else {
-                    let result =
-                        complete_database_name(partial_database_name, unix_user, db_connection)
-                            .await;
+                    let result = complete_database_name(
+                        partial_database_name,
+                        unix_user,
+                        db_connection,
+                        db_is_mariadb,
+                    )
+                    .await;
                     Response::CompleteDatabaseName(result)
                 }
             }
@@ -194,39 +207,54 @@ async fn session_handler_with_db_connection(
                 {
                     Response::CompleteUserName(vec![])
                 } else {
-                    let result =
-                        complete_user_name(partial_user_name, unix_user, db_connection).await;
+                    let result = complete_user_name(
+                        partial_user_name,
+                        unix_user,
+                        db_connection,
+                        db_is_mariadb,
+                    )
+                    .await;
                     Response::CompleteUserName(result)
                 }
             }
             Request::CreateDatabases(databases_names) => {
-                let result = create_databases(databases_names, unix_user, db_connection).await;
+                let result =
+                    create_databases(databases_names, unix_user, db_connection, db_is_mariadb)
+                        .await;
                 Response::CreateDatabases(result)
             }
             Request::DropDatabases(databases_names) => {
-                let result = drop_databases(databases_names, unix_user, db_connection).await;
+                let result =
+                    drop_databases(databases_names, unix_user, db_connection, db_is_mariadb).await;
                 Response::DropDatabases(result)
             }
             Request::ListDatabases(database_names) => match database_names {
                 Some(database_names) => {
-                    let result = list_databases(database_names, unix_user, db_connection).await;
+                    let result =
+                        list_databases(database_names, unix_user, db_connection, db_is_mariadb)
+                            .await;
                     Response::ListDatabases(result)
                 }
                 None => {
-                    let result = list_all_databases_for_user(unix_user, db_connection).await;
+                    let result =
+                        list_all_databases_for_user(unix_user, db_connection, db_is_mariadb).await;
                     Response::ListAllDatabases(result)
                 }
             },
             Request::ListPrivileges(database_names) => match database_names {
                 Some(database_names) => {
-                    let privilege_data =
-                        get_databases_privilege_data(database_names, unix_user, db_connection)
-                            .await;
+                    let privilege_data = get_databases_privilege_data(
+                        database_names,
+                        unix_user,
+                        db_connection,
+                        db_is_mariadb,
+                    )
+                    .await;
                     Response::ListPrivileges(privilege_data)
                 }
                 None => {
                     let privilege_data =
-                        get_all_database_privileges(unix_user, db_connection).await;
+                        get_all_database_privileges(unix_user, db_connection, db_is_mariadb).await;
                     Response::ListAllPrivileges(privilege_data)
                 }
             },
@@ -235,41 +263,57 @@ async fn session_handler_with_db_connection(
                     BTreeSet::from_iter(database_privilege_diffs),
                     unix_user,
                     db_connection,
+                    db_is_mariadb,
                 )
                 .await;
                 Response::ModifyPrivileges(result)
             }
             Request::CreateUsers(db_users) => {
-                let result = create_database_users(db_users, unix_user, db_connection).await;
+                let result =
+                    create_database_users(db_users, unix_user, db_connection, db_is_mariadb).await;
                 Response::CreateUsers(result)
             }
             Request::DropUsers(db_users) => {
-                let result = drop_database_users(db_users, unix_user, db_connection).await;
+                let result =
+                    drop_database_users(db_users, unix_user, db_connection, db_is_mariadb).await;
                 Response::DropUsers(result)
             }
             Request::PasswdUser((db_user, password)) => {
-                let result =
-                    set_password_for_database_user(&db_user, &password, unix_user, db_connection)
-                        .await;
+                let result = set_password_for_database_user(
+                    &db_user,
+                    &password,
+                    unix_user,
+                    db_connection,
+                    db_is_mariadb,
+                )
+                .await;
                 Response::SetUserPassword(result)
             }
             Request::ListUsers(db_users) => match db_users {
                 Some(db_users) => {
-                    let result = list_database_users(db_users, unix_user, db_connection).await;
+                    let result =
+                        list_database_users(db_users, unix_user, db_connection, db_is_mariadb)
+                            .await;
                     Response::ListUsers(result)
                 }
                 None => {
-                    let result =
-                        list_all_database_users_for_unix_user(unix_user, db_connection).await;
+                    let result = list_all_database_users_for_unix_user(
+                        unix_user,
+                        db_connection,
+                        db_is_mariadb,
+                    )
+                    .await;
                     Response::ListAllUsers(result)
                 }
             },
             Request::LockUsers(db_users) => {
-                let result = lock_database_users(db_users, unix_user, db_connection).await;
+                let result =
+                    lock_database_users(db_users, unix_user, db_connection, db_is_mariadb).await;
                 Response::LockUsers(result)
             }
             Request::UnlockUsers(db_users) => {
-                let result = unlock_database_users(db_users, unix_user, db_connection).await;
+                let result =
+                    unlock_database_users(db_users, unix_user, db_connection, db_is_mariadb).await;
                 Response::UnlockUsers(result)
             }
             Request::Exit => {

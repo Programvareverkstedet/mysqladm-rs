@@ -277,8 +277,23 @@ fn run_forked_server(
         .block_on(async {
             let socket = TokioUnixStream::from_std(server_socket)?;
             let db_pool = construct_single_connection_mysql_pool(&config.mysql).await?;
+            let db_is_mariadb = {
+                let mut conn = db_pool.acquire().await?;
+                let version_row: String = sqlx::query_scalar("SELECT VERSION()")
+                    .fetch_one(&mut *conn)
+                    .await
+                    .context("Failed to query MySQL version")?;
+                version_row.to_lowercase().contains("mariadb")
+            };
+
             let db_pool = Arc::new(RwLock::new(db_pool));
-            session_handler::session_handler_with_unix_user(socket, &unix_user, db_pool).await?;
+            session_handler::session_handler_with_unix_user(
+                socket,
+                &unix_user,
+                db_pool,
+                db_is_mariadb,
+            )
+            .await?;
             Ok(())
         });
 

@@ -55,6 +55,7 @@ pub async fn complete_user_name(
     user_prefix: String,
     unix_user: &UnixUser,
     connection: &mut MySqlConnection,
+    _db_is_mariadb: bool,
 ) -> Vec<MySQLUser> {
     let result = sqlx::query(
         r#"
@@ -93,6 +94,7 @@ pub async fn create_database_users(
     db_users: Vec<MySQLUser>,
     unix_user: &UnixUser,
     connection: &mut MySqlConnection,
+    _db_is_mariadb: bool,
 ) -> CreateUsersResponse {
     let mut results = BTreeMap::new();
 
@@ -139,6 +141,7 @@ pub async fn drop_database_users(
     db_users: Vec<MySQLUser>,
     unix_user: &UnixUser,
     connection: &mut MySqlConnection,
+    _db_is_mariadb: bool,
 ) -> DropUsersResponse {
     let mut results = BTreeMap::new();
 
@@ -186,6 +189,7 @@ pub async fn set_password_for_database_user(
     password: &str,
     unix_user: &UnixUser,
     connection: &mut MySqlConnection,
+    _db_is_mariadb: bool,
 ) -> SetUserPasswordResponse {
     if let Err(err) = validate_name(db_user) {
         return Err(SetPasswordError::SanitizationError(err));
@@ -224,26 +228,39 @@ pub async fn set_password_for_database_user(
     result
 }
 
+const DATABASE_USER_LOCK_STATUS_QUERY_MARIADB: &str = r#"
+    SELECT COALESCE(
+        JSON_EXTRACT(`mysql`.`global_priv`.`priv`, "$.account_locked"),
+        'false'
+    ) != 'false'
+    FROM `mysql`.`global_priv`
+    WHERE `User` = ?
+    AND `Host` = '%'
+"#;
+
+const DATABASE_USER_LOCK_STATUS_QUERY_MYSQL: &str = r#"
+    SELECT `mysql`.`user`.`account_locked` = 'Y'
+    FROM `mysql`.`user`
+    WHERE `User` = ?
+    AND `Host` = '%'
+"#;
+
 // NOTE: this function is unsafe because it does no input validation.
 async fn database_user_is_locked_unsafe(
     db_user: &str,
     connection: &mut MySqlConnection,
+    db_is_mariadb: bool,
 ) -> Result<bool, sqlx::Error> {
-    let result = sqlx::query(
-        r#"
-          SELECT COALESCE(
-            JSON_EXTRACT(`mysql`.`global_priv`.`priv`, "$.account_locked"),
-            'false'
-          ) != 'false'
-          FROM `mysql`.`global_priv`
-          WHERE `User` = ?
-          AND `Host` = '%'
-        "#,
-    )
+    let result = sqlx::query(if db_is_mariadb {
+        DATABASE_USER_LOCK_STATUS_QUERY_MARIADB
+    } else {
+        DATABASE_USER_LOCK_STATUS_QUERY_MYSQL
+    })
     .bind(db_user)
     .fetch_one(connection)
     .await
-    .map(|row| row.get::<bool, _>(0));
+    .map(|row| row.try_get(0))
+    .and_then(|res| res);
 
     if let Err(err) = &result {
         tracing::error!(
@@ -260,6 +277,7 @@ pub async fn lock_database_users(
     db_users: Vec<MySQLUser>,
     unix_user: &UnixUser,
     connection: &mut MySqlConnection,
+    db_is_mariadb: bool,
 ) -> LockUsersResponse {
     let mut results = BTreeMap::new();
 
@@ -286,7 +304,7 @@ pub async fn lock_database_users(
             }
         }
 
-        match database_user_is_locked_unsafe(&db_user, &mut *connection).await {
+        match database_user_is_locked_unsafe(&db_user, &mut *connection, db_is_mariadb).await {
             Ok(false) => {}
             Ok(true) => {
                 results.insert(db_user, Err(LockUserError::UserIsAlreadyLocked));
@@ -320,6 +338,7 @@ pub async fn unlock_database_users(
     db_users: Vec<MySQLUser>,
     unix_user: &UnixUser,
     connection: &mut MySqlConnection,
+    db_is_mariadb: bool,
 ) -> UnlockUsersResponse {
     let mut results = BTreeMap::new();
 
@@ -346,7 +365,7 @@ pub async fn unlock_database_users(
             _ => {}
         }
 
-        match database_user_is_locked_unsafe(&db_user, &mut *connection).await {
+        match database_user_is_locked_unsafe(&db_user, &mut *connection, db_is_mariadb).await {
             Ok(false) => {
                 results.insert(db_user, Err(UnlockUserError::UserIsAlreadyUnlocked));
                 continue;
@@ -394,13 +413,13 @@ impl FromRow<'_, sqlx::mysql::MySqlRow> for DatabaseUser {
             user: try_get_with_binary_fallback(row, "User")?.into(),
             host: try_get_with_binary_fallback(row, "Host")?,
             has_password: row.try_get("has_password")?,
-            is_locked: row.try_get("is_locked")?,
+            is_locked: row.try_get("account_locked")?,
             databases: Vec::new(),
         })
     }
 }
 
-const DB_USER_SELECT_STATEMENT: &str = r#"
+const DB_USER_SELECT_STATEMENT_MARIADB: &str = r#"
 SELECT
   `user`.`User`,
   `user`.`Host`,
@@ -408,17 +427,27 @@ SELECT
   COALESCE(
     JSON_EXTRACT(`global_priv`.`priv`, "$.account_locked"),
     'false'
-  ) != 'false' AS `is_locked`
+  ) != 'false' AS `account_locked`
 FROM `user`
 JOIN `global_priv` ON
   `user`.`User` = `global_priv`.`User`
   AND `user`.`Host` = `global_priv`.`Host`
 "#;
 
+const DB_USER_SELECT_STATEMENT_MYSQL: &str = r#"
+SELECT
+  `user`.`User`,
+  `user`.`Host`,
+  `user`.`authentication_string` != '' AS `has_password`,
+  `user`.`account_locked` = 'Y' AS `account_locked`
+FROM `user`
+"#;
+
 pub async fn list_database_users(
     db_users: Vec<MySQLUser>,
     unix_user: &UnixUser,
     connection: &mut MySqlConnection,
+    db_is_mariadb: bool,
 ) -> ListUsersResponse {
     let mut results = BTreeMap::new();
 
@@ -434,7 +463,11 @@ pub async fn list_database_users(
         }
 
         let mut result = sqlx::query_as::<_, DatabaseUser>(
-            &(DB_USER_SELECT_STATEMENT.to_string() + "WHERE `mysql`.`user`.`User` = ?"),
+            &(if db_is_mariadb {
+                DB_USER_SELECT_STATEMENT_MARIADB.to_string()
+            } else {
+                DB_USER_SELECT_STATEMENT_MYSQL.to_string()
+            } + "WHERE `mysql`.`user`.`User` = ?"),
         )
         .bind(db_user.as_str())
         .fetch_optional(&mut *connection)
@@ -461,9 +494,14 @@ pub async fn list_database_users(
 pub async fn list_all_database_users_for_unix_user(
     unix_user: &UnixUser,
     connection: &mut MySqlConnection,
+    db_is_mariadb: bool,
 ) -> ListAllUsersResponse {
     let mut result = sqlx::query_as::<_, DatabaseUser>(
-        &(DB_USER_SELECT_STATEMENT.to_string() + "WHERE `user`.`User` REGEXP ?"),
+        &(if db_is_mariadb {
+            DB_USER_SELECT_STATEMENT_MARIADB.to_string()
+        } else {
+            DB_USER_SELECT_STATEMENT_MYSQL.to_string()
+        } + "WHERE `user`.`User` REGEXP ?"),
     )
     .bind(create_user_group_matching_regex(unix_user))
     .fetch_all(&mut *connection)

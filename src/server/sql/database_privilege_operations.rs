@@ -140,6 +140,7 @@ pub async fn get_databases_privilege_data(
     database_names: Vec<MySQLDatabase>,
     unix_user: &UnixUser,
     connection: &mut MySqlConnection,
+    _db_is_mariadb: bool,
 ) -> ListPrivilegesResponse {
     let mut results = BTreeMap::new();
 
@@ -187,6 +188,7 @@ pub async fn get_databases_privilege_data(
 pub async fn get_all_database_privileges(
     unix_user: &UnixUser,
     connection: &mut MySqlConnection,
+    _db_is_mariadb: bool,
 ) -> ListAllPrivilegesResponse {
     let result = sqlx::query_as::<_, DatabasePrivilegeRow>(&format!(
         indoc! {r#"
@@ -394,6 +396,7 @@ pub async fn apply_privilege_diffs(
     database_privilege_diffs: BTreeSet<DatabasePrivilegesDiff>,
     unix_user: &UnixUser,
     connection: &mut MySqlConnection,
+    _db_is_mariadb: bool,
 ) -> ModifyPrivilegesResponse {
     let mut results: BTreeMap<(MySQLDatabase, MySQLUser), _> = BTreeMap::new();
 
@@ -451,10 +454,7 @@ pub async fn apply_privilege_diffs(
             .await
             .unwrap()
         {
-            results.insert(
-                key,
-                Err(ModifyDatabasePrivilegesError::UserDoesNotExist),
-            );
+            results.insert(key, Err(ModifyDatabasePrivilegesError::UserDoesNotExist));
             continue;
         }
 
