@@ -143,9 +143,13 @@ enum PrivilegeRowParseResult {
 
 #[inline]
 fn parse_privilege_cell_from_editor(yn: &str, name: &str) -> anyhow::Result<bool> {
+    let human_readable_name = db_priv_field_human_readable_name(name);
     rev_yn(yn)
         .ok_or_else(|| anyhow!("Expected Y or N, found {}", yn))
-        .context(format!("Could not parse {} privilege", name))
+        .context(format!(
+            "Could not parse '{}' privilege",
+            human_readable_name
+        ))
 }
 
 #[inline]
@@ -267,8 +271,6 @@ fn parse_privilege_row_from_editor(row: &str) -> PrivilegeRowParseResult {
     PrivilegeRowParseResult::PrivilegeRow(row)
 }
 
-// TODO: return better errors
-
 pub fn parse_privilege_data_from_editor_content(
     content: String,
 ) -> anyhow::Result<Vec<DatabasePrivilegeRow>> {
@@ -276,23 +278,41 @@ pub fn parse_privilege_data_from_editor_content(
         .trim()
         .split('\n')
         .map(|line| line.trim())
-        .map(parse_privilege_row_from_editor)
-        .map(|result| match result {
-            PrivilegeRowParseResult::PrivilegeRow(row) => Ok(Some(row)),
-            PrivilegeRowParseResult::ParserError(e) => Err(e),
-            PrivilegeRowParseResult::TooFewFields(n) => Err(anyhow!(
-                "Too few fields in line. Expected to find {} fields, found {}",
-                DATABASE_PRIVILEGE_FIELDS.len(),
-                n
-            )),
-            PrivilegeRowParseResult::TooManyFields(n) => Err(anyhow!(
-                "Too many fields in line. Expected to find {} fields, found {}",
-                DATABASE_PRIVILEGE_FIELDS.len(),
-                n
-            )),
-            PrivilegeRowParseResult::Header => Ok(None),
-            PrivilegeRowParseResult::Comment => Ok(None),
-            PrivilegeRowParseResult::Empty => Ok(None),
+        .enumerate()
+        .map(|(i, line)| {
+            let mut header: Vec<_> = DATABASE_PRIVILEGE_FIELDS
+                .into_iter()
+                .map(db_priv_field_human_readable_name)
+                .collect();
+
+            let splitline = line.split_ascii_whitespace().collect::<Vec<&str>>();
+            let dbname = splitline.first().unwrap_or(&"");
+            let username = splitline.get(1).unwrap_or(&"");
+
+            // Pad the first two columns with spaces to align the privileges.
+            header[0] = format!("{:width$}", header[0], width = dbname.len());
+            header[1] = format!("{:width$}", header[1], width = username.len());
+
+            let header: String = header.join(" ");
+
+            match parse_privilege_row_from_editor(line) {
+                PrivilegeRowParseResult::PrivilegeRow(row) => Ok(Some(row)),
+                PrivilegeRowParseResult::ParserError(e) => Err(anyhow!(
+                    "Could not parse privilege row from line {i}:\n  {header}\n  {line}\n  {e}",
+                )),
+
+                PrivilegeRowParseResult::TooFewFields(n) => Err(anyhow!(
+                    "Too few fields in line {i}:\n  {header}\n  {line}\n  Expected to find {} fields, found {n}",
+                    DATABASE_PRIVILEGE_FIELDS.len(),
+                )),
+                PrivilegeRowParseResult::TooManyFields(n) => Err(anyhow!(
+                    "Too many fields in line {i}:\n  {header}\n  {line}\n  Expected to find {} fields, found {n}",
+                    DATABASE_PRIVILEGE_FIELDS.len(),
+                )),
+                PrivilegeRowParseResult::Header => Ok(None),
+                PrivilegeRowParseResult::Comment => Ok(None),
+                PrivilegeRowParseResult::Empty => Ok(None),
+            }
         })
         .filter_map(|result| result.transpose())
         .collect::<anyhow::Result<Vec<DatabasePrivilegeRow>>>()
