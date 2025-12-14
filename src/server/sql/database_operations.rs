@@ -52,7 +52,7 @@ pub async fn complete_database_name(
 ) -> CompleteDatabaseNameResponse {
     let result = sqlx::query(
         r#"
-          SELECT `SCHEMA_NAME` AS `database`
+          SELECT CAST(`SCHEMA_NAME` AS CHAR(64)) AS `database`
           FROM `information_schema`.`SCHEMATA`
           WHERE `SCHEMA_NAME` NOT IN ('information_schema', 'performance_schema', 'mysql', 'sys')
             AND `SCHEMA_NAME` REGEXP ?
@@ -244,7 +244,7 @@ pub async fn list_databases(
 
         let result = sqlx::query_as::<_, DatabaseRow>(
             r#"
-          SELECT `SCHEMA_NAME` AS `database`
+          SELECT CAST(`SCHEMA_NAME` AS CHAR(64)) AS `database`
           FROM `information_schema`.`SCHEMATA`
           WHERE `SCHEMA_NAME` = ?
         "#,
@@ -276,7 +276,7 @@ pub async fn list_all_databases_for_user(
 ) -> ListAllDatabasesResponse {
     let result = sqlx::query_as::<_, DatabaseRow>(
         r#"
-          SELECT `SCHEMA_NAME` AS `database`
+          SELECT CAST(`SCHEMA_NAME` AS CHAR(64)) AS `database`
           FROM `information_schema`.`SCHEMATA`
           WHERE `SCHEMA_NAME` NOT IN ('information_schema', 'performance_schema', 'mysql', 'sys')
             AND `SCHEMA_NAME` REGEXP ?

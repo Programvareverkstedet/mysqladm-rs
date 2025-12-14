@@ -184,29 +184,34 @@ pub async fn get_databases_privilege_data(
     results
 }
 
+/// TODO: make this constant
+fn get_all_db_privs_query() -> String {
+    format!(
+        indoc! {r#"
+            SELECT {} FROM `db` WHERE `db` IN
+            (SELECT DISTINCT CAST(`SCHEMA_NAME` AS CHAR(64)) AS `database`
+              FROM `information_schema`.`SCHEMATA`
+              WHERE `SCHEMA_NAME` NOT IN ('information_schema', 'performance_schema', 'mysql', 'sys')
+                AND `SCHEMA_NAME` REGEXP ?)
+        "#},
+        DATABASE_PRIVILEGE_FIELDS
+            .iter()
+            .map(|field| quote_identifier(field))
+            .join(","),
+    )
+}
+
 /// Get all database + user + privileges pairs that are owned by the current user.
 pub async fn get_all_database_privileges(
     unix_user: &UnixUser,
     connection: &mut MySqlConnection,
     _db_is_mariadb: bool,
 ) -> ListAllPrivilegesResponse {
-    let result = sqlx::query_as::<_, DatabasePrivilegeRow>(&format!(
-        indoc! {r#"
-          SELECT {} FROM `db` WHERE `db` IN
-          (SELECT DISTINCT `SCHEMA_NAME` AS `database`
-            FROM `information_schema`.`SCHEMATA`
-            WHERE `SCHEMA_NAME` NOT IN ('information_schema', 'performance_schema', 'mysql', 'sys')
-              AND `SCHEMA_NAME` REGEXP ?)
-        "#},
-        DATABASE_PRIVILEGE_FIELDS
-            .iter()
-            .map(|field| quote_identifier(field))
-            .join(","),
-    ))
-    .bind(create_user_group_matching_regex(unix_user))
-    .fetch_all(connection)
-    .await
-    .map_err(|e| GetAllDatabasesPrivilegeDataError::MySqlError(e.to_string()));
+    let result = sqlx::query_as::<_, DatabasePrivilegeRow>(&get_all_db_privs_query())
+        .bind(create_user_group_matching_regex(unix_user))
+        .fetch_all(connection)
+        .await
+        .map_err(|e| GetAllDatabasesPrivilegeDataError::MySqlError(e.to_string()));
 
     if let Err(e) = &result {
         tracing::error!("Failed to get all database privileges: {:?}", e);
@@ -215,6 +220,7 @@ pub async fn get_all_database_privileges(
     result
 }
 
+// TODO: make these queries constant strings.
 async fn unsafe_apply_privilege_diff(
     database_privilege_diff: &DatabasePrivilegesDiff,
     connection: &mut MySqlConnection,
