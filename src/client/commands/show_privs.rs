@@ -27,6 +27,12 @@ pub struct ShowPrivsArgs {
     #[arg(short, long)]
     json: bool,
 
+    /// Show single-character privilege names in addition to human-readable names
+    ///
+    /// This flag has no effect when used with --json
+    #[arg(short, long)]
+    long: bool,
+
     /// Return a non-zero exit code if any of the results were erroneous
     #[arg(short, long)]
     fail: bool,
@@ -67,7 +73,7 @@ pub async fn show_database_privileges(
     if args.json {
         print_list_privileges_output_status_json(&privilege_data);
     } else {
-        print_list_privileges_output_status(&privilege_data);
+        print_list_privileges_output_status(&privilege_data, args.long);
     }
 
     if args.fail && privilege_data.values().any(|res| res.is_err()) {

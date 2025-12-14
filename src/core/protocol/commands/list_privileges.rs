@@ -13,6 +13,7 @@ use crate::core::{
     common::yn,
     database_privileges::{
         DATABASE_PRIVILEGE_FIELDS, DatabasePrivilegeRow, db_priv_field_human_readable_name,
+        db_priv_field_single_character_name,
     },
     protocol::request_validation::{NameValidationError, OwnerValidationError},
     types::{DbOrUser, MySQLDatabase},
@@ -23,7 +24,7 @@ pub type ListPrivilegesRequest = Option<Vec<MySQLDatabase>>;
 pub type ListPrivilegesResponse =
     BTreeMap<MySQLDatabase, Result<Vec<DatabasePrivilegeRow>, GetDatabasesPrivilegeDataError>>;
 
-pub fn print_list_privileges_output_status(output: &ListPrivilegesResponse) {
+pub fn print_list_privileges_output_status(output: &ListPrivilegesResponse, long_names: bool) {
     let mut final_privs_map: BTreeMap<MySQLDatabase, Vec<DatabasePrivilegeRow>> = BTreeMap::new();
     for (db_name, db_result) in output {
         match db_result {
@@ -45,7 +46,19 @@ pub fn print_list_privileges_output_status(output: &ListPrivilegesResponse) {
         table.add_row(Row::new(
             DATABASE_PRIVILEGE_FIELDS
                 .into_iter()
-                .map(db_priv_field_human_readable_name)
+                .map(|field| {
+                    if field == "Db" || field == "User" {
+                        db_priv_field_human_readable_name(field)
+                    } else if long_names {
+                        format!(
+                            "{} ({})",
+                            db_priv_field_human_readable_name(field),
+                            db_priv_field_single_character_name(field),
+                        )
+                    } else {
+                        db_priv_field_human_readable_name(field)
+                    }
+                })
                 .map(|name| Cell::new(&name))
                 .collect(),
         ));

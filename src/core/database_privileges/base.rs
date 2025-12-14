@@ -101,3 +101,22 @@ pub fn db_priv_field_human_readable_name(name: &str) -> String {
         _ => format!("Unknown({})", name),
     }
 }
+
+/// Converts a database privilege field name to a single-character name.
+/// (the characters from the cli privilege editor)
+pub fn db_priv_field_single_character_name(name: &str) -> &str {
+    match name {
+        "select_priv" => "s",
+        "insert_priv" => "i",
+        "update_priv" => "u",
+        "delete_priv" => "d",
+        "create_priv" => "c",
+        "drop_priv" => "D",
+        "alter_priv" => "a",
+        "index_priv" => "I",
+        "create_tmp_table_priv" => "t",
+        "lock_tables_priv" => "l",
+        "references_priv" => "r",
+        _ => "?",
+    }
+}
