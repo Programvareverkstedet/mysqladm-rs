@@ -2,30 +2,33 @@
 
 ## Installing with deb on Debian
 
-You can install muscl by adding the muscl apt repository and installing the package:
+You can install muscl by adding the [PVV apt repository][pvv-apt-repository] and installing the package:
 
 ```bash
+# Become root (if not already)
+sudo -i
+
 # Check the version of your Debian installation
 VERSION_CODENAME=$(lsb_release -cs)
 
 # Add the repository
-echo "deb [signed-by=/etc/apt/keyrings/pvvgit-projects.asc] https://git.pvv.ntnu.no/api/packages/Projects/debian $VERSION_CODENAME main" | sudo tee -a /etc/apt/sources.list.d/gitea.list
+echo "deb [signed-by=/etc/apt/keyrings/pvvgit-projects.asc] https://git.pvv.ntnu.no/api/packages/Projects/debian $VERSION_CODENAME main" | tee -a /etc/apt/sources.list.d/gitea.list
 
 # Pull the repository key
-sudo curl https://git.pvv.ntnu.no/api/packages/Projects/debian/repository.key -o /etc/apt/keyrings/pvvgit-projects.asc
+curl https://git.pvv.ntnu.no/api/packages/Projects/debian/repository.key -o /etc/apt/keyrings/pvvgit-projects.asc
 
 # Update package lists
-sudo apt update
+apt update
 
 # Install muscl
-sudo apt install muscl
+apt install muscl
 ```
 
 ## Creating a database user
 
 In order for the daemon to be able to do anything interesting on the mysql server, it needs
 a database user with sufficient privileges. You can create such a user by running the following commands
-on the mysql server as root (or another user with sufficient privileges):
+on the mysql server as the admin user (or another user with sufficient privileges):
 
 ```sql
 CREATE USER `muscl`@`%` IDENTIFIED BY '<strong_password_here>';
@@ -40,9 +43,12 @@ Now you should add the login credentials to the muscl configuration file, typica
 
 The debian package assumes that you will provide the password for `muscl`'s database user with `systemd-creds`.
 
-You can add the password like this (run as root):
+You can add the password like this:
 
 ```bash
+# Become root (if not already)
+sudo -i
+
 # Unless you already have a working credential store, you need to set it up first
 mkdir -p /etc/credstore.encrypted
 systemd-creds setup
@@ -74,3 +80,5 @@ Otherwise, the only requirement is that the user/group is able to read the confi
 The muscl server will work with older versions of systemd, but the recommended version is 254 or newer.
 
 For full landlock support (disabled by default), you need a linux kernel version 6.7 or newer.
+
+[pvv-apt-repository]: https://git.pvv.ntnu.no/Projects/-/packages/debian/muscl
