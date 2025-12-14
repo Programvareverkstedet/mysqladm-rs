@@ -1,4 +1,4 @@
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use clap_complete::ArgValueCompleter;
 use futures_util::{SinkExt, StreamExt};
 use std::os::unix::net::UnixStream as StdUnixStream;
@@ -98,7 +98,7 @@ pub struct Args {
 // NOTE: mysql-dbadm explicitly calls privileges "permissions".
 //       This is something we're trying to move away from.
 //       See https://git.pvv.ntnu.no/Projects/muscl/issues/29
-#[derive(Parser)]
+#[derive(Subcommand)]
 pub enum Command {
     /// create the DATABASE(s).
     Create(CreateArgs),

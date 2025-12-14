@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use anyhow::Context;
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use clap_verbosity_flag::{InfoLevel, Verbosity};
 use tracing_subscriber::prelude::*;
 
@@ -26,15 +26,13 @@ pub struct ServerArgs {
     pub disable_landlock: bool,
 }
 
-#[derive(Parser, Debug, Clone)]
+#[derive(Subcommand, Debug, Clone)]
 pub enum ServerCommand {
     /// Start the server and listen for incoming connections on the unix socket
     /// specified in the configuration file.
-    #[command()]
     Listen,
 
     /// Start the server using systemd socket activation.
-    #[command()]
     SocketActivate,
 }
 

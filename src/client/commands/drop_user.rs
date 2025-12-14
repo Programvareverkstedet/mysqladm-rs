@@ -19,7 +19,7 @@ use crate::{
 #[derive(Parser, Debug, Clone)]
 pub struct DropUserArgs {
     /// The MySQL user(s) to drop
-    #[arg(num_args = 1..)]
+    #[arg(num_args = 1.., value_name = "USER_NAME")]
     #[cfg_attr(not(feature = "suid-sgid-mode"), arg(add = ArgValueCompleter::new(mysql_user_completer)))]
     username: Vec<MySQLUser>,
 

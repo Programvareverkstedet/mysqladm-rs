@@ -23,6 +23,7 @@ use crate::{
 pub struct PasswdUserArgs {
     /// The MySQL user whose password is to be changed
     #[cfg_attr(not(feature = "suid-sgid-mode"), arg(add = ArgValueCompleter::new(mysql_user_completer)))]
+    #[arg(value_name = "USER_NAME")]
     username: MySQLUser,
 
     /// Read the new password from a file instead of prompting for it

@@ -24,34 +24,30 @@ pub use show_privs::*;
 pub use show_user::*;
 pub use unlock_user::*;
 
-use clap::Parser;
+use clap::Subcommand;
 
 use crate::core::protocol::{ClientToServerMessageStream, Response};
 
-#[derive(Parser, Debug, Clone)]
+#[derive(Subcommand, Debug, Clone)]
+#[command(subcommand_required = true)]
 pub enum ClientCommand {
     /// Check whether you are authorized to manage the specified databases or users.
-    #[command()]
     CheckAuth(CheckAuthArgs),
 
     /// Create one or more databases
-    #[command()]
     CreateDb(CreateDbArgs),
 
     /// Delete one or more databases
-    #[command()]
     DropDb(DropDbArgs),
 
     /// Print information about one or more databases
     ///
     /// If no database name is provided, all databases you have access will be shown.
-    #[command()]
     ShowDb(ShowDbArgs),
 
     /// Print user privileges for one or more databases
     ///
     /// If no database names are provided, all databases you have access to will be shown.
-    #[command()]
     ShowPrivs(ShowPrivsArgs),
 
     /// Change user privileges for one or more databases. See `edit-privs --help` for details.
@@ -116,29 +112,23 @@ pub enum ClientCommand {
     EditPrivs(EditPrivsArgs),
 
     /// Create one or more users
-    #[command()]
     CreateUser(CreateUserArgs),
 
     /// Delete one or more users
-    #[command()]
     DropUser(DropUserArgs),
 
     /// Change the MySQL password for a user
-    #[command()]
     PasswdUser(PasswdUserArgs),
 
     /// Print information about one or more users
     ///
     /// If no username is provided, all users you have access will be shown.
-    #[command()]
     ShowUser(ShowUserArgs),
 
     /// Lock account for one or more users
-    #[command()]
     LockUser(LockUserArgs),
 
     /// Unlock account for one or more users
-    #[command()]
     UnlockUser(UnlockUserArgs),
 }
 

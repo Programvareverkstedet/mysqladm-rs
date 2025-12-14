@@ -1,4 +1,4 @@
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use clap_complete::ArgValueCompleter;
 use futures_util::{SinkExt, StreamExt};
 use std::path::PathBuf;
@@ -67,7 +67,7 @@ pub struct Args {
     config: Option<PathBuf>,
 }
 
-#[derive(Parser)]
+#[derive(Subcommand)]
 pub enum Command {
     /// create the USER(s).
     Create(CreateArgs),

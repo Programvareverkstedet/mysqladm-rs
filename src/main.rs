@@ -75,9 +75,12 @@ const LONG_VERSION: &str = long_version();
   version,
   about,
   disable_help_subcommand = true,
+  propagate_version = true,
   before_long_help = ASCII_BANNER,
   after_long_help = KIND_REGARDS,
   long_version = LONG_VERSION,
+  // NOTE: All non-registered "subcommands" are processed before Arg::parse() is called.
+  subcommand_required = true,
 )]
 struct Args {
     #[command(subcommand)]
@@ -169,8 +172,8 @@ fn handle_dynamic_completion() -> anyhow::Result<Option<()>> {
 
         let command = match argv0.as_str() {
             "muscl" => Args::command(),
-            "mysql-dbadm" => mysql_dbadm::Command::command(),
-            "mysql-useradm" => mysql_useradm::Command::command(),
+            "mysql-dbadm" => mysql_dbadm::Args::command(),
+            "mysql-useradm" => mysql_useradm::Args::command(),
             command => anyhow::bail!("Unknown executable name: `{}`", command),
         };
 

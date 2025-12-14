@@ -19,7 +19,7 @@ use crate::{
 #[derive(Parser, Debug, Clone)]
 pub struct DropDbArgs {
     /// The MySQL database(s) to drop
-    #[arg(num_args = 1..)]
+    #[arg(num_args = 1.., value_name = "DB_NAME")]
     #[cfg_attr(not(feature = "suid-sgid-mode"), arg(add = ArgValueCompleter::new(mysql_database_completer)))]
     name: Vec<MySQLDatabase>,
 

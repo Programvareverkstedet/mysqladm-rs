@@ -16,7 +16,7 @@ use crate::{
 #[derive(Parser, Debug, Clone)]
 pub struct CreateDbArgs {
     /// The MySQL database(s) to create
-    #[arg(num_args = 1..)]
+    #[arg(num_args = 1.., value_name = "DB_NAME")]
     name: Vec<MySQLDatabase>,
 
     /// Print the information as JSON

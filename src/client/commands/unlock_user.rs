@@ -18,8 +18,8 @@ use crate::{
 #[derive(Parser, Debug, Clone)]
 pub struct UnlockUserArgs {
     /// The MySQL user(s) to unlock
-    #[arg(num_args = 1..)]
     #[cfg_attr(not(feature = "suid-sgid-mode"), arg(add = ArgValueCompleter::new(mysql_user_completer)))]
+    #[arg(num_args = 1.., value_name = "USER_NAME")]
     username: Vec<MySQLUser>,
 
     /// Print the information as JSON

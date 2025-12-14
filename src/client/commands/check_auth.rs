@@ -15,7 +15,7 @@ use tokio_stream::StreamExt;
 #[derive(Parser, Debug, Clone)]
 pub struct CheckAuthArgs {
     /// The MySQL database(s) or user(s) to check authorization for
-    #[arg(num_args = 1..)]
+    #[arg(num_args = 1.., value_name = "NAME")]
     name: Vec<String>,
 
     /// Treat the provided names as users instead of databases

@@ -19,7 +19,7 @@ use crate::{
 #[derive(Parser, Debug, Clone)]
 pub struct ShowPrivsArgs {
     /// The MySQL database(s) to show privileges for
-    #[arg(num_args = 0..)]
+    #[arg(num_args = 0.., value_name = "DB_NAME")]
     #[cfg_attr(not(feature = "suid-sgid-mode"), arg(add = ArgValueCompleter::new(mysql_database_completer)))]
     name: Vec<MySQLDatabase>,
 
