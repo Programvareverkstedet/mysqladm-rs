@@ -47,9 +47,12 @@ You can add the password like this (run as root):
 mkdir -p /etc/credstore.encrypted
 systemd-creds setup
 
-# Now set the muscl mysql password
 # Be careful not to leave the password in your shell history!
-systemd-creds encrypt --name=muscl_mysql_password <(echo "<strong_password_here>") /etc/credstore.encrypted/muscl_mysql_password
+# Add a space before setting the next line to avoid this.
+ export MUSCL_MYSQL_PASSWORD="<strong_password_here>"
+
+# Now set the muscl mysql password
+systemd-creds encrypt --name=muscl_mysql_password <(echo "$MUSCL_MYSQL_PASSWORD") /etc/credstore.encrypted/muscl_mysql_password
 ```
 
 If you are running systemd older than version 254 (see `systemctl --version`), you might have to override the service to point to the path of the credential manually, because `ImportCredential=` is not supported. Run `systemctl edit muscl.service` and add the following lines:
