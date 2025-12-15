@@ -1,5 +1,9 @@
 # Installation and configuration
 
+This document contains instructions for the recommended way of installing and configuring muscl.
+
+Note that there are separate instructions for [installing on NixOS](nixos.md) and [installing with SUID/SGID mode](suid-sgid-mode.md).
+
 ## Installing with deb on Debian
 
 You can install muscl by adding the [PVV apt repository][pvv-apt-repository] and installing the package:
@@ -67,13 +71,6 @@ If you are running systemd older than version 254 (see `systemctl --version`), y
 [Service]
 LoadCredentialEncrypted=muscl_mysql_password:/etc/credstore.encrypted/muscl_mysql_password
 ```
-
-## SUID/SGID mode
-
-For backwards compatibility reasons, it is possible to run the program without a daemon by utilizing SUID/SGID.
-In order to do this, you should set either the SUID/SGID bit and preferably make the executable owned by a non-privileged user.
-If the database is running on the same machine, the user/group will need access to write and read from the database socket.
-Otherwise, the only requirement is that the user/group is able to read the config file (typically `/etc/muscl/config.toml`).
 
 ## A note on minimum version requirements
 

@@ -30,3 +30,4 @@ This software is designed for multi-user servers, like tilde servers, university
 - [Development and testing](docs/development.md)
 - [Compatibility mode with mysql-admutils](docs/mysql-admutils-compatibility.md)
 - [Use with NixOS](docs/nixos.md)
+- [SUID/SGID mode](docs/suid-sgid-mode.md)
