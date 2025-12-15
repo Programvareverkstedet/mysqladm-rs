@@ -2,22 +2,17 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use thiserror::Error;
 
-use crate::core::{
-    protocol::request_validation::{NameValidationError, OwnerValidationError},
-    types::DbOrUser,
-};
+use crate::core::{protocol::request_validation::AuthorizationError, types::DbOrUser};
 
 pub type CheckAuthorizationRequest = Vec<DbOrUser>;
 
 pub type CheckAuthorizationResponse = BTreeMap<DbOrUser, Result<(), CheckAuthorizationError>>;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum CheckAuthorizationError {
-    SanitizationError(NameValidationError),
-    OwnershipError(OwnerValidationError),
-    // AuthorizationHandlerError(String),
-}
+#[derive(Error, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[error("Authorization error: {0}")]
+pub struct CheckAuthorizationError(#[from] pub AuthorizationError);
 
 pub fn print_check_authorization_output_status(output: &CheckAuthorizationResponse) {
     for (db_or_user, result) in output {
@@ -63,30 +58,10 @@ pub fn print_check_authorization_output_status_json(output: &CheckAuthorizationR
 
 impl CheckAuthorizationError {
     pub fn to_error_message(&self, db_or_user: &DbOrUser) -> String {
-        match self {
-            CheckAuthorizationError::SanitizationError(err) => {
-                err.to_error_message(db_or_user.clone())
-            }
-            CheckAuthorizationError::OwnershipError(err) => {
-                err.to_error_message(db_or_user.clone())
-            } // CheckAuthorizationError::AuthorizationHandlerError(msg) => {
-              //     format!(
-              //         "Authorization handler error for '{}': {}",
-              //         db_or_user.name(),
-              //         msg
-              //     )
-              // }
-        }
+        self.0.to_error_message(db_or_user.clone())
     }
 
     pub fn error_type(&self) -> String {
-        match self {
-            CheckAuthorizationError::SanitizationError(err) => {
-                format!("sanitization-error/{}", err.error_type())
-            }
-            CheckAuthorizationError::OwnershipError(err) => {
-                format!("ownership-error/{}", err.error_type())
-            } // CheckAuthorizationError::AuthorizationHandlerError(_) => "authorization-handler-error".to_string(),
-        }
+        self.0.error_type()
     }
 }

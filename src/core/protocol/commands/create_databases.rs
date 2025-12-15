@@ -2,9 +2,10 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use thiserror::Error;
 
 use crate::core::{
-    protocol::request_validation::{NameValidationError, OwnerValidationError},
+    protocol::request_validation::AuthorizationError,
     types::{DbOrUser, MySQLDatabase},
 };
 
@@ -12,11 +13,15 @@ pub type CreateDatabasesRequest = Vec<MySQLDatabase>;
 
 pub type CreateDatabasesResponse = BTreeMap<MySQLDatabase, Result<(), CreateDatabaseError>>;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Error, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum CreateDatabaseError {
-    SanitizationError(NameValidationError),
-    OwnershipError(OwnerValidationError),
+    #[error("Authorization error: {0}")]
+    AuthorizationError(#[from] AuthorizationError),
+
+    #[error("Database already exists")]
     DatabaseAlreadyExists,
+
+    #[error("MySQL error: {0}")]
     MySqlError(String),
 }
 
@@ -60,10 +65,7 @@ pub fn print_create_databases_output_status_json(output: &CreateDatabasesRespons
 impl CreateDatabaseError {
     pub fn to_error_message(&self, database_name: &MySQLDatabase) -> String {
         match self {
-            CreateDatabaseError::SanitizationError(err) => {
-                err.to_error_message(DbOrUser::Database(database_name.clone()))
-            }
-            CreateDatabaseError::OwnershipError(err) => {
+            CreateDatabaseError::AuthorizationError(err) => {
                 err.to_error_message(DbOrUser::Database(database_name.clone()))
             }
             CreateDatabaseError::DatabaseAlreadyExists => {
@@ -77,12 +79,7 @@ impl CreateDatabaseError {
 
     pub fn error_type(&self) -> String {
         match self {
-            CreateDatabaseError::SanitizationError(err) => {
-                format!("sanitization-error/{}", err.error_type())
-            }
-            CreateDatabaseError::OwnershipError(err) => {
-                format!("ownership-error/{}", err.error_type())
-            }
+            CreateDatabaseError::AuthorizationError(err) => err.error_type(),
             CreateDatabaseError::DatabaseAlreadyExists => "database-already-exists".to_string(),
             CreateDatabaseError::MySqlError(_) => "mysql-error".to_string(),
         }

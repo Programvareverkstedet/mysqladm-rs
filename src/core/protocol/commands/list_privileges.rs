@@ -8,6 +8,7 @@ use itertools::Itertools;
 use prettytable::{Cell, Row, Table};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use thiserror::Error;
 
 use crate::core::{
     common::yn,
@@ -15,7 +16,7 @@ use crate::core::{
         DATABASE_PRIVILEGE_FIELDS, DatabasePrivilegeRow, db_priv_field_human_readable_name,
         db_priv_field_single_character_name,
     },
-    protocol::request_validation::{NameValidationError, OwnerValidationError},
+    protocol::request_validation::AuthorizationError,
     types::{DbOrUser, MySQLDatabase},
 };
 
@@ -115,21 +116,22 @@ pub fn print_list_privileges_output_status_json(output: &ListPrivilegesResponse)
     );
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Error, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum GetDatabasesPrivilegeDataError {
-    SanitizationError(NameValidationError),
-    OwnershipError(OwnerValidationError),
+    #[error("Authorization error: {0}")]
+    AuthorizationError(#[from] AuthorizationError),
+
+    #[error("Database does not exist")]
     DatabaseDoesNotExist,
+
+    #[error("MySQL error: {0}")]
     MySqlError(String),
 }
 
 impl GetDatabasesPrivilegeDataError {
     pub fn to_error_message(&self, database_name: &MySQLDatabase) -> String {
         match self {
-            GetDatabasesPrivilegeDataError::SanitizationError(err) => {
-                err.to_error_message(DbOrUser::Database(database_name.clone()))
-            }
-            GetDatabasesPrivilegeDataError::OwnershipError(err) => {
+            GetDatabasesPrivilegeDataError::AuthorizationError(err) => {
                 err.to_error_message(DbOrUser::Database(database_name.clone()))
             }
             GetDatabasesPrivilegeDataError::DatabaseDoesNotExist => {
@@ -143,12 +145,7 @@ impl GetDatabasesPrivilegeDataError {
 
     pub fn error_type(&self) -> String {
         match self {
-            GetDatabasesPrivilegeDataError::SanitizationError(err) => {
-                format!("sanitization-error/{}", err.error_type())
-            }
-            GetDatabasesPrivilegeDataError::OwnershipError(err) => {
-                format!("ownership-error/{}", err.error_type())
-            }
+            GetDatabasesPrivilegeDataError::AuthorizationError(err) => err.error_type(),
             GetDatabasesPrivilegeDataError::DatabaseDoesNotExist => {
                 "database-does-not-exist".to_string()
             }

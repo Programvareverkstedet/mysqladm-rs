@@ -2,9 +2,10 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use thiserror::Error;
 
 use crate::core::{
-    protocol::request_validation::{NameValidationError, OwnerValidationError},
+    protocol::request_validation::AuthorizationError,
     types::{DbOrUser, MySQLUser},
 };
 
@@ -12,11 +13,15 @@ pub type CreateUsersRequest = Vec<MySQLUser>;
 
 pub type CreateUsersResponse = BTreeMap<MySQLUser, Result<(), CreateUserError>>;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Error, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum CreateUserError {
-    SanitizationError(NameValidationError),
-    OwnershipError(OwnerValidationError),
+    #[error("Authorization error: {0}")]
+    AuthorizationError(#[from] AuthorizationError),
+
+    #[error("User already exists")]
     UserAlreadyExists,
+
+    #[error("MySQL error: {0}")]
     MySqlError(String),
 }
 
@@ -60,10 +65,7 @@ pub fn print_create_users_output_status_json(output: &CreateUsersResponse) {
 impl CreateUserError {
     pub fn to_error_message(&self, username: &MySQLUser) -> String {
         match self {
-            CreateUserError::SanitizationError(err) => {
-                err.to_error_message(DbOrUser::User(username.clone()))
-            }
-            CreateUserError::OwnershipError(err) => {
+            CreateUserError::AuthorizationError(err) => {
                 err.to_error_message(DbOrUser::User(username.clone()))
             }
             CreateUserError::UserAlreadyExists => {
@@ -77,10 +79,7 @@ impl CreateUserError {
 
     pub fn error_type(&self) -> String {
         match self {
-            CreateUserError::SanitizationError(err) => {
-                format!("sanitization-error/{}", err.error_type())
-            }
-            CreateUserError::OwnershipError(err) => format!("ownership-error/{}", err.error_type()),
+            CreateUserError::AuthorizationError(err) => err.error_type(),
             CreateUserError::UserAlreadyExists => "user-already-exists".to_string(),
             CreateUserError::MySqlError(_) => "mysql-error".to_string(),
         }

@@ -4,10 +4,11 @@ use itertools::Itertools;
 use prettytable::Table;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use thiserror::Error;
 
 use crate::{
     core::{
-        protocol::request_validation::{NameValidationError, OwnerValidationError},
+        protocol::request_validation::AuthorizationError,
         types::{DbOrUser, MySQLDatabase},
     },
     server::sql::database_operations::DatabaseRow,
@@ -17,11 +18,15 @@ pub type ListDatabasesRequest = Option<Vec<MySQLDatabase>>;
 
 pub type ListDatabasesResponse = BTreeMap<MySQLDatabase, Result<DatabaseRow, ListDatabasesError>>;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Error, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ListDatabasesError {
-    SanitizationError(NameValidationError),
-    OwnershipError(OwnerValidationError),
+    #[error("Authorization error: {0}")]
+    AuthorizationError(#[from] AuthorizationError),
+
+    #[error("Database does not exist")]
     DatabaseDoesNotExist,
+
+    #[error("MySQL error: {0}")]
     MySqlError(String),
 }
 
@@ -99,10 +104,7 @@ pub fn print_list_databases_output_status_json(output: &ListDatabasesResponse) {
 impl ListDatabasesError {
     pub fn to_error_message(&self, database_name: &MySQLDatabase) -> String {
         match self {
-            ListDatabasesError::SanitizationError(err) => {
-                err.to_error_message(DbOrUser::Database(database_name.clone()))
-            }
-            ListDatabasesError::OwnershipError(err) => {
+            ListDatabasesError::AuthorizationError(err) => {
                 err.to_error_message(DbOrUser::Database(database_name.clone()))
             }
             ListDatabasesError::DatabaseDoesNotExist => {
@@ -116,12 +118,7 @@ impl ListDatabasesError {
 
     pub fn error_type(&self) -> String {
         match self {
-            ListDatabasesError::SanitizationError(err) => {
-                format!("sanitization-error/{}", err.error_type())
-            }
-            ListDatabasesError::OwnershipError(err) => {
-                format!("ownership-error/{}", err.error_type())
-            }
+            ListDatabasesError::AuthorizationError(err) => err.error_type(),
             ListDatabasesError::DatabaseDoesNotExist => "database-does-not-exist".to_string(),
             ListDatabasesError::MySqlError(_) => "mysql-error".to_string(),
         }

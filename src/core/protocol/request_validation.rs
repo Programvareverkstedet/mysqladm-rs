@@ -1,13 +1,21 @@
 use indoc::indoc;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 use crate::core::{common::UnixUser, types::DbOrUser};
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
+#[derive(Error, Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
 pub enum NameValidationError {
+    #[error("Name cannot be empty.")]
     EmptyString,
+
+    #[error(
+        "Name contains invalid characters. Only A-Z, a-z, 0-9, _ (underscore) and - (dash) are permitted."
+    )]
     InvalidCharacters,
+
+    #[error("Name is too long. Maximum length is 64 characters.")]
     TooLong,
 }
 
@@ -42,6 +50,15 @@ impl NameValidationError {
             NameValidationError::TooLong => "too-long",
         }
     }
+}
+
+#[derive(Error, Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
+pub enum OwnerValidationError {
+    #[error("No matching owner prefix found")]
+    NoMatch,
+
+    #[error("Name cannot be empty")]
+    StringEmpty,
 }
 
 impl OwnerValidationError {
@@ -98,11 +115,42 @@ impl OwnerValidationError {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
-pub enum OwnerValidationError {
-    // The name is valid, but none of the given prefixes matched the name
-    NoMatch,
+#[derive(Error, Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
+pub enum AuthorizationError {
+    #[error("Sanitization error: {0}")]
+    SanitizationError(NameValidationError),
 
-    // The name is empty, which is invalid
-    StringEmpty,
+    #[error("Ownership error: {0}")]
+    OwnershipError(OwnerValidationError),
+    // AuthorizationHandlerError(String),
+}
+
+impl AuthorizationError {
+    pub fn to_error_message(&self, db_or_user: DbOrUser) -> String {
+        match self {
+            AuthorizationError::SanitizationError(err) => err.to_error_message(db_or_user),
+            AuthorizationError::OwnershipError(err) => err.to_error_message(db_or_user),
+            // AuthorizationError::AuthorizationHandlerError(msg) => {
+            //     format!(
+            //         "Authorization handler error for '{}': {}",
+            //         db_or_user.name(),
+            //         msg
+            //     )
+            // }
+        }
+    }
+
+    pub fn error_type(&self) -> String {
+        match self {
+            AuthorizationError::SanitizationError(err) => {
+                format!("sanitization-error/{}", err.error_type())
+            }
+            // TODO: maybe rename this to authorization error?
+            AuthorizationError::OwnershipError(err) => {
+                format!("ownership-error/{}", err.error_type())
+            } // AuthorizationError::AuthorizationHandlerError(_) => {
+              //     "authorization-handler-error".to_string()
+              // }
+        }
+    }
 }

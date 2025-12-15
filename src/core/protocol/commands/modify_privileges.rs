@@ -1,10 +1,11 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 use crate::core::{
     database_privileges::{DatabasePrivilegeRow, DatabasePrivilegeRowDiff, DatabasePrivilegesDiff},
-    protocol::request_validation::{NameValidationError, OwnerValidationError},
+    protocol::request_validation::AuthorizationError,
     types::{DbOrUser, MySQLDatabase, MySQLUser},
 };
 
@@ -13,23 +14,37 @@ pub type ModifyPrivilegesRequest = BTreeSet<DatabasePrivilegesDiff>;
 pub type ModifyPrivilegesResponse =
     BTreeMap<(MySQLDatabase, MySQLUser), Result<(), ModifyDatabasePrivilegesError>>;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Error, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ModifyDatabasePrivilegesError {
-    DatabaseSanitizationError(NameValidationError),
-    DatabaseOwnershipError(OwnerValidationError),
-    UserSanitizationError(NameValidationError),
-    UserOwnershipError(OwnerValidationError),
+    #[error("Database authorization error: {0}")]
+    DatabaseAuthorizationError(AuthorizationError),
+
+    #[error("User authorization error: {0}")]
+    UserAuthorizationError(AuthorizationError),
+
+    #[error("Database does not exist")]
     DatabaseDoesNotExist,
+
+    #[error("User does not exist")]
     UserDoesNotExist,
+
+    #[error("Diff does not apply: {0}")]
     DiffDoesNotApply(DiffDoesNotApplyError),
+
+    #[error("MySQL error: {0}")]
     MySqlError(String),
 }
 
 #[allow(clippy::enum_variant_names)]
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Error, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum DiffDoesNotApplyError {
+    #[error("Privileges row already exists for database '{0}' and user '{1}'")]
     RowAlreadyExists(MySQLDatabase, MySQLUser),
+
+    #[error("Privileges row does not exist for database '{0}' and user '{1}'")]
     RowDoesNotExist(MySQLDatabase, MySQLUser),
+
+    #[error("Privilege change '{0:?}' does not apply to row '{1:?}'")]
     RowPrivilegeChangeDoesNotApply(DatabasePrivilegeRowDiff, DatabasePrivilegeRow),
 }
 
@@ -54,16 +69,10 @@ pub fn print_modify_database_privileges_output_status(output: &ModifyPrivilegesR
 impl ModifyDatabasePrivilegesError {
     pub fn to_error_message(&self, database_name: &MySQLDatabase, username: &MySQLUser) -> String {
         match self {
-            ModifyDatabasePrivilegesError::DatabaseSanitizationError(err) => {
+            ModifyDatabasePrivilegesError::DatabaseAuthorizationError(err) => {
                 err.to_error_message(DbOrUser::Database(database_name.clone()))
             }
-            ModifyDatabasePrivilegesError::DatabaseOwnershipError(err) => {
-                err.to_error_message(DbOrUser::Database(database_name.clone()))
-            }
-            ModifyDatabasePrivilegesError::UserSanitizationError(err) => {
-                err.to_error_message(DbOrUser::User(username.clone()))
-            }
-            ModifyDatabasePrivilegesError::UserOwnershipError(err) => {
+            ModifyDatabasePrivilegesError::UserAuthorizationError(err) => {
                 err.to_error_message(DbOrUser::User(username.clone()))
             }
             ModifyDatabasePrivilegesError::DatabaseDoesNotExist => {
@@ -87,18 +96,9 @@ impl ModifyDatabasePrivilegesError {
     #[allow(dead_code)]
     pub fn error_type(&self) -> String {
         match self {
-            ModifyDatabasePrivilegesError::DatabaseSanitizationError(err) => {
-                format!("database-sanitization-error/{}", err.error_type())
-            }
-            ModifyDatabasePrivilegesError::DatabaseOwnershipError(err) => {
-                format!("database-ownership-error/{}", err.error_type())
-            }
-            ModifyDatabasePrivilegesError::UserSanitizationError(err) => {
-                format!("user-sanitization-error/{}", err.error_type())
-            }
-            ModifyDatabasePrivilegesError::UserOwnershipError(err) => {
-                format!("user-ownership-error/{}", err.error_type())
-            }
+            // TODO: should these be subtyped?
+            ModifyDatabasePrivilegesError::DatabaseAuthorizationError(err) => err.error_type(),
+            ModifyDatabasePrivilegesError::UserAuthorizationError(err) => err.error_type(),
             ModifyDatabasePrivilegesError::DatabaseDoesNotExist => {
                 "database-does-not-exist".to_string()
             }

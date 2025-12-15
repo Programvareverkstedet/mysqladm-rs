@@ -2,9 +2,10 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use thiserror::Error;
 
 use crate::core::{
-    protocol::request_validation::{NameValidationError, OwnerValidationError},
+    protocol::request_validation::AuthorizationError,
     types::{DbOrUser, MySQLUser},
 };
 
@@ -12,12 +13,18 @@ pub type UnlockUsersRequest = Vec<MySQLUser>;
 
 pub type UnlockUsersResponse = BTreeMap<MySQLUser, Result<(), UnlockUserError>>;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Error, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum UnlockUserError {
-    SanitizationError(NameValidationError),
-    OwnershipError(OwnerValidationError),
+    #[error("Authorization error: {0}")]
+    AuthorizationError(#[from] AuthorizationError),
+
+    #[error("User does not exist")]
     UserDoesNotExist,
+
+    #[error("User is already unlocked")]
     UserIsAlreadyUnlocked,
+
+    #[error("MySQL error: {0}")]
     MySqlError(String),
 }
 
@@ -61,10 +68,7 @@ pub fn print_unlock_users_output_status_json(output: &UnlockUsersResponse) {
 impl UnlockUserError {
     pub fn to_error_message(&self, username: &MySQLUser) -> String {
         match self {
-            UnlockUserError::SanitizationError(err) => {
-                err.to_error_message(DbOrUser::User(username.clone()))
-            }
-            UnlockUserError::OwnershipError(err) => {
+            UnlockUserError::AuthorizationError(err) => {
                 err.to_error_message(DbOrUser::User(username.clone()))
             }
             UnlockUserError::UserDoesNotExist => {
@@ -81,10 +85,7 @@ impl UnlockUserError {
 
     pub fn error_type(&self) -> String {
         match self {
-            UnlockUserError::SanitizationError(err) => {
-                format!("sanitization-error/{}", err.error_type())
-            }
-            UnlockUserError::OwnershipError(err) => format!("ownership-error/{}", err.error_type()),
+            UnlockUserError::AuthorizationError(err) => err.error_type(),
             UnlockUserError::UserDoesNotExist => "user-does-not-exist".to_string(),
             UnlockUserError::UserIsAlreadyUnlocked => "user-is-already-unlocked".to_string(),
             UnlockUserError::MySqlError(_) => "mysql-error".to_string(),

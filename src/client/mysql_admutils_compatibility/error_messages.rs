@@ -1,7 +1,7 @@
 use crate::core::{
     protocol::{
         CreateDatabaseError, CreateUserError, DropDatabaseError, DropUserError,
-        GetDatabasesPrivilegeDataError, ListUsersError,
+        GetDatabasesPrivilegeDataError, ListUsersError, request_validation::AuthorizationError,
     },
     types::DbOrUser,
 };
@@ -36,13 +36,13 @@ pub fn handle_create_user_error(error: CreateUserError, name: &str) {
         .next()
         .unwrap_or_else(|| "mysql-useradm".to_string());
     match error {
-        CreateUserError::SanitizationError(_) => {
+        CreateUserError::AuthorizationError(AuthorizationError::SanitizationError(_)) => {
             eprintln!(
                 "{}",
                 name_validation_error_to_error_message(DbOrUser::User(name.into()))
             );
         }
-        CreateUserError::OwnershipError(_) => {
+        CreateUserError::AuthorizationError(AuthorizationError::OwnershipError(_)) => {
             eprintln!(
                 "{}",
                 owner_validation_error_message(DbOrUser::User(name.into()))
@@ -59,13 +59,13 @@ pub fn handle_drop_user_error(error: DropUserError, name: &str) {
         .next()
         .unwrap_or_else(|| "mysql-useradm".to_string());
     match error {
-        DropUserError::SanitizationError(_) => {
+        DropUserError::AuthorizationError(AuthorizationError::SanitizationError(_)) => {
             eprintln!(
                 "{}",
                 name_validation_error_to_error_message(DbOrUser::User(name.into()))
             );
         }
-        DropUserError::OwnershipError(_) => {
+        DropUserError::AuthorizationError(AuthorizationError::OwnershipError(_)) => {
             eprintln!(
                 "{}",
                 owner_validation_error_message(DbOrUser::User(name.into()))
@@ -82,13 +82,13 @@ pub fn handle_list_users_error(error: ListUsersError, name: &str) {
         .next()
         .unwrap_or_else(|| "mysql-useradm".to_string());
     match error {
-        ListUsersError::SanitizationError(_) => {
+        ListUsersError::AuthorizationError(AuthorizationError::SanitizationError(_)) => {
             eprintln!(
                 "{}",
                 name_validation_error_to_error_message(DbOrUser::User(name.into()))
             );
         }
-        ListUsersError::OwnershipError(_) => {
+        ListUsersError::AuthorizationError(AuthorizationError::OwnershipError(_)) => {
             eprintln!(
                 "{}",
                 owner_validation_error_message(DbOrUser::User(name.into()))
@@ -113,13 +113,14 @@ pub fn handle_create_database_error(error: CreateDatabaseError, name: &str) {
         .next()
         .unwrap_or_else(|| "mysql-dbadm".to_string());
     match error {
-        CreateDatabaseError::SanitizationError(_) => {
+        CreateDatabaseError::AuthorizationError(AuthorizationError::SanitizationError(_)) => {
             eprintln!(
                 "{}",
                 name_validation_error_to_error_message(DbOrUser::Database(name.into()))
             );
         }
-        CreateDatabaseError::OwnershipError(_) => {
+
+        CreateDatabaseError::AuthorizationError(AuthorizationError::OwnershipError(_)) => {
             eprintln!(
                 "{}",
                 owner_validation_error_message(DbOrUser::Database(name.into()))
@@ -139,13 +140,13 @@ pub fn handle_drop_database_error(error: DropDatabaseError, name: &str) {
         .next()
         .unwrap_or_else(|| "mysql-dbadm".to_string());
     match error {
-        DropDatabaseError::SanitizationError(_) => {
+        DropDatabaseError::AuthorizationError(AuthorizationError::SanitizationError(_)) => {
             eprintln!(
                 "{}",
                 name_validation_error_to_error_message(DbOrUser::Database(name.into()))
             );
         }
-        DropDatabaseError::OwnershipError(_) => {
+        DropDatabaseError::AuthorizationError(AuthorizationError::OwnershipError(_)) => {
             eprintln!(
                 "{}",
                 owner_validation_error_message(DbOrUser::Database(name.into()))
@@ -169,12 +170,12 @@ pub fn format_show_database_error_message(
         .unwrap_or_else(|| "mysql-dbadm".to_string());
 
     match error {
-        GetDatabasesPrivilegeDataError::SanitizationError(_) => {
-            name_validation_error_to_error_message(DbOrUser::Database(name.into()))
-        }
-        GetDatabasesPrivilegeDataError::OwnershipError(_) => {
-            owner_validation_error_message(DbOrUser::Database(name.into()))
-        }
+        GetDatabasesPrivilegeDataError::AuthorizationError(
+            AuthorizationError::SanitizationError(_),
+        ) => name_validation_error_to_error_message(DbOrUser::Database(name.into())),
+        GetDatabasesPrivilegeDataError::AuthorizationError(AuthorizationError::OwnershipError(
+            _,
+        )) => owner_validation_error_message(DbOrUser::Database(name.into())),
         GetDatabasesPrivilegeDataError::MySqlError(err) => {
             format!(
                 "{}: Failed to look up privileges for database '{}': {}",

@@ -2,9 +2,10 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use thiserror::Error;
 
 use crate::core::{
-    protocol::request_validation::{NameValidationError, OwnerValidationError},
+    protocol::request_validation::AuthorizationError,
     types::{DbOrUser, MySQLUser},
 };
 
@@ -12,12 +13,18 @@ pub type LockUsersRequest = Vec<MySQLUser>;
 
 pub type LockUsersResponse = BTreeMap<MySQLUser, Result<(), LockUserError>>;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Error, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum LockUserError {
-    SanitizationError(NameValidationError),
-    OwnershipError(OwnerValidationError),
+    #[error("Authorization error: {0}")]
+    AuthorizationError(#[from] AuthorizationError),
+
+    #[error("User does not exist")]
     UserDoesNotExist,
+
+    #[error("User is already locked")]
     UserIsAlreadyLocked,
+
+    #[error("MySQL error: {0}")]
     MySqlError(String),
 }
 
@@ -61,10 +68,7 @@ pub fn print_lock_users_output_status_json(output: &LockUsersResponse) {
 impl LockUserError {
     pub fn to_error_message(&self, username: &MySQLUser) -> String {
         match self {
-            LockUserError::SanitizationError(err) => {
-                err.to_error_message(DbOrUser::User(username.clone()))
-            }
-            LockUserError::OwnershipError(err) => {
+            LockUserError::AuthorizationError(err) => {
                 err.to_error_message(DbOrUser::User(username.clone()))
             }
             LockUserError::UserDoesNotExist => {
@@ -81,10 +85,7 @@ impl LockUserError {
 
     pub fn error_type(&self) -> String {
         match self {
-            LockUserError::SanitizationError(err) => {
-                format!("sanitization-error/{}", err.error_type())
-            }
-            LockUserError::OwnershipError(err) => format!("ownership-error/{}", err.error_type()),
+            LockUserError::AuthorizationError(err) => err.error_type(),
             LockUserError::UserDoesNotExist => "user-does-not-exist".to_string(),
             LockUserError::UserIsAlreadyLocked => "user-is-already-locked".to_string(),
             LockUserError::MySqlError(_) => "mysql-error".to_string(),

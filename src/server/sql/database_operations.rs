@@ -6,6 +6,7 @@ use sqlx::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::core::protocol::CompleteDatabaseNameResponse;
+use crate::core::protocol::request_validation::AuthorizationError;
 use crate::core::types::MySQLDatabase;
 use crate::core::types::MySQLUser;
 use crate::{
@@ -94,19 +95,19 @@ pub async fn create_databases(
     let mut results = BTreeMap::new();
 
     for database_name in database_names {
-        if let Err(err) = validate_name(&database_name) {
-            results.insert(
-                database_name.to_owned(),
-                Err(CreateDatabaseError::SanitizationError(err)),
-            );
+        if let Err(err) = validate_name(&database_name)
+            .map_err(AuthorizationError::SanitizationError)
+            .map_err(CreateDatabaseError::AuthorizationError)
+        {
+            results.insert(database_name.to_owned(), Err(err));
             continue;
         }
 
-        if let Err(err) = validate_ownership_by_unix_user(&database_name, unix_user) {
-            results.insert(
-                database_name.to_owned(),
-                Err(CreateDatabaseError::OwnershipError(err)),
-            );
+        if let Err(err) = validate_ownership_by_unix_user(&database_name, unix_user)
+            .map_err(AuthorizationError::OwnershipError)
+            .map_err(CreateDatabaseError::AuthorizationError)
+        {
+            results.insert(database_name.to_owned(), Err(err));
             continue;
         }
 
@@ -154,19 +155,19 @@ pub async fn drop_databases(
     let mut results = BTreeMap::new();
 
     for database_name in database_names {
-        if let Err(err) = validate_name(&database_name) {
-            results.insert(
-                database_name.to_owned(),
-                Err(DropDatabaseError::SanitizationError(err)),
-            );
+        if let Err(err) = validate_name(&database_name)
+            .map_err(AuthorizationError::SanitizationError)
+            .map_err(DropDatabaseError::AuthorizationError)
+        {
+            results.insert(database_name.to_owned(), Err(err));
             continue;
         }
 
-        if let Err(err) = validate_ownership_by_unix_user(&database_name, unix_user) {
-            results.insert(
-                database_name.to_owned(),
-                Err(DropDatabaseError::OwnershipError(err)),
-            );
+        if let Err(err) = validate_ownership_by_unix_user(&database_name, unix_user)
+            .map_err(AuthorizationError::OwnershipError)
+            .map_err(DropDatabaseError::AuthorizationError)
+        {
+            results.insert(database_name.to_owned(), Err(err));
             continue;
         }
 
@@ -257,19 +258,19 @@ pub async fn list_databases(
     let mut results = BTreeMap::new();
 
     for database_name in database_names {
-        if let Err(err) = validate_name(&database_name) {
-            results.insert(
-                database_name.to_owned(),
-                Err(ListDatabasesError::SanitizationError(err)),
-            );
+        if let Err(err) = validate_name(&database_name)
+            .map_err(AuthorizationError::SanitizationError)
+            .map_err(ListDatabasesError::AuthorizationError)
+        {
+            results.insert(database_name.to_owned(), Err(err));
             continue;
         }
 
-        if let Err(err) = validate_ownership_by_unix_user(&database_name, unix_user) {
-            results.insert(
-                database_name.to_owned(),
-                Err(ListDatabasesError::OwnershipError(err)),
-            );
+        if let Err(err) = validate_ownership_by_unix_user(&database_name, unix_user)
+            .map_err(AuthorizationError::OwnershipError)
+            .map_err(ListDatabasesError::AuthorizationError)
+        {
+            results.insert(database_name.to_owned(), Err(err));
             continue;
         }
 

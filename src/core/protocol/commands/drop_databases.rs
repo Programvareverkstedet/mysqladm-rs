@@ -2,9 +2,10 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use thiserror::Error;
 
 use crate::core::{
-    protocol::request_validation::{NameValidationError, OwnerValidationError},
+    protocol::request_validation::AuthorizationError,
     types::{DbOrUser, MySQLDatabase},
 };
 
@@ -12,11 +13,15 @@ pub type DropDatabasesRequest = Vec<MySQLDatabase>;
 
 pub type DropDatabasesResponse = BTreeMap<MySQLDatabase, Result<(), DropDatabaseError>>;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Error, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum DropDatabaseError {
-    SanitizationError(NameValidationError),
-    OwnershipError(OwnerValidationError),
+    #[error("Authorization error: {0}")]
+    AuthorizationError(#[from] AuthorizationError),
+
+    #[error("Database does not exist")]
     DatabaseDoesNotExist,
+
+    #[error("MySQL error: {0}")]
     MySqlError(String),
 }
 
@@ -63,10 +68,7 @@ pub fn print_drop_databases_output_status_json(output: &DropDatabasesResponse) {
 impl DropDatabaseError {
     pub fn to_error_message(&self, database_name: &MySQLDatabase) -> String {
         match self {
-            DropDatabaseError::SanitizationError(err) => {
-                err.to_error_message(DbOrUser::Database(database_name.clone()))
-            }
-            DropDatabaseError::OwnershipError(err) => {
+            DropDatabaseError::AuthorizationError(err) => {
                 err.to_error_message(DbOrUser::Database(database_name.clone()))
             }
             DropDatabaseError::DatabaseDoesNotExist => {
@@ -80,12 +82,7 @@ impl DropDatabaseError {
 
     pub fn error_type(&self) -> String {
         match self {
-            DropDatabaseError::SanitizationError(err) => {
-                format!("sanitization-error/{}", err.error_type())
-            }
-            DropDatabaseError::OwnershipError(err) => {
-                format!("ownership-error/{}", err.error_type())
-            }
+            DropDatabaseError::AuthorizationError(err) => err.error_type(),
             DropDatabaseError::DatabaseDoesNotExist => "database-does-not-exist".to_string(),
             DropDatabaseError::MySqlError(_) => "mysql-error".to_string(),
         }
