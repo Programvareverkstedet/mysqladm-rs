@@ -39,13 +39,12 @@ jobs:
       - uses: cargo-bins/cargo-binstall@main
 
       - name: Install rust toolchain
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@master
         with:
             toolchain: ${{ inputs.rust_toolchain }}
-            override: true
 
       - name: Install cargo-deb
-        run: cargo binstall cargo-deb
+        run: cargo binstall -y cargo-deb
 
       - name: Build deb package
         env:
