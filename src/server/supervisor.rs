@@ -68,6 +68,7 @@ impl Supervisor {
 
         let mut watchdog_duration = None;
         let mut watchdog_micro_seconds = 0;
+        #[cfg(target_os = "linux")]
         let watchdog_task =
             if systemd_mode && sd_notify::watchdog_enabled(true, &mut watchdog_micro_seconds) {
                 watchdog_duration = Some(Duration::from_micros(watchdog_micro_seconds));
@@ -80,6 +81,8 @@ impl Supervisor {
                 tracing::debug!("Systemd watchdog not enabled, skipping watchdog thread");
                 None
             };
+        #[cfg(not(target_os = "linux"))]
+        let watchdog_task = None;
 
         let db_connection_pool =
             Arc::new(RwLock::new(create_db_connection_pool(&config.mysql).await?));
@@ -102,19 +105,34 @@ impl Supervisor {
 
         let task_tracker = TaskTracker::new();
 
+        #[cfg(target_os = "linux")]
         let status_notifier_task = if systemd_mode {
             Some(spawn_status_notifier_task(task_tracker.clone()))
         } else {
             None
         };
+        #[cfg(not(target_os = "linux"))]
+        let status_notifier_task = None;
 
         let (tx, rx) = broadcast::channel(1);
 
         // TODO: try to detech systemd socket before using the provided socket path
+        #[cfg(target_os = "linux")]
         let listener = Arc::new(RwLock::new(match config.socket_path {
             Some(ref path) => create_unix_listener_with_socket_path(path.clone()).await?,
             None => create_unix_listener_with_systemd_socket().await?,
         }));
+        #[cfg(not(target_os = "linux"))]
+        let listener = Arc::new(RwLock::new(
+            create_unix_listener_with_socket_path(
+                config
+                    .socket_path
+                    .as_ref()
+                    .ok_or(anyhow!("Socket path must be set"))?
+                    .clone(),
+            )
+            .await?,
+        ));
 
         let (reload_tx, reload_rx) = broadcast::channel(1);
         let shutdown_cancel_token = CancellationToken::new();
@@ -211,16 +229,28 @@ impl Supervisor {
     //       first. Make sure to handle that appropriately to avoid a deadlock.
     async fn reload_listener(&self) -> anyhow::Result<()> {
         let config = self.config.lock().await;
+        #[cfg(target_os = "linux")]
         let new_listener = match config.socket_path {
             Some(ref path) => create_unix_listener_with_socket_path(path.clone()).await?,
             None => create_unix_listener_with_systemd_socket().await?,
         };
+        #[cfg(not(target_os = "linux"))]
+        let new_listener = create_unix_listener_with_socket_path(
+            config
+                .socket_path
+                .as_ref()
+                .ok_or(anyhow!("Socket path must be set"))?
+                .clone(),
+        )
+        .await?;
+
         let mut listener = self.listener.write().await;
         *listener = new_listener;
         Ok(())
     }
 
     pub async fn reload(&self) -> anyhow::Result<()> {
+        #[cfg(target_os = "linux")]
         sd_notify::notify(false, &[sd_notify::NotifyState::Reloading])?;
 
         let previous_config = self.config.lock().await.clone();
@@ -257,12 +287,14 @@ impl Supervisor {
             self.resume_receiving_new_connections()?;
         }
 
+        #[cfg(target_os = "linux")]
         sd_notify::notify(false, &[sd_notify::NotifyState::Ready])?;
 
         Ok(())
     }
 
     pub async fn shutdown(&self) -> anyhow::Result<()> {
+        #[cfg(target_os = "linux")]
         sd_notify::notify(false, &[sd_notify::NotifyState::Stopping])?;
 
         tracing::debug!("Stop accepting new connections");
@@ -323,6 +355,7 @@ impl Supervisor {
     }
 }
 
+#[cfg(target_os = "linux")]
 fn spawn_watchdog_task(duration: Duration) -> JoinHandle<()> {
     tokio::spawn(async move {
         let mut interval = interval(duration.div_f32(2.0));
@@ -339,6 +372,7 @@ fn spawn_watchdog_task(duration: Duration) -> JoinHandle<()> {
     })
 }
 
+#[cfg(target_os = "linux")]
 fn spawn_status_notifier_task(task_tracker: TaskTracker) -> JoinHandle<()> {
     const STATUS_UPDATE_INTERVAL_SECS: Duration = Duration::from_secs(1);
 
@@ -385,6 +419,7 @@ async fn create_unix_listener_with_socket_path(
     Ok(listener)
 }
 
+#[cfg(target_os = "linux")]
 async fn create_unix_listener_with_systemd_socket() -> anyhow::Result<TokioUnixListener> {
     let fd = sd_notify::listen_fds()
         .context("Failed to get file descriptors from systemd")?
@@ -468,6 +503,7 @@ async fn listener_task(
     mut supervisor_message_receiver: broadcast::Receiver<SupervisorMessage>,
     db_is_mariadb: Arc<RwLock<bool>>,
 ) -> anyhow::Result<()> {
+    #[cfg(target_os = "linux")]
     sd_notify::notify(false, &[sd_notify::NotifyState::Ready])?;
 
     loop {

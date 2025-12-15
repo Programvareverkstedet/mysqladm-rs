@@ -16,6 +16,7 @@ pub struct ServerArgs {
     pub subcmd: ServerCommand,
 
     /// Enable systemd mode
+    #[cfg(target_os = "linux")]
     #[arg(long)]
     pub systemd: bool,
 
@@ -58,6 +59,8 @@ pub async fn handle_command(
     args: ServerArgs,
 ) -> anyhow::Result<()> {
     let mut auto_detected_systemd_mode = false;
+
+    #[cfg(target_os = "linux")]
     let systemd_mode = args.systemd || {
         if let Ok(true) = sd_notify::booted() {
             auto_detected_systemd_mode = true;
@@ -67,24 +70,30 @@ pub async fn handle_command(
         }
     };
 
+    #[cfg(not(target_os = "linux"))]
+    let systemd_mode = false;
+
     if systemd_mode {
-        let subscriber = tracing_subscriber::Registry::default()
-            .with(verbosity.tracing_level_filter())
-            .with(tracing_journald::layer()?);
+        #[cfg(target_os = "linux")]
+        {
+            let subscriber = tracing_subscriber::Registry::default()
+                .with(verbosity.tracing_level_filter())
+                .with(tracing_journald::layer()?);
 
-        tracing::subscriber::set_global_default(subscriber)
-            .context("Failed to set global default tracing subscriber")?;
+            tracing::subscriber::set_global_default(subscriber)
+                .context("Failed to set global default tracing subscriber")?;
 
-        trace_server_prelude();
+            trace_server_prelude();
 
-        if verbosity.tracing_level_filter() >= tracing::Level::TRACE {
-            tracing::warn!("{}", LOG_LEVEL_WARNING.trim());
-        }
+            if verbosity.tracing_level_filter() >= tracing::Level::TRACE {
+                tracing::warn!("{}", LOG_LEVEL_WARNING.trim());
+            }
 
-        if auto_detected_systemd_mode {
-            tracing::debug!("Running in systemd mode, auto-detected");
-        } else {
-            tracing::debug!("Running in systemd mode");
+            if auto_detected_systemd_mode {
+                tracing::debug!("Running in systemd mode, auto-detected");
+            } else {
+                tracing::debug!("Running in systemd mode");
+            }
         }
     } else {
         let subscriber = tracing_subscriber::Registry::default()
