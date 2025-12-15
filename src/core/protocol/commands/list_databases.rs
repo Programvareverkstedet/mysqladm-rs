@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 
-use prettytable::{Cell, Row, Table};
+use itertools::Itertools;
+use prettytable::Table;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
@@ -40,10 +41,25 @@ pub fn print_list_databases_output_status(output: &ListDatabasesResponse) {
         println!("No databases to show.");
     } else {
         let mut table = Table::new();
-        table.add_row(Row::new(vec![Cell::new("Database")]));
+        table.add_row(row![
+            "Database",
+            "Tables",
+            "Users",
+            "Collation",
+            "Character Set",
+            "Size (Bytes)"
+        ]);
         for db in final_database_list {
-            table.add_row(row![db.database]);
+            table.add_row(row![
+                db.database,
+                db.tables.join("\n"),
+                db.users.iter().map(|user| user.as_str()).join("\n"),
+                db.collation.as_deref().unwrap_or("N/A"),
+                db.character_set.as_deref().unwrap_or("N/A"),
+                db.size_bytes,
+            ]);
         }
+
         table.printstd();
     }
 }
@@ -52,11 +68,15 @@ pub fn print_list_databases_output_status_json(output: &ListDatabasesResponse) {
     let value = output
         .iter()
         .map(|(name, result)| match result {
-            Ok(_row) => (
+            Ok(row) => (
                 name.to_string(),
                 json!({
                   "status": "success",
-                  // NOTE: there will likely be more data to include here in the future
+                  "tables": row.tables,
+                  "users": row.users,
+                  "collation": row.collation,
+                  "character_set": row.character_set,
+                  "size_bytes": row.size_bytes,
                 }),
             ),
             Err(err) => (

@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::core::protocol::CompleteDatabaseNameResponse;
 use crate::core::types::MySQLDatabase;
+use crate::core::types::MySQLUser;
 use crate::{
     core::{
         common::UnixUser,
@@ -207,12 +208,42 @@ pub async fn drop_databases(
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DatabaseRow {
     pub database: MySQLDatabase,
+    pub tables: Vec<String>,
+    pub users: Vec<MySQLUser>,
+    pub collation: Option<String>,
+    pub character_set: Option<String>,
+    pub size_bytes: u64,
 }
 
 impl FromRow<'_, sqlx::mysql::MySqlRow> for DatabaseRow {
     fn from_row(row: &sqlx::mysql::MySqlRow) -> Result<Self, sqlx::Error> {
         Ok(DatabaseRow {
             database: row.try_get::<String, _>("database")?.into(),
+            tables: {
+                let s: Option<String> = row.try_get("tables")?;
+                s.and_then(|s| {
+                    if s.is_empty() {
+                        None
+                    } else {
+                        Some(s.split(',').map(|s| s.to_owned()).collect())
+                    }
+                })
+                .unwrap_or_default()
+            },
+            users: {
+                let s: Option<String> = row.try_get("users")?;
+                s.and_then(|s| {
+                    if s.is_empty() {
+                        None
+                    } else {
+                        Some(s.split(',').map(|s| s.to_owned().into()).collect())
+                    }
+                })
+                .unwrap_or_default()
+            },
+            collation: row.try_get::<Option<String>, _>("collation")?,
+            character_set: row.try_get::<Option<String>, _>("character_set")?,
+            size_bytes: row.try_get::<u64, _>("size_bytes")?,
         })
     }
 }
@@ -244,10 +275,25 @@ pub async fn list_databases(
 
         let result = sqlx::query_as::<_, DatabaseRow>(
             r#"
-          SELECT CAST(`SCHEMA_NAME` AS CHAR(64)) AS `database`
-          FROM `information_schema`.`SCHEMATA`
-          WHERE `SCHEMA_NAME` = ?
-        "#,
+                SELECT
+                  CAST(`information_schema`.`SCHEMATA`.`SCHEMA_NAME` AS CHAR(64)) AS `database`,
+                  GROUP_CONCAT(DISTINCT CAST(`information_schema`.`TABLES`.`TABLE_NAME` AS CHAR(64)) SEPARATOR ',') AS `tables`,
+                  GROUP_CONCAT(DISTINCT CAST(`mysql`.`db`.`User` AS CHAR(64)) SEPARATOR ',') AS `users`,
+                  MAX(`information_schema`.`SCHEMATA`.`DEFAULT_COLLATION_NAME`) AS `collation`,
+                  MAX(`information_schema`.`SCHEMATA`.`DEFAULT_CHARACTER_SET_NAME`) AS `character_set`,
+                  CAST(IFNULL(
+                    SUM(`information_schema`.`TABLES`.`DATA_LENGTH` + `information_schema`.`TABLES`.`INDEX_LENGTH`),
+                    0
+                  ) AS UNSIGNED INTEGER) AS `size_bytes`
+                FROM `information_schema`.`SCHEMATA`
+                LEFT OUTER JOIN `information_schema`.`TABLES`
+                  ON `information_schema`.`SCHEMATA`.`SCHEMA_NAME` = `TABLES`.`TABLE_SCHEMA`
+                LEFT OUTER JOIN `mysql`.`db`
+                  ON `information_schema`.`SCHEMATA`.`SCHEMA_NAME` = `mysql`.`db`.`DB`
+                WHERE `information_schema`.`SCHEMATA`.`SCHEMA_NAME` = ?
+                GROUP BY `information_schema`.`SCHEMATA`.`SCHEMA_NAME`
+            "#,
+
         )
         .bind(database_name.to_string())
         .fetch_optional(&mut *connection)
@@ -263,6 +309,8 @@ pub async fn list_databases(
             tracing::error!("Failed to list database '{}': {:?}", &database_name, err);
         }
 
+        // TODO: should we assert that the users are also owned by the unix_user from the request?
+
         results.insert(database_name, result);
     }
 
@@ -276,16 +324,32 @@ pub async fn list_all_databases_for_user(
 ) -> ListAllDatabasesResponse {
     let result = sqlx::query_as::<_, DatabaseRow>(
         r#"
-          SELECT CAST(`SCHEMA_NAME` AS CHAR(64)) AS `database`
+          SELECT
+            CAST(`information_schema`.`SCHEMATA`.`SCHEMA_NAME` AS CHAR(64)) AS `database`,
+            GROUP_CONCAT(DISTINCT CAST(`information_schema`.`TABLES`.`TABLE_NAME` AS CHAR(64)) SEPARATOR ',') AS `tables`,
+            GROUP_CONCAT(DISTINCT CAST(`mysql`.`db`.`User` AS CHAR(64)) SEPARATOR ',') AS `users`,
+            MAX(`information_schema`.`SCHEMATA`.`DEFAULT_COLLATION_NAME`) AS `collation`,
+            MAX(`information_schema`.`SCHEMATA`.`DEFAULT_CHARACTER_SET_NAME`) AS `character_set`,
+            CAST(IFNULL(
+              SUM(`information_schema`.`TABLES`.`DATA_LENGTH` + `information_schema`.`TABLES`.`INDEX_LENGTH`),
+              0
+            ) AS UNSIGNED INTEGER) AS `size_bytes`
           FROM `information_schema`.`SCHEMATA`
-          WHERE `SCHEMA_NAME` NOT IN ('information_schema', 'performance_schema', 'mysql', 'sys')
-            AND `SCHEMA_NAME` REGEXP ?
+          LEFT OUTER JOIN `information_schema`.`TABLES`
+            ON `information_schema`.`SCHEMATA`.`SCHEMA_NAME` = `TABLES`.`TABLE_SCHEMA`
+          LEFT OUTER JOIN `mysql`.`db`
+            ON `information_schema`.`SCHEMATA`.`SCHEMA_NAME` = `mysql`.`db`.`DB`
+          WHERE `information_schema`.`SCHEMATA`.`SCHEMA_NAME` NOT IN ('information_schema', 'performance_schema', 'mysql', 'sys')
+            AND `information_schema`.`SCHEMATA`.`SCHEMA_NAME` REGEXP ?
+          GROUP BY `information_schema`.`SCHEMATA`.`SCHEMA_NAME`
         "#,
     )
     .bind(create_user_group_matching_regex(unix_user))
     .fetch_all(connection)
     .await
     .map_err(|err| ListAllDatabasesError::MySqlError(err.to_string()));
+
+    // TODO: should we assert that the users are also owned by the unix_user from the request?
 
     if let Err(err) = &result {
         tracing::error!(
