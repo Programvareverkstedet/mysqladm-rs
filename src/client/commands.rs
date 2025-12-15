@@ -52,23 +52,28 @@ pub enum ClientCommand {
 
     /// Change user privileges for one or more databases. See `edit-privs --help` for details.
     ///
-    /// This command has two modes of operation:
+    /// This command has three modes of operation:
     ///
-    /// 1. Interactive mode: If nothing else is specified, the user will be prompted to edit the privileges using a text editor.
+    /// 1. Interactive mode:
+    ///
+    ///    If no arguments are provided, the user will be prompted to edit the privileges using a text editor.
     ///
     ///    You can configure your preferred text editor by setting the `VISUAL` or `EDITOR` environment variables.
     ///
     ///    Follow the instructions inside the editor for more information.
     ///
-    /// 2. Non-interactive mode: If the `-p` flag is specified, the user can write privileges using arguments.
+    /// 2. Non-interactive human-friendly mode:
     ///
-    ///    The privilege arguments should be formatted as `<db>:<user>:<op><privileges>`
-    ///    where the privileges are a string of characters, each representing a single privilege.
+    ///    You can provide the command with three positional arguments:
+    ///
+    ///    - `<DB_NAME>`: The name of the database for which you want to edit privileges.
+    ///    - `<USER_NAME>`: The name of the user whose privileges you want to edit.
+    ///    - `<[+-]PRIVILEGES>`: A string representing the privileges to set for the user.
+    ///
+    ///    The `<[+-]PRIVILEGES>` argument is a string of characters, each representing a single privilege.
     ///    The character `A` is an exception - it represents all privileges.
-    ///
-    ///    The `<op>` character is optional and can be either `+` to grant additional privileges
-    ///    or `-` to revoke privileges. If omitted, the privileges will be set exactly as specified,
-    ///    removing any privileges not listed, and adding any that are.
+    ///    The optional leading character can be either `+` to grant additional privileges or `-` to revoke privileges.
+    ///    If omitted, the privileges will be set exactly as specified, removing any privileges not listed, and adding any that are.
     ///
     ///    The character-to-privilege mapping is defined as follows:
     ///
@@ -85,30 +90,36 @@ pub enum ClientCommand {
     ///    - `r` - REFERENCES
     ///    - `A` - ALL PRIVILEGES
     ///
-    ///   If you provide a database name, you can omit it from the privilege string,
-    ///   e.g. `edit-privs my_db -p my_user:siu` is equivalent to `edit-privs -p my_db:my_user:siu`.
-    ///   While it doesn't make much of a difference for a single edit, it can be useful for editing multiple users
-    ///   on the same database at once.
+    /// 3. Non-interactive batch mode:
+    ///
+    ///    By using the `-p` flag, you can provide multiple privilege edits in a single command.
+    ///
+    ///    The flag value should be formatted as `DB_NAME:USER_NAME:[+-]PRIVILEGES`
+    ///    where the privileges are a string of characters, each representing a single privilege.
+    ///    (See the character-to-privilege mapping above.)
     ///
     ///   Example usage of non-interactive mode:
     ///
-    ///     Enable privileges `SELECT`, `INSERT`, and `UPDATE` for user `my_user` on database `my_db`:
+    ///     Set privileges `SELECT`, `INSERT`, and `UPDATE` for user `my_user` on database `my_db`:
     ///
-    ///       `muscl edit-privs -p my_db:my_user:siu`
+    ///       `muscl edit-privs my_db my_user siu`
     ///
-    ///     Enable all privileges for user `my_other_user` on database `my_other_db`:
+    ///     Set all privileges for user `my_other_user` on database `my_other_db`:
     ///
-    ///       `muscl edit-privs -p my_other_db:my_other_user:A`
-    ///
-    ///     Set miscellaneous privileges for multiple users on database `my_db`:
-    ///
-    ///       `muscl edit-privs my_db -p my_user:siu my_other_user:ct``
+    ///       `muscl edit-privs my_other_db my_other_user A`
     ///
     ///     Add the `DELETE` privilege for user `my_user` on database `my_db`:
     ///
-    ///       `muscl edit-privs my_db -p my_user:+d
+    ///       `muscl edit-privs -p my_db my_user +d
     ///
-    #[command(verbatim_doc_comment)]
+    ///     Set miscellaneous privileges for multiple users on database `my_db`:
+    ///
+    ///       `muscl edit-privs -p my_db:my_user:siu -p my_db:my_other_user:+ct`
+    ///
+    #[command(
+        verbatim_doc_comment,
+        override_usage = "muscl edit-privs [OPTIONS] [ -p <DB_NAME:USER_NAME:[+-]PRIVILEGES>... | <DB_NAME> <USER_NAME> <[+-]PRIVILEGES> ]"
+    )]
     EditPrivs(EditPrivsArgs),
 
     /// Create one or more users
@@ -142,7 +153,9 @@ pub async fn handle_command(
         ClientCommand::DropDb(args) => drop_databases(args, server_connection).await,
         ClientCommand::ShowDb(args) => show_databases(args, server_connection).await,
         ClientCommand::ShowPrivs(args) => show_database_privileges(args, server_connection).await,
-        ClientCommand::EditPrivs(args) => edit_database_privileges(args, server_connection).await,
+        ClientCommand::EditPrivs(args) => {
+            edit_database_privileges(args, None, server_connection).await
+        }
         ClientCommand::CreateUser(args) => create_users(args, server_connection).await,
         ClientCommand::DropUser(args) => drop_users(args, server_connection).await,
         ClientCommand::PasswdUser(args) => passwd_user(args, server_connection).await,

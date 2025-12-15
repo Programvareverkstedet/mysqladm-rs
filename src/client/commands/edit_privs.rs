@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use anyhow::Context;
-use clap::Parser;
+use clap::{Args, Parser};
 use clap_complete::ArgValueCompleter;
 use dialoguer::{Confirm, Editor};
 use futures_util::SinkExt;
@@ -11,11 +11,11 @@ use tokio_stream::StreamExt;
 use crate::{
     client::commands::erroneous_server_response,
     core::{
-        completion::mysql_database_completer,
+        completion::{mysql_database_completer, mysql_user_completer},
         database_privileges::{
-            DatabasePrivilegeEditEntry, DatabasePrivilegeRow, DatabasePrivilegeRowDiff,
-            DatabasePrivilegesDiff, create_or_modify_privilege_rows, diff_privileges,
-            display_privilege_diffs, generate_editor_content_from_privilege_data,
+            DatabasePrivilegeEdit, DatabasePrivilegeEditEntry, DatabasePrivilegeRow,
+            DatabasePrivilegeRowDiff, DatabasePrivilegesDiff, create_or_modify_privilege_rows,
+            diff_privileges, display_privilege_diffs, generate_editor_content_from_privilege_data,
             parse_privilege_data_from_editor_content, reduce_privilege_diffs,
         },
         protocol::{
@@ -28,19 +28,23 @@ use crate::{
 
 #[derive(Parser, Debug, Clone)]
 pub struct EditPrivsArgs {
-    /// The MySQL database to edit privileges for
-    #[cfg_attr(not(feature = "suid-sgid-mode"), arg(add = ArgValueCompleter::new(mysql_database_completer)))]
-    #[arg(value_name = "DB_NAME")]
-    pub name: Option<MySQLDatabase>,
-
+    /// The privileges to set, grant or revoke, in the format `DATABASE:USER:[+-]PRIVILEGES`
+    ///
+    /// This option allows for changing privileges for multiple databases and users in batch.
+    ///
+    /// This can not be used together with the positional `DB_NAME`, `USER_NAME` and `PRIVILEGES` arguments.
     #[arg(
       short,
       long,
-      value_name = "[DATABASE:]USER:[+-]PRIVILEGES",
+      value_name = "DB_NAME:USER_NAME:[+-]PRIVILEGES",
       num_args = 0..,
       value_parser = DatabasePrivilegeEditEntry::parse_from_str,
+      conflicts_with("single_priv"),
     )]
     pub privs: Vec<DatabasePrivilegeEditEntry>,
+
+    #[command(flatten)]
+    pub single_priv: Option<SinglePrivilegeEditArgs>,
 
     /// Print the information as JSON
     #[arg(short, long)]
@@ -58,6 +62,31 @@ pub struct EditPrivsArgs {
     /// Disable interactive confirmation before saving changes
     #[arg(short, long)]
     pub yes: bool,
+}
+
+#[derive(Args, Debug, Clone)]
+pub struct SinglePrivilegeEditArgs {
+    /// The MySQL database to edit privileges for
+    #[cfg_attr(not(feature = "suid-sgid-mode"), arg(add = ArgValueCompleter::new(mysql_database_completer)))]
+    #[arg(
+        value_name = "DB_NAME",
+        requires = "user_name",
+        requires = "single_priv"
+    )]
+    pub db_name: Option<MySQLDatabase>,
+
+    /// The MySQL database to edit privileges for
+    #[cfg_attr(not(feature = "suid-sgid-mode"), arg(add = ArgValueCompleter::new(mysql_user_completer)))]
+    #[arg(value_name = "USER_NAME")]
+    pub user_name: Option<MySQLUser>,
+
+    /// The privileges to set, grant or revoke
+    #[arg(
+      allow_hyphen_values = true,
+      value_name = "[+-]PRIVILEGES",
+      value_parser = DatabasePrivilegeEdit::parse_from_str,
+    )]
+    pub single_priv: Option<DatabasePrivilegeEdit>,
 }
 
 async fn users_exist(
@@ -120,11 +149,41 @@ async fn databases_exist(
 
 pub async fn edit_database_privileges(
     args: EditPrivsArgs,
+    // NOTE: this is only used for backwards compat with mysql-admutils
+    use_database: Option<MySQLDatabase>,
     mut server_connection: ClientToServerMessageStream,
 ) -> anyhow::Result<()> {
-    let message = Request::ListPrivileges(args.name.to_owned().map(|name| vec![name]));
+    let message = Request::ListPrivileges(use_database.clone().map(|db| vec![db]));
 
     server_connection.send(message).await?;
+
+    debug_assert!(args.privs.is_empty() ^ args.single_priv.is_none());
+
+    let privs = if let Some(single_priv_entry) = &args.single_priv {
+        let database = single_priv_entry.db_name.clone().ok_or_else(|| {
+            anyhow::anyhow!(
+                "DB_NAME must be specified when editing privileges in single privilege mode"
+            )
+        })?;
+        let user = single_priv_entry.user_name.clone().ok_or_else(|| {
+            anyhow::anyhow!(
+                "USER_NAME must be specified when DB_NAME is specified in single privilege mode"
+            )
+        })?;
+        let privilege_edit = single_priv_entry.single_priv.clone().ok_or_else(|| {
+            anyhow::anyhow!(
+                "PRIVILEGES must be specified when DB_NAME is specified in single privilege mode"
+            )
+        })?;
+
+        vec![DatabasePrivilegeEditEntry {
+            database,
+            user,
+            privilege_edit,
+        }]
+    } else {
+        args.privs.clone()
+    };
 
     let existing_privilege_rows = match server_connection.next().await {
         Some(Ok(Response::ListPrivileges(databases))) => databases
@@ -151,12 +210,12 @@ pub async fn edit_database_privileges(
         response => return erroneous_server_response(response),
     };
 
-    let diffs: BTreeSet<DatabasePrivilegesDiff> = if !args.privs.is_empty() {
-        let privileges_to_change = parse_privilege_tables_from_args(&args)?;
+    let diffs: BTreeSet<DatabasePrivilegesDiff> = if !privs.is_empty() {
+        let privileges_to_change = parse_privilege_tables(&privs)?;
         create_or_modify_privilege_rows(&existing_privilege_rows, &privileges_to_change)?
     } else {
         let privileges_to_change =
-            edit_privileges_with_editor(&existing_privilege_rows, args.name.as_ref())?;
+            edit_privileges_with_editor(&existing_privilege_rows, use_database.as_ref())?;
         diff_privileges(&existing_privilege_rows, &privileges_to_change)
     };
 
@@ -220,15 +279,15 @@ pub async fn edit_database_privileges(
     Ok(())
 }
 
-fn parse_privilege_tables_from_args(
-    args: &EditPrivsArgs,
+fn parse_privilege_tables(
+    privs: &[DatabasePrivilegeEditEntry],
 ) -> anyhow::Result<BTreeSet<DatabasePrivilegeRowDiff>> {
-    debug_assert!(!args.privs.is_empty());
-    args.privs
+    debug_assert!(!privs.is_empty());
+    privs
         .iter()
         .map(|priv_edit_entry| {
             priv_edit_entry
-                .as_database_privileges_diff(args.name.as_ref())
+                .as_database_privileges_diff()
                 .context(format!(
                     "Failed parsing database privileges: `{}`",
                     priv_edit_entry
@@ -239,6 +298,7 @@ fn parse_privilege_tables_from_args(
 
 fn edit_privileges_with_editor(
     privilege_data: &[DatabasePrivilegeRow],
+    // NOTE: this is only used for backwards compat with mysql-admtools
     database_name: Option<&MySQLDatabase>,
 ) -> anyhow::Result<Vec<DatabasePrivilegeRow>> {
     let unix_user = User::from_uid(getuid())

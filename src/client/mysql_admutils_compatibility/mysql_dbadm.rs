@@ -208,14 +208,19 @@ fn tokio_run_command(command: Command, server_connection: StdUnixStream) -> anyh
                 Command::Show(args) => show_databases(args, message_stream).await,
                 Command::Editperm(args) => {
                     let edit_privileges_args = EditPrivsArgs {
-                        name: Some(args.database),
+                        single_priv: None,
                         privs: vec![],
                         json: false,
                         editor: None,
                         yes: false,
                     };
 
-                    edit_database_privileges(edit_privileges_args, message_stream).await
+                    edit_database_privileges(
+                        edit_privileges_args,
+                        Some(args.database),
+                        message_stream,
+                    )
+                    .await
                 }
             }
         })

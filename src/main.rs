@@ -86,9 +86,11 @@ struct Args {
     #[command(subcommand)]
     command: Command,
 
+    // NOTE: be careful not to add short options that collide with the `edit-privs` privilege
+    //       characters. It should in theory be possible for `edit-privs` to ignore any options
+    //       specified here, but in practice clap is being difficult to work with.
     /// Path to the socket of the server, if it already exists.
     #[arg(
-        short,
         long,
         value_name = "PATH",
         value_hint = clap::ValueHint::FilePath,
@@ -99,7 +101,6 @@ struct Args {
 
     /// Config file to use for the server.
     #[arg(
-        short,
         long,
         value_name = "PATH",
         value_hint = clap::ValueHint::FilePath,

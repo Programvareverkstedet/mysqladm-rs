@@ -1,8 +1,14 @@
 //! This module contains serialization and deserialization logic for
 //! database privileges related CLI commands.
 
+use itertools::Itertools;
+
 use super::diff::{DatabasePrivilegeChange, DatabasePrivilegeRowDiff};
 use crate::core::types::{MySQLDatabase, MySQLUser};
+
+const VALID_PRIVILEGE_EDIT_CHARS: &[char] = &[
+    's', 'i', 'u', 'd', 'c', 'D', 'a', 'A', 'I', 't', 'l', 'r', 'A',
+];
 
 /// This enum represents a part of a CLI argument for editing database privileges,
 /// indicating whether privileges are to be added, set, or removed.
@@ -13,17 +19,76 @@ pub enum DatabasePrivilegeEditEntryType {
     Remove,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DatabasePrivilegeEdit {
+    pub type_: DatabasePrivilegeEditEntryType,
+    pub privileges: Vec<char>,
+}
+
+impl DatabasePrivilegeEdit {
+    pub fn parse_from_str(input: &str) -> anyhow::Result<Self> {
+        let (edit_type, privs_str) = if let Some(privs_str) = input.strip_prefix('+') {
+            (DatabasePrivilegeEditEntryType::Add, privs_str)
+        } else if let Some(privs_str) = input.strip_prefix('-') {
+            (DatabasePrivilegeEditEntryType::Remove, privs_str)
+        } else {
+            (DatabasePrivilegeEditEntryType::Set, input)
+        };
+
+        let privileges: Vec<char> = privs_str.chars().collect();
+
+        if privileges
+            .iter()
+            .any(|c| !VALID_PRIVILEGE_EDIT_CHARS.contains(c))
+        {
+            let invalid_chars: String = privileges
+                .iter()
+                .filter(|c| !VALID_PRIVILEGE_EDIT_CHARS.contains(c))
+                .map(|c| format!("'{c}'"))
+                .join(", ");
+            let valid_characters: String = VALID_PRIVILEGE_EDIT_CHARS
+                .iter()
+                .map(|c| format!("'{c}'"))
+                .join(", ");
+            anyhow::bail!(
+                "Invalid character(s) in privilege edit entry: {}\n\nValid characters are: {}",
+                invalid_chars,
+                valid_characters,
+            );
+        }
+
+        Ok(DatabasePrivilegeEdit {
+            type_: edit_type,
+            privileges,
+        })
+    }
+}
+
+impl std::fmt::Display for DatabasePrivilegeEdit {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.type_ {
+            DatabasePrivilegeEditEntryType::Add => write!(f, "+")?,
+            DatabasePrivilegeEditEntryType::Set => {}
+            DatabasePrivilegeEditEntryType::Remove => write!(f, "-")?,
+        }
+        for priv_char in &self.privileges {
+            write!(f, "{}", priv_char)?;
+        }
+
+        Ok(())
+    }
+}
+
 /// This struct represents a single CLI argument for editing database privileges.
 ///
 /// This is typically parsed from a string looking like:
 ///
-///   `[database_name:]username:[+|-]privileges`
+///   `database_name:username:[+|-]privileges`
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DatabasePrivilegeEditEntry {
-    pub database: Option<MySQLDatabase>,
+    pub database: MySQLDatabase,
     pub user: MySQLUser,
-    pub type_: DatabasePrivilegeEditEntryType,
-    pub privileges: Vec<String>,
+    pub privilege_edit: DatabasePrivilegeEdit,
 }
 
 impl DatabasePrivilegeEditEntry {
@@ -31,80 +96,41 @@ impl DatabasePrivilegeEditEntry {
     ///
     /// The expected format is:
     ///
-    ///   `[database_name:]username:[+|-]privileges`
+    ///   `database_name:username:[+|-]privileges`
     ///
     /// where:
-    /// - database_name is optional, if omitted the entry applies to all databases
+    /// - database_name is the name of the database to edit privileges for
     /// - username is the name of the user to edit privileges for
     /// - privileges is a string of characters representing the privileges to add, set or remove
     /// - the `+` or `-` prefix indicates whether to add or remove the privileges, if omitted the privileges are set directly
     /// - privileges characters are: siudcDaAItlrA
-    pub fn parse_from_str(arg: &str) -> anyhow::Result<DatabasePrivilegeEditEntry> {
+    pub fn parse_from_str(arg: &str) -> anyhow::Result<Self> {
         let parts: Vec<&str> = arg.split(':').collect();
-        if parts.len() < 2 || parts.len() > 3 {
+        if parts.len() != 3 {
             anyhow::bail!("Invalid privilege edit entry format: {}", arg);
         }
 
-        let (database, user, user_privs) = if parts.len() == 3 {
-            (Some(parts[0].to_string()), parts[1].to_string(), parts[2])
-        } else {
-            (None, parts[0].to_string(), parts[1])
-        };
+        let (database, user, user_privs) = (parts[0].to_string(), parts[1].to_string(), parts[2]);
 
         if user.is_empty() {
             anyhow::bail!("Username cannot be empty in privilege edit entry: {}", arg);
         }
 
-        let (edit_type, privs_str) = if let Some(privs_str) = user_privs.strip_prefix('+') {
-            (DatabasePrivilegeEditEntryType::Add, privs_str)
-        } else if let Some(privs_str) = user_privs.strip_prefix('-') {
-            (DatabasePrivilegeEditEntryType::Remove, privs_str)
-        } else {
-            (DatabasePrivilegeEditEntryType::Set, user_privs)
-        };
-
-        let privileges: Vec<String> = privs_str.chars().map(|c| c.to_string()).collect();
-        if privileges.iter().any(|c| !"siudcDaAItlrA".contains(c)) {
-            let invalid_chars: String = privileges
-                .iter()
-                .filter(|c| !"siudcDaAItlrA".contains(c.as_str()))
-                .cloned()
-                .collect();
-            anyhow::bail!(
-                "Invalid character(s) in privilege edit entry: {}",
-                invalid_chars
-            );
-        }
+        let privilege_edit = DatabasePrivilegeEdit::parse_from_str(user_privs)?;
 
         Ok(DatabasePrivilegeEditEntry {
-            database: database.map(MySQLDatabase::from),
+            database: MySQLDatabase::from(database),
             user: MySQLUser::from(user),
-            type_: edit_type,
-            privileges,
+            privilege_edit,
         })
     }
 
-    pub fn as_database_privileges_diff(
-        &self,
-        external_database_name: Option<&MySQLDatabase>,
-    ) -> anyhow::Result<DatabasePrivilegeRowDiff> {
-        let database = match self.database.as_ref() {
-            Some(db) => db.clone(),
-            None => {
-                if let Some(external_db) = external_database_name {
-                    external_db.clone()
-                } else {
-                    anyhow::bail!(
-                        "Database name must be specified either in the privilege edit entry or as an external argument."
-                    );
-                }
-            }
-        };
+    pub fn as_database_privileges_diff(&self) -> anyhow::Result<DatabasePrivilegeRowDiff> {
         let mut diff;
-        match self.type_ {
+        match self.privilege_edit.type_ {
             DatabasePrivilegeEditEntryType::Set => {
                 diff = DatabasePrivilegeRowDiff {
-                    db: database,
+                    db: self.database.clone(),
                     user: self.user.clone(),
                     select_priv: Some(DatabasePrivilegeChange::YesToNo),
                     insert_priv: Some(DatabasePrivilegeChange::YesToNo),
@@ -118,20 +144,20 @@ impl DatabasePrivilegeEditEntry {
                     lock_tables_priv: Some(DatabasePrivilegeChange::YesToNo),
                     references_priv: Some(DatabasePrivilegeChange::YesToNo),
                 };
-                for priv_char in &self.privileges {
-                    match priv_char.as_str() {
-                        "s" => diff.select_priv = Some(DatabasePrivilegeChange::NoToYes),
-                        "i" => diff.insert_priv = Some(DatabasePrivilegeChange::NoToYes),
-                        "u" => diff.update_priv = Some(DatabasePrivilegeChange::NoToYes),
-                        "d" => diff.delete_priv = Some(DatabasePrivilegeChange::NoToYes),
-                        "c" => diff.create_priv = Some(DatabasePrivilegeChange::NoToYes),
-                        "D" => diff.drop_priv = Some(DatabasePrivilegeChange::NoToYes),
-                        "a" => diff.alter_priv = Some(DatabasePrivilegeChange::NoToYes),
-                        "I" => diff.index_priv = Some(DatabasePrivilegeChange::NoToYes),
-                        "t" => diff.create_tmp_table_priv = Some(DatabasePrivilegeChange::NoToYes),
-                        "l" => diff.lock_tables_priv = Some(DatabasePrivilegeChange::NoToYes),
-                        "r" => diff.references_priv = Some(DatabasePrivilegeChange::NoToYes),
-                        "A" => {
+                for priv_char in &self.privilege_edit.privileges {
+                    match priv_char {
+                        's' => diff.select_priv = Some(DatabasePrivilegeChange::NoToYes),
+                        'i' => diff.insert_priv = Some(DatabasePrivilegeChange::NoToYes),
+                        'u' => diff.update_priv = Some(DatabasePrivilegeChange::NoToYes),
+                        'd' => diff.delete_priv = Some(DatabasePrivilegeChange::NoToYes),
+                        'c' => diff.create_priv = Some(DatabasePrivilegeChange::NoToYes),
+                        'D' => diff.drop_priv = Some(DatabasePrivilegeChange::NoToYes),
+                        'a' => diff.alter_priv = Some(DatabasePrivilegeChange::NoToYes),
+                        'I' => diff.index_priv = Some(DatabasePrivilegeChange::NoToYes),
+                        't' => diff.create_tmp_table_priv = Some(DatabasePrivilegeChange::NoToYes),
+                        'l' => diff.lock_tables_priv = Some(DatabasePrivilegeChange::NoToYes),
+                        'r' => diff.references_priv = Some(DatabasePrivilegeChange::NoToYes),
+                        'A' => {
                             diff.select_priv = Some(DatabasePrivilegeChange::NoToYes);
                             diff.insert_priv = Some(DatabasePrivilegeChange::NoToYes);
                             diff.update_priv = Some(DatabasePrivilegeChange::NoToYes);
@@ -150,7 +176,7 @@ impl DatabasePrivilegeEditEntry {
             }
             DatabasePrivilegeEditEntryType::Add | DatabasePrivilegeEditEntryType::Remove => {
                 diff = DatabasePrivilegeRowDiff {
-                    db: database,
+                    db: self.database.clone(),
                     user: self.user.clone(),
                     select_priv: None,
                     insert_priv: None,
@@ -164,25 +190,25 @@ impl DatabasePrivilegeEditEntry {
                     lock_tables_priv: None,
                     references_priv: None,
                 };
-                let value = match self.type_ {
+                let value = match self.privilege_edit.type_ {
                     DatabasePrivilegeEditEntryType::Add => DatabasePrivilegeChange::NoToYes,
                     DatabasePrivilegeEditEntryType::Remove => DatabasePrivilegeChange::YesToNo,
                     _ => unreachable!(),
                 };
-                for priv_char in &self.privileges {
-                    match priv_char.as_str() {
-                        "s" => diff.select_priv = Some(value),
-                        "i" => diff.insert_priv = Some(value),
-                        "u" => diff.update_priv = Some(value),
-                        "d" => diff.delete_priv = Some(value),
-                        "c" => diff.create_priv = Some(value),
-                        "D" => diff.drop_priv = Some(value),
-                        "a" => diff.alter_priv = Some(value),
-                        "I" => diff.index_priv = Some(value),
-                        "t" => diff.create_tmp_table_priv = Some(value),
-                        "l" => diff.lock_tables_priv = Some(value),
-                        "r" => diff.references_priv = Some(value),
-                        "A" => {
+                for priv_char in &self.privilege_edit.privileges {
+                    match priv_char {
+                        's' => diff.select_priv = Some(value),
+                        'i' => diff.insert_priv = Some(value),
+                        'u' => diff.update_priv = Some(value),
+                        'd' => diff.delete_priv = Some(value),
+                        'c' => diff.create_priv = Some(value),
+                        'D' => diff.drop_priv = Some(value),
+                        'a' => diff.alter_priv = Some(value),
+                        'I' => diff.index_priv = Some(value),
+                        't' => diff.create_tmp_table_priv = Some(value),
+                        'l' => diff.lock_tables_priv = Some(value),
+                        'r' => diff.references_priv = Some(value),
+                        'A' => {
                             diff.select_priv = Some(value);
                             diff.insert_priv = Some(value);
                             diff.update_priv = Some(value);
@@ -207,19 +233,9 @@ impl DatabasePrivilegeEditEntry {
 
 impl std::fmt::Display for DatabasePrivilegeEditEntry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if let Some(db) = &self.database {
-            write!(f, "{}:, ", db)?;
-        }
+        write!(f, "{}:, ", self.database)?;
         write!(f, "{}: ", self.user)?;
-        match self.type_ {
-            DatabasePrivilegeEditEntryType::Add => write!(f, "+")?,
-            DatabasePrivilegeEditEntryType::Set => {}
-            DatabasePrivilegeEditEntryType::Remove => write!(f, "-")?,
-        }
-        for priv_char in &self.privileges {
-            write!(f, "{}", priv_char)?;
-        }
-
+        write!(f, "{}", self.privilege_edit)?;
         Ok(())
     }
 }
@@ -234,10 +250,12 @@ mod tests {
         assert_eq!(
             result.ok(),
             Some(DatabasePrivilegeEditEntry {
-                database: Some("db".into()),
+                database: "db".into(),
                 user: "user".into(),
-                type_: DatabasePrivilegeEditEntryType::Set,
-                privileges: vec!["A".into()],
+                privilege_edit: DatabasePrivilegeEdit {
+                    type_: DatabasePrivilegeEditEntryType::Set,
+                    privileges: vec!['A'],
+                },
             })
         );
     }
@@ -248,10 +266,12 @@ mod tests {
         assert_eq!(
             result.ok(),
             Some(DatabasePrivilegeEditEntry {
-                database: Some("db".into()),
+                database: "db".into(),
                 user: "user".into(),
-                type_: DatabasePrivilegeEditEntryType::Set,
-                privileges: vec![],
+                privilege_edit: DatabasePrivilegeEdit {
+                    type_: DatabasePrivilegeEditEntryType::Set,
+                    privileges: vec![],
+                },
             })
         );
     }
@@ -262,25 +282,13 @@ mod tests {
         assert_eq!(
             result.ok(),
             Some(DatabasePrivilegeEditEntry {
-                database: Some("db".into()),
+                database: "db".into(),
                 user: "user".into(),
-                type_: DatabasePrivilegeEditEntryType::Set,
-                privileges: vec!["s".into(), "i".into(), "u".into(), "d".into()],
+                privilege_edit: DatabasePrivilegeEdit {
+                    type_: DatabasePrivilegeEditEntryType::Set,
+                    privileges: vec!['s', 'i', 'u', 'd'],
+                },
             })
-        );
-    }
-
-    #[test]
-    fn test_cli_arg_parse_set_user_nonexistent_misc() {
-        let result = DatabasePrivilegeEditEntry::parse_from_str("user:siud");
-        assert_eq!(
-            result.ok(),
-            Some(DatabasePrivilegeEditEntry {
-                database: None,
-                user: "user".into(),
-                type_: DatabasePrivilegeEditEntryType::Set,
-                privileges: vec!["s".into(), "i".into(), "u".into(), "d".into()],
-            }),
         );
     }
 
@@ -308,10 +316,12 @@ mod tests {
         assert_eq!(
             result.ok(),
             Some(DatabasePrivilegeEditEntry {
-                database: Some("db".into()),
+                database: "db".into(),
                 user: "user".into(),
-                type_: DatabasePrivilegeEditEntryType::Add,
-                privileges: vec!["s".into(), "i".into(), "u".into(), "d".into()],
+                privilege_edit: DatabasePrivilegeEdit {
+                    type_: DatabasePrivilegeEditEntryType::Add,
+                    privileges: vec!['s', 'i', 'u', 'd'],
+                },
             })
         );
     }
@@ -322,10 +332,12 @@ mod tests {
         assert_eq!(
             result.ok(),
             Some(DatabasePrivilegeEditEntry {
-                database: Some("db".into()),
+                database: "db".into(),
                 user: "user".into(),
-                type_: DatabasePrivilegeEditEntryType::Remove,
-                privileges: vec!["s".into(), "i".into(), "u".into(), "d".into()],
+                privilege_edit: DatabasePrivilegeEdit {
+                    type_: DatabasePrivilegeEditEntryType::Remove,
+                    privileges: vec!['s', 'i', 'u', 'd'],
+                },
             }),
         );
     }
