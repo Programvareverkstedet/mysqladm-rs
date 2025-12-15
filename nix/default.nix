@@ -22,6 +22,7 @@ let
   pname = "${cargoToml.package.name}${pnameSuidSuffix}${pnameCraneSuffix}";
 
   rustPlatformArgs = {
+    buildType = "release-lto";
     buildFeatures = lib.optional suidSgidSupport "suid-sgid-mode";
     cargoLock.lockFile = cargoLock;
 

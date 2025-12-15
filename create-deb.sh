@@ -2,6 +2,8 @@
 
 set -euo pipefail
 
+declare -r RUST_PROFILE="release-lto"
+
 if [[ "${CREATE_DEB_DEBUG:-}" == "1" ]]; then
   set -x
 fi
@@ -16,12 +18,12 @@ if ! command -v cargo-deb &> /dev/null; then
   exit 1
 fi
 
-cargo build --release
+cargo build --profile "$RUST_PROFILE"
 
 mkdir -p assets/completions
 
 (
-  PATH="./target/release:$PATH"
+  PATH="./target/$RUST_PROFILE:$PATH"
 
   COMPLETE=bash muscl > assets/completions/muscl.bash
   COMPLETE=zsh muscl > assets/completions/_muscl
@@ -41,6 +43,7 @@ sed -i 's/muscl/mysql-dbadm/g' assets/completions/{mysql-dbadm.bash,mysql-dbadm.
 sed -i 's/muscl/mysql-useradm/g' assets/completions/{mysql-useradm.bash,mysql-useradm.fish,_mysql-useradm}
 
 DEFAULT_CARGO_DEB_ARGS=(
+  --profile "$RUST_PROFILE"
   --no-build
 )
 
