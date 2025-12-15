@@ -16,7 +16,8 @@ port = 3306
 # systemd unit.
 username = "muscl"
 # This file gets created by systemd automatically, given you have set
-# the password with `systemd-creds`.
+# the password with `systemd-creds`. See /usr/share/doc/muscl/docs/installation.md
+# for more information.
 password_file = "/run/credentials/muscl.service/muscl_mysql_password"
 
 # Database connection timeout in seconds
