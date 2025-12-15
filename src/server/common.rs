@@ -1,13 +1,37 @@
-use crate::core::common::UnixUser;
+use crate::core::{common::UnixUser, protocol::request_validation::GroupDenylist};
+use nix::unistd::Group;
 use sqlx::prelude::*;
+
+/// This function retrieves the groups of a user, filtering out any groups
+/// that are present in the provided denylist.
+pub fn get_user_filtered_groups(user: &UnixUser, group_denylist: &GroupDenylist) -> Vec<String> {
+    user.groups
+        .iter()
+        .cloned()
+        .filter_map(|group_name| {
+            match Group::from_name(&group_name) {
+                Ok(Some(group)) => {
+                    if group_denylist.contains(&group.gid.as_raw()) {
+                        None
+                    } else {
+                        Some(group.name)
+                    }
+                }
+                // NOTE: allow non-existing groups to pass through the filter
+                _ => Some(group_name),
+            }
+        })
+        .collect()
+}
 
 /// This function creates a regex that matches items (users, databases)
 /// that belong to the user or any of the user's groups.
-pub fn create_user_group_matching_regex(user: &UnixUser) -> String {
-    if user.groups.is_empty() {
+pub fn create_user_group_matching_regex(user: &UnixUser, group_denylist: &GroupDenylist) -> String {
+    let filtered_groups = get_user_filtered_groups(user, group_denylist);
+    if filtered_groups.is_empty() {
         format!("{}_.+", user.username)
     } else {
-        format!("({}|{})_.+", user.username, user.groups.join("|"))
+        format!("({}|{})_.+", user.username, filtered_groups.join("|"))
     }
 }
 
@@ -37,7 +61,8 @@ mod tests {
             groups: vec!["group1".to_owned(), "group2".to_owned()],
         };
 
-        let regex = create_user_group_matching_regex(&user);
+        let regex = create_user_group_matching_regex(&user, &GroupDenylist::new());
+        println!("Generated regex: {}", regex);
         let re = Regex::new(&regex).unwrap();
 
         assert!(re.is_match("user_something"));

@@ -8,12 +8,12 @@ use futures_util::SinkExt;
 use tokio_stream::StreamExt;
 
 use crate::{
-    client::commands::erroneous_server_response,
+    client::commands::{erroneous_server_response, print_authorization_owner_hint},
     core::{
         completion::mysql_user_completer,
         protocol::{
-            ClientToServerMessageStream, ListUsersError, Request, Response,
-            print_set_password_output_status,
+            ClientToServerMessageStream, ListUsersError, Request, Response, SetPasswordError,
+            print_set_password_output_status, request_validation::ValidationError,
         },
         types::MySQLUser,
     },
@@ -103,9 +103,18 @@ pub async fn passwd_user(
         response => return erroneous_server_response(response),
     };
 
-    server_connection.send(Request::Exit).await?;
-
     print_set_password_output_status(&result, &args.username);
+
+    if matches!(
+        result,
+        Err(SetPasswordError::ValidationError(
+            ValidationError::AuthorizationError(_)
+        ))
+    ) {
+        print_authorization_owner_hint(&mut server_connection).await?
+    }
+
+    server_connection.send(Request::Exit).await?;
 
     Ok(())
 }

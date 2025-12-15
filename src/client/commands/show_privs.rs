@@ -5,12 +5,13 @@ use itertools::Itertools;
 use tokio_stream::StreamExt;
 
 use crate::{
-    client::commands::erroneous_server_response,
+    client::commands::{erroneous_server_response, print_authorization_owner_hint},
     core::{
         completion::mysql_database_completer,
         protocol::{
-            ClientToServerMessageStream, Request, Response, print_list_privileges_output_status,
-            print_list_privileges_output_status_json,
+            ClientToServerMessageStream, GetDatabasesPrivilegeDataError, Request, Response,
+            print_list_privileges_output_status, print_list_privileges_output_status_json,
+            request_validation::ValidationError,
         },
         types::MySQLDatabase,
     },
@@ -68,13 +69,24 @@ pub async fn show_database_privileges(
         response => return erroneous_server_response(response),
     };
 
-    server_connection.send(Request::Exit).await?;
-
     if args.json {
         print_list_privileges_output_status_json(&privilege_data);
     } else {
         print_list_privileges_output_status(&privilege_data, args.long);
+
+        if privilege_data.iter().any(|(_, res)| {
+            matches!(
+                res,
+                Err(GetDatabasesPrivilegeDataError::ValidationError(
+                    ValidationError::AuthorizationError(_)
+                ))
+            )
+        }) {
+            print_authorization_owner_hint(&mut server_connection).await?
+        }
     }
+
+    server_connection.send(Request::Exit).await?;
 
     if args.fail && privilege_data.values().any(|res| res.is_err()) {
         std::process::exit(1);

@@ -40,6 +40,14 @@ in
             };
           };
 
+          authorization = {
+             group_denylist = lib.mkOption {
+               type = with lib.types; nullOr (listOf str);
+               default = [ "wheel" ];
+               description = "List of groups that are denied access";
+             };
+          };
+
           mysql = {
             socket_path = lib.mkOption {
               type = with lib.types; nullOr path;
@@ -81,6 +89,12 @@ in
     environment.systemPackages = [ cfg.package ];
 
     environment.etc."muscl/config.toml".source = lib.pipe cfg.settings [
+      # Handle group_denylist_file
+      (conf: lib.recursiveUpdate conf {
+         authorization.group_denylist_file = if (conf.authorization.group_denylist != [ ]) then "/etc/muscl/group-denylist" else null;
+         authorization.group_denylist = null;
+      })
+
       # Remove nulls
       (lib.filterAttrsRecursive (_: v: v != null))
 
@@ -94,6 +108,10 @@ in
       # Render file
       (format.generate "muscl.conf")
     ];
+
+    environment.etc."muscl/group-denylist" = lib.mkIf (cfg.settings.authorization.group_denylist != [ ]) {
+      text = lib.concatMapStringsSep "\n" (group: "group:${group}") cfg.settings.authorization.group_denylist;
+    };
 
     services.mysql.ensureUsers = lib.mkIf cfg.createLocalDatabaseUser [
       {

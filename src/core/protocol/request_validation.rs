@@ -1,5 +1,7 @@
+use std::collections::HashSet;
+
 use indoc::indoc;
-use itertools::Itertools;
+use nix::{libc::gid_t, unistd::Group};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -23,23 +25,19 @@ impl NameValidationError {
     pub fn to_error_message(self, db_or_user: DbOrUser) -> String {
         match self {
             NameValidationError::EmptyString => {
-                format!("{} name cannot be empty.", db_or_user.capitalized_noun()).to_owned()
+                format!("{} name can not be empty.", db_or_user.capitalized_noun())
             }
             NameValidationError::TooLong => format!(
-                "{} is too long. Maximum length is 64 characters.",
+                "{} is too long, maximum length is 64 characters.",
                 db_or_user.capitalized_noun()
-            )
-            .to_owned(),
+            ),
             NameValidationError::InvalidCharacters => format!(
                 indoc! {r#"
-                  Invalid characters in {} name: '{}'
-
-                  Only A-Z, a-z, 0-9, _ (underscore) and - (dash) are permitted.
+                  Invalid characters in {} name: '{}', only A-Z, a-z, 0-9, _ (underscore) and - (dash) are permitted.
                 "#},
                 db_or_user.lowercased_noun(),
                 db_or_user.name(),
-            )
-            .to_owned(),
+            ),
         }
     }
 
@@ -54,64 +52,41 @@ impl NameValidationError {
 
 #[derive(Error, Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
 pub enum AuthorizationError {
-    #[error("No matching owner prefix found")]
-    NoMatch,
+    #[error("Illegal prefix, user is not authorized to manage this resource")]
+    IllegalPrefix,
 
     // TODO: I don't think this should ever happen?
     #[error("Name cannot be empty")]
     StringEmpty,
+
+    #[error("Group was found in denylist")]
+    DenylistError,
 }
 
 impl AuthorizationError {
     pub fn to_error_message(self, db_or_user: DbOrUser) -> String {
-        let user = UnixUser::from_enviroment();
-
-        let UnixUser {
-            username,
-            mut groups,
-        } = user.unwrap_or(UnixUser {
-            username: "???".to_string(),
-            groups: vec![],
-        });
-
-        groups.sort();
-
         match self {
-            AuthorizationError::NoMatch => format!(
-                indoc! {r#"
-                  Invalid {} name prefix: '{}' does not match your username or any of your groups.
-                  Are you sure you are allowed to create {} names with this prefix?
-                  The format should be: <prefix>_<{} name>
-
-                  Allowed prefixes:
-                    - {}
-                  {}
-                "#},
+            AuthorizationError::IllegalPrefix => format!(
+                "Illegal {} name prefix: you are not allowed to manage databases or users prefixed with '{}'",
                 db_or_user.lowercased_noun(),
-                db_or_user.name(),
-                db_or_user.lowercased_noun(),
-                db_or_user.lowercased_noun(),
-                username,
-                groups
-                    .into_iter()
-                    .filter(|g| g != &username)
-                    .map(|g| format!("  - {}", g))
-                    .join("\n"),
+                db_or_user.prefix(),
             )
             .to_owned(),
-            AuthorizationError::StringEmpty => format!(
-                "'{}' is not a valid {} name.",
-                db_or_user.name(),
-                db_or_user.lowercased_noun()
-            )
-            .to_string(),
+            // TODO: This error message could be clearer
+            AuthorizationError::StringEmpty => {
+                format!("{} name can not be empty.", db_or_user.capitalized_noun())
+            }
+            AuthorizationError::DenylistError => {
+                format!("'{}' is denied by the group denylist", db_or_user.name())
+            }
         }
     }
 
     pub fn error_type(&self) -> &'static str {
         match self {
-            AuthorizationError::NoMatch => "no-match",
+            AuthorizationError::IllegalPrefix => "illegal-prefix",
             AuthorizationError::StringEmpty => "string-empty",
+            AuthorizationError::DenylistError => "denylist-error",
         }
     }
 }
@@ -154,6 +129,8 @@ impl ValidationError {
         }
     }
 }
+
+pub type GroupDenylist = HashSet<gid_t>;
 
 const MAX_NAME_LENGTH: usize = 64;
 
@@ -201,19 +178,47 @@ pub fn validate_authorization_by_prefixes(
         .collect::<Vec<_>>()
         .is_empty()
     {
-        return Err(AuthorizationError::NoMatch);
+        return Err(AuthorizationError::IllegalPrefix);
     };
 
     Ok(())
 }
 
+pub fn validate_authorization_by_group_denylist(
+    name: &str,
+    user: &UnixUser,
+    group_denylist: &GroupDenylist,
+) -> Result<(), AuthorizationError> {
+    // NOTE: if the username matches, we allow it regardless of denylist
+    if user.username == name {
+        return Ok(());
+    }
+
+    let user_group = Group::from_name(name)
+        .ok()
+        .flatten()
+        .map(|g| g.gid.as_raw());
+
+    if let Some(gid) = user_group
+        && group_denylist.contains(&gid)
+    {
+        Err(AuthorizationError::DenylistError)
+    } else {
+        Ok(())
+    }
+}
+
 pub fn validate_db_or_user_request(
     db_or_user: &DbOrUser,
     unix_user: &UnixUser,
+    group_denylist: &GroupDenylist,
 ) -> Result<(), ValidationError> {
     validate_name(db_or_user.name()).map_err(ValidationError::NameValidationError)?;
 
     validate_authorization_by_unix_user(db_or_user.name(), unix_user)
+        .map_err(ValidationError::AuthorizationError)?;
+
+    validate_authorization_by_group_denylist(db_or_user.name(), unix_user, group_denylist)
         .map_err(ValidationError::AuthorizationError)?;
 
     Ok(())
@@ -273,7 +278,7 @@ mod tests {
 
         assert_eq!(
             validate_authorization_by_prefixes("nonexistent_testdb", &prefixes),
-            Err(AuthorizationError::NoMatch)
+            Err(AuthorizationError::IllegalPrefix)
         );
     }
 }

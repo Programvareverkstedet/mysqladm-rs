@@ -6,6 +6,7 @@ use sqlx::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::core::protocol::CompleteDatabaseNameResponse;
+use crate::core::protocol::request_validation::GroupDenylist;
 use crate::core::protocol::request_validation::validate_db_or_user_request;
 use crate::core::types::DbOrUser;
 use crate::core::types::MySQLDatabase;
@@ -49,6 +50,7 @@ pub async fn complete_database_name(
     unix_user: &UnixUser,
     connection: &mut MySqlConnection,
     _db_is_mariadb: bool,
+    group_denylist: &GroupDenylist,
 ) -> CompleteDatabaseNameResponse {
     let result = sqlx::query(
         r#"
@@ -59,7 +61,7 @@ pub async fn complete_database_name(
             AND `SCHEMA_NAME` LIKE ?
         "#,
     )
-    .bind(create_user_group_matching_regex(unix_user))
+    .bind(create_user_group_matching_regex(unix_user, group_denylist))
     .bind(format!("{}%", database_prefix))
     .fetch_all(connection)
     .await;
@@ -89,13 +91,17 @@ pub async fn create_databases(
     unix_user: &UnixUser,
     connection: &mut MySqlConnection,
     _db_is_mariadb: bool,
+    group_denylist: &GroupDenylist,
 ) -> CreateDatabasesResponse {
     let mut results = BTreeMap::new();
 
     for database_name in database_names {
-        if let Err(err) =
-            validate_db_or_user_request(&DbOrUser::Database(database_name.clone()), unix_user)
-                .map_err(CreateDatabaseError::ValidationError)
+        if let Err(err) = validate_db_or_user_request(
+            &DbOrUser::Database(database_name.clone()),
+            unix_user,
+            group_denylist,
+        )
+        .map_err(CreateDatabaseError::ValidationError)
         {
             results.insert(database_name.to_owned(), Err(err));
             continue;
@@ -141,13 +147,17 @@ pub async fn drop_databases(
     unix_user: &UnixUser,
     connection: &mut MySqlConnection,
     _db_is_mariadb: bool,
+    group_denylist: &GroupDenylist,
 ) -> DropDatabasesResponse {
     let mut results = BTreeMap::new();
 
     for database_name in database_names {
-        if let Err(err) =
-            validate_db_or_user_request(&DbOrUser::Database(database_name.clone()), unix_user)
-                .map_err(DropDatabaseError::ValidationError)
+        if let Err(err) = validate_db_or_user_request(
+            &DbOrUser::Database(database_name.clone()),
+            unix_user,
+            group_denylist,
+        )
+        .map_err(DropDatabaseError::ValidationError)
         {
             results.insert(database_name.to_owned(), Err(err));
             continue;
@@ -236,13 +246,17 @@ pub async fn list_databases(
     unix_user: &UnixUser,
     connection: &mut MySqlConnection,
     _db_is_mariadb: bool,
+    group_denylist: &GroupDenylist,
 ) -> ListDatabasesResponse {
     let mut results = BTreeMap::new();
 
     for database_name in database_names {
-        if let Err(err) =
-            validate_db_or_user_request(&DbOrUser::Database(database_name.clone()), unix_user)
-                .map_err(ListDatabasesError::ValidationError)
+        if let Err(err) = validate_db_or_user_request(
+            &DbOrUser::Database(database_name.clone()),
+            unix_user,
+            group_denylist,
+        )
+        .map_err(ListDatabasesError::ValidationError)
         {
             results.insert(database_name.to_owned(), Err(err));
             continue;
@@ -296,6 +310,7 @@ pub async fn list_all_databases_for_user(
     unix_user: &UnixUser,
     connection: &mut MySqlConnection,
     _db_is_mariadb: bool,
+    group_denylist: &GroupDenylist,
 ) -> ListAllDatabasesResponse {
     let result = sqlx::query_as::<_, DatabaseRow>(
         r#"
@@ -319,7 +334,7 @@ pub async fn list_all_databases_for_user(
           GROUP BY `information_schema`.`SCHEMATA`.`SCHEMA_NAME`
         "#,
     )
-    .bind(create_user_group_matching_regex(unix_user))
+    .bind(create_user_group_matching_regex(unix_user, group_denylist))
     .fetch_all(connection)
     .await
     .map_err(|err| ListAllDatabasesError::MySqlError(err.to_string()));

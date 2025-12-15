@@ -1,4 +1,4 @@
-mod authorization;
+pub mod authorization;
 pub mod command;
 mod common;
 pub mod config;

@@ -4,12 +4,13 @@ use futures_util::SinkExt;
 use tokio_stream::StreamExt;
 
 use crate::{
-    client::commands::erroneous_server_response,
+    client::commands::{erroneous_server_response, print_authorization_owner_hint},
     core::{
         completion::mysql_user_completer,
         protocol::{
-            ClientToServerMessageStream, Request, Response, print_unlock_users_output_status,
-            print_unlock_users_output_status_json,
+            ClientToServerMessageStream, Request, Response, UnlockUserError,
+            print_unlock_users_output_status, print_unlock_users_output_status_json,
+            request_validation::ValidationError,
         },
         types::MySQLUser,
     },
@@ -47,13 +48,24 @@ pub async fn unlock_users(
         response => return erroneous_server_response(response),
     };
 
-    server_connection.send(Request::Exit).await?;
-
     if args.json {
         print_unlock_users_output_status_json(&result);
     } else {
         print_unlock_users_output_status(&result);
+
+        if result.iter().any(|(_, res)| {
+            matches!(
+                res,
+                Err(UnlockUserError::ValidationError(
+                    ValidationError::AuthorizationError(_)
+                ))
+            )
+        }) {
+            print_authorization_owner_hint(&mut server_connection).await?
+        }
     }
+
+    server_connection.send(Request::Exit).await?;
 
     Ok(())
 }

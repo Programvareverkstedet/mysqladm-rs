@@ -4,11 +4,15 @@ use futures_util::SinkExt;
 use tokio_stream::StreamExt;
 
 use crate::{
-    client::commands::{erroneous_server_response, read_password_from_stdin_with_double_check},
+    client::commands::{
+        erroneous_server_response, print_authorization_owner_hint,
+        read_password_from_stdin_with_double_check,
+    },
     core::{
         protocol::{
-            ClientToServerMessageStream, Request, Response, print_create_users_output_status,
-            print_create_users_output_status_json, print_set_password_output_status,
+            ClientToServerMessageStream, CreateUserError, Request, Response,
+            print_create_users_output_status, print_create_users_output_status_json,
+            print_set_password_output_status, request_validation::ValidationError,
         },
         types::MySQLUser,
     },
@@ -54,6 +58,17 @@ pub async fn create_users(
         print_create_users_output_status_json(&result);
     } else {
         print_create_users_output_status(&result);
+
+        if result.iter().any(|(_, res)| {
+            matches!(
+                res,
+                Err(CreateUserError::ValidationError(
+                    ValidationError::AuthorizationError(_)
+                ))
+            )
+        }) {
+            print_authorization_owner_hint(&mut server_connection).await?
+        }
 
         let successfully_created_users = result
             .iter()

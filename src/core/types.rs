@@ -132,4 +132,11 @@ impl DbOrUser {
             DbOrUser::User(user) => user.as_str(),
         }
     }
+
+    pub fn prefix(&self) -> &str {
+        match self {
+            DbOrUser::Database(db) => db.split('_').next().unwrap_or("?"),
+            DbOrUser::User(user) => user.split('_').next().unwrap_or("?"),
+        }
+    }
 }

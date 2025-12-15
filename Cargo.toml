@@ -133,6 +133,11 @@ assets = [
         "644",
     ],
     [
+        "assets/debian/group_denylist.txt",
+        "etc/muscl/group_denylist.txt",
+        "644",
+    ],
+    [
         "assets/completions/_*",
         "usr/share/zsh/site-functions/completions/",
         "644",

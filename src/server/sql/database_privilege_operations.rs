@@ -31,7 +31,7 @@ use crate::{
             DiffDoesNotApplyError, GetAllDatabasesPrivilegeDataError,
             GetDatabasesPrivilegeDataError, ListAllPrivilegesResponse, ListPrivilegesResponse,
             ModifyDatabasePrivilegesError, ModifyPrivilegesResponse,
-            request_validation::validate_db_or_user_request,
+            request_validation::{GroupDenylist, validate_db_or_user_request},
         },
         types::{DbOrUser, MySQLDatabase, MySQLUser},
     },
@@ -143,13 +143,17 @@ pub async fn get_databases_privilege_data(
     unix_user: &UnixUser,
     connection: &mut MySqlConnection,
     _db_is_mariadb: bool,
+    group_denylist: &GroupDenylist,
 ) -> ListPrivilegesResponse {
     let mut results = BTreeMap::new();
 
     for database_name in database_names.iter() {
-        if let Err(err) =
-            validate_db_or_user_request(&DbOrUser::Database(database_name.clone()), unix_user)
-                .map_err(GetDatabasesPrivilegeDataError::ValidationError)
+        if let Err(err) = validate_db_or_user_request(
+            &DbOrUser::Database(database_name.clone()),
+            unix_user,
+            group_denylist,
+        )
+        .map_err(GetDatabasesPrivilegeDataError::ValidationError)
         {
             results.insert(database_name.to_owned(), Err(err));
             continue;
@@ -200,9 +204,10 @@ pub async fn get_all_database_privileges(
     unix_user: &UnixUser,
     connection: &mut MySqlConnection,
     _db_is_mariadb: bool,
+    group_denylist: &GroupDenylist,
 ) -> ListAllPrivilegesResponse {
     let result = sqlx::query_as::<_, DatabasePrivilegeRow>(&get_all_db_privs_query())
-        .bind(create_user_group_matching_regex(unix_user))
+        .bind(create_user_group_matching_regex(unix_user, group_denylist))
         .fetch_all(connection)
         .await
         .map_err(|e| GetAllDatabasesPrivilegeDataError::MySqlError(e.to_string()));
@@ -397,6 +402,7 @@ pub async fn apply_privilege_diffs(
     unix_user: &UnixUser,
     connection: &mut MySqlConnection,
     _db_is_mariadb: bool,
+    group_denylist: &GroupDenylist,
 ) -> ModifyPrivilegesResponse {
     let mut results: BTreeMap<(MySQLDatabase, MySQLUser), _> = BTreeMap::new();
 
@@ -408,6 +414,7 @@ pub async fn apply_privilege_diffs(
         if let Err(err) = validate_db_or_user_request(
             &DbOrUser::Database(diff.get_database_name().to_owned()),
             unix_user,
+            group_denylist,
         )
         .map_err(ModifyDatabasePrivilegesError::UserValidationError)
         {
@@ -415,9 +422,12 @@ pub async fn apply_privilege_diffs(
             continue;
         }
 
-        if let Err(err) =
-            validate_db_or_user_request(&DbOrUser::User(diff.get_user_name().to_owned()), unix_user)
-                .map_err(ModifyDatabasePrivilegesError::UserValidationError)
+        if let Err(err) = validate_db_or_user_request(
+            &DbOrUser::User(diff.get_user_name().to_owned()),
+            unix_user,
+            group_denylist,
+        )
+        .map_err(ModifyDatabasePrivilegesError::UserValidationError)
         {
             results.insert(key, Err(err));
             continue;

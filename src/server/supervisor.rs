@@ -17,9 +17,13 @@ use tokio::{
 };
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
-use crate::server::{
-    config::{MysqlConfig, ServerConfig},
-    session_handler::session_handler,
+use crate::{
+    core::protocol::request_validation::GroupDenylist,
+    server::{
+        authorization::read_and_parse_group_denylist,
+        config::{MysqlConfig, ServerConfig},
+        session_handler::session_handler,
+    },
 };
 
 #[derive(Clone, Debug)]
@@ -36,6 +40,7 @@ pub struct ReloadEvent;
 pub struct Supervisor {
     config_path: PathBuf,
     config: Arc<Mutex<ServerConfig>>,
+    group_deny_list: Arc<RwLock<GroupDenylist>>,
     systemd_mode: bool,
 
     shutdown_cancel_token: CancellationToken,
@@ -65,6 +70,23 @@ impl Supervisor {
 
         let config = ServerConfig::read_config_from_path(&config_path)
             .context("Failed to read server configuration")?;
+
+        let group_deny_list = match &config.authorization.group_denylist_file {
+            Some(denylist_path) => {
+                let denylist = read_and_parse_group_denylist(denylist_path)
+                    .context("Failed to read group denylist file")?;
+                tracing::debug!(
+                    "Loaded group denylist with {} entries from {:?}",
+                    denylist.len(),
+                    denylist_path
+                );
+                Arc::new(RwLock::new(denylist))
+            }
+            None => {
+                tracing::debug!("No group denylist file specified, proceeding without a denylist");
+                Arc::new(RwLock::new(GroupDenylist::new()))
+            }
+        };
 
         let mut watchdog_duration = None;
         let mut watchdog_micro_seconds = 0;
@@ -148,12 +170,14 @@ impl Supervisor {
                 db_connection_pool.clone(),
                 rx,
                 db_is_mariadb.clone(),
+                group_deny_list.clone(),
             ))
         };
 
         Ok(Self {
             config_path,
             config: Arc::new(Mutex::new(config)),
+            group_deny_list,
             systemd_mode,
             reload_message_receiver: reload_rx,
             shutdown_cancel_token,
@@ -196,6 +220,26 @@ impl Supervisor {
             .context("Failed to read server configuration")?;
         let mut config = self.config.clone().lock_owned().await;
         *config = new_config;
+
+        let group_deny_list = match &config.authorization.group_denylist_file {
+            Some(denylist_path) => {
+                let denylist = read_and_parse_group_denylist(denylist_path)
+                    .context("Failed to read group denylist file")?;
+
+                tracing::debug!(
+                    "Loaded group denylist with {} entries from {:?}",
+                    denylist.len(),
+                    denylist_path
+                );
+                denylist
+            }
+            None => {
+                tracing::debug!("No group denylist file specified, proceeding without a denylist");
+                GroupDenylist::new()
+            }
+        };
+        let mut group_deny_list_lock = self.group_deny_list.write().await;
+        *group_deny_list_lock = group_deny_list;
         Ok(())
     }
 
@@ -502,6 +546,7 @@ async fn listener_task(
     db_pool: Arc<RwLock<MySqlPool>>,
     mut supervisor_message_receiver: broadcast::Receiver<SupervisorMessage>,
     db_is_mariadb: Arc<RwLock<bool>>,
+    group_denylist: Arc<RwLock<GroupDenylist>>,
 ) -> anyhow::Result<()> {
     #[cfg(target_os = "linux")]
     sd_notify::notify(false, &[sd_notify::NotifyState::Ready])?;
@@ -539,8 +584,14 @@ async fn listener_task(
 
                         let db_pool_clone = db_pool.clone();
                         let db_is_mariadb_clone = *db_is_mariadb.read().await;
+                        let group_denylist_arc_clone = group_denylist.clone();
                         task_tracker.spawn(async move {
-                            match session_handler(conn, db_pool_clone, db_is_mariadb_clone).await {
+                            match session_handler(
+                                conn,
+                                db_pool_clone,
+                                db_is_mariadb_clone,
+                                &*group_denylist_arc_clone.read().await,
+                            ).await {
                                 Ok(()) => {}
                                 Err(e) => {
                                     tracing::error!("Failed to run server: {}", e);

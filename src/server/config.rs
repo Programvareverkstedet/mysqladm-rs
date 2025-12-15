@@ -79,8 +79,14 @@ impl MysqlConfig {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+pub struct AuthorizationConfig {
+    pub group_denylist_file: Option<PathBuf>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct ServerConfig {
     pub socket_path: Option<PathBuf>,
+    pub authorization: AuthorizationConfig,
     pub mysql: MysqlConfig,
 }
 

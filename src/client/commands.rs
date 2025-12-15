@@ -17,16 +17,19 @@ pub use create_user::*;
 pub use drop_db::*;
 pub use drop_user::*;
 pub use edit_privs::*;
+use futures_util::SinkExt;
+use itertools::Itertools;
 pub use lock_user::*;
 pub use passwd_user::*;
 pub use show_db::*;
 pub use show_privs::*;
 pub use show_user::*;
+use tokio_stream::StreamExt;
 pub use unlock_user::*;
 
 use clap::Subcommand;
 
-use crate::core::protocol::{ClientToServerMessageStream, Response};
+use crate::core::protocol::{ClientToServerMessageStream, Request, Response};
 
 #[derive(Subcommand, Debug, Clone)]
 #[command(subcommand_required = true)]
@@ -182,4 +185,24 @@ pub fn erroneous_server_response(
             anyhow::bail!("No response from server");
         }
     }
+}
+
+pub async fn print_authorization_owner_hint(
+    server_connection: &mut ClientToServerMessageStream,
+) -> anyhow::Result<()> {
+    server_connection
+        .send(Request::ListValidNamePrefixes)
+        .await?;
+
+    let response = match server_connection.next().await {
+        Some(Ok(Response::ListValidNamePrefixes(prefixes))) => prefixes,
+        response => return erroneous_server_response(response),
+    };
+
+    println!(
+        "Note: You are allowed to manage databases and users with the following prefixes:\n{}",
+        response.into_iter().map(|p| format!(" - {}", p)).join("\n")
+    );
+
+    Ok(())
 }

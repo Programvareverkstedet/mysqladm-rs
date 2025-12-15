@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::MySqlConnection;
 use sqlx::prelude::*;
 
+use crate::core::protocol::request_validation::GroupDenylist;
 use crate::core::protocol::request_validation::validate_db_or_user_request;
 use crate::core::types::DbOrUser;
 use crate::{
@@ -58,6 +59,7 @@ pub async fn complete_user_name(
     unix_user: &UnixUser,
     connection: &mut MySqlConnection,
     _db_is_mariadb: bool,
+    group_denylist: &GroupDenylist,
 ) -> Vec<MySQLUser> {
     let result = sqlx::query(
         r#"
@@ -67,7 +69,7 @@ pub async fn complete_user_name(
             AND `User` LIKE ?
         "#,
     )
-    .bind(create_user_group_matching_regex(unix_user))
+    .bind(create_user_group_matching_regex(unix_user, group_denylist))
     .bind(format!("{}%", user_prefix))
     .fetch_all(connection)
     .await;
@@ -97,12 +99,14 @@ pub async fn create_database_users(
     unix_user: &UnixUser,
     connection: &mut MySqlConnection,
     _db_is_mariadb: bool,
+    group_denylist: &GroupDenylist,
 ) -> CreateUsersResponse {
     let mut results = BTreeMap::new();
 
     for db_user in db_users {
-        if let Err(err) = validate_db_or_user_request(&DbOrUser::User(db_user.clone()), unix_user)
-            .map_err(CreateUserError::ValidationError)
+        if let Err(err) =
+            validate_db_or_user_request(&DbOrUser::User(db_user.clone()), unix_user, group_denylist)
+                .map_err(CreateUserError::ValidationError)
         {
             results.insert(db_user, Err(err));
             continue;
@@ -141,12 +145,14 @@ pub async fn drop_database_users(
     unix_user: &UnixUser,
     connection: &mut MySqlConnection,
     _db_is_mariadb: bool,
+    group_denylist: &GroupDenylist,
 ) -> DropUsersResponse {
     let mut results = BTreeMap::new();
 
     for db_user in db_users {
-        if let Err(err) = validate_db_or_user_request(&DbOrUser::User(db_user.clone()), unix_user)
-            .map_err(DropUserError::ValidationError)
+        if let Err(err) =
+            validate_db_or_user_request(&DbOrUser::User(db_user.clone()), unix_user, group_denylist)
+                .map_err(DropUserError::ValidationError)
         {
             results.insert(db_user, Err(err));
             continue;
@@ -186,8 +192,9 @@ pub async fn set_password_for_database_user(
     unix_user: &UnixUser,
     connection: &mut MySqlConnection,
     _db_is_mariadb: bool,
+    group_denylist: &GroupDenylist,
 ) -> SetUserPasswordResponse {
-    validate_db_or_user_request(&DbOrUser::User(db_user.clone()), unix_user)
+    validate_db_or_user_request(&DbOrUser::User(db_user.clone()), unix_user, group_denylist)
         .map_err(SetPasswordError::ValidationError)?;
 
     match unsafe_user_exists(db_user, &mut *connection).await {
@@ -269,12 +276,14 @@ pub async fn lock_database_users(
     unix_user: &UnixUser,
     connection: &mut MySqlConnection,
     db_is_mariadb: bool,
+    group_denylist: &GroupDenylist,
 ) -> LockUsersResponse {
     let mut results = BTreeMap::new();
 
     for db_user in db_users {
-        if let Err(err) = validate_db_or_user_request(&DbOrUser::User(db_user.clone()), unix_user)
-            .map_err(LockUserError::ValidationError)
+        if let Err(err) =
+            validate_db_or_user_request(&DbOrUser::User(db_user.clone()), unix_user, group_denylist)
+                .map_err(LockUserError::ValidationError)
         {
             results.insert(db_user, Err(err));
             continue;
@@ -327,12 +336,14 @@ pub async fn unlock_database_users(
     unix_user: &UnixUser,
     connection: &mut MySqlConnection,
     db_is_mariadb: bool,
+    group_denylist: &GroupDenylist,
 ) -> UnlockUsersResponse {
     let mut results = BTreeMap::new();
 
     for db_user in db_users {
-        if let Err(err) = validate_db_or_user_request(&DbOrUser::User(db_user.clone()), unix_user)
-            .map_err(UnlockUserError::ValidationError)
+        if let Err(err) =
+            validate_db_or_user_request(&DbOrUser::User(db_user.clone()), unix_user, group_denylist)
+                .map_err(UnlockUserError::ValidationError)
         {
             results.insert(db_user, Err(err));
             continue;
@@ -433,12 +444,14 @@ pub async fn list_database_users(
     unix_user: &UnixUser,
     connection: &mut MySqlConnection,
     db_is_mariadb: bool,
+    group_denylist: &GroupDenylist,
 ) -> ListUsersResponse {
     let mut results = BTreeMap::new();
 
     for db_user in db_users {
-        if let Err(err) = validate_db_or_user_request(&DbOrUser::User(db_user.clone()), unix_user)
-            .map_err(ListUsersError::ValidationError)
+        if let Err(err) =
+            validate_db_or_user_request(&DbOrUser::User(db_user.clone()), unix_user, group_denylist)
+                .map_err(ListUsersError::ValidationError)
         {
             results.insert(db_user, Err(err));
             continue;
@@ -477,6 +490,7 @@ pub async fn list_all_database_users_for_unix_user(
     unix_user: &UnixUser,
     connection: &mut MySqlConnection,
     db_is_mariadb: bool,
+    group_denylist: &GroupDenylist,
 ) -> ListAllUsersResponse {
     let mut result = sqlx::query_as::<_, DatabaseUser>(
         &(if db_is_mariadb {
@@ -485,7 +499,7 @@ pub async fn list_all_database_users_for_unix_user(
             DB_USER_SELECT_STATEMENT_MYSQL.to_string()
         } + "WHERE `user`.`User` REGEXP ?"),
     )
-    .bind(create_user_group_matching_regex(unix_user))
+    .bind(create_user_group_matching_regex(unix_user, group_denylist))
     .fetch_all(&mut *connection)
     .await
     .map_err(|err| ListAllUsersError::MySqlError(err.to_string()));

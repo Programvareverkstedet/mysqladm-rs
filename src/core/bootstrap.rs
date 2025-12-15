@@ -9,10 +9,12 @@ use tokio::{net::UnixStream as TokioUnixStream, sync::RwLock};
 use tracing_subscriber::prelude::*;
 
 use crate::{
-    core::common::{
-        DEFAULT_CONFIG_PATH, DEFAULT_SOCKET_PATH, UnixUser, executing_in_suid_sgid_mode,
+    core::{
+        common::{DEFAULT_CONFIG_PATH, DEFAULT_SOCKET_PATH, UnixUser, executing_in_suid_sgid_mode},
+        protocol::request_validation::GroupDenylist,
     },
     server::{
+        authorization::read_and_parse_group_denylist,
         config::{MysqlConfig, ServerConfig},
         landlock::landlock_restrict_server,
         session_handler,
@@ -270,6 +272,13 @@ fn run_forked_server(
     let config = ServerConfig::read_config_from_path(&config_path)
         .context("Failed to read server config in forked process")?;
 
+    let group_denylist = if let Some(denylist_path) = &config.authorization.group_denylist_file {
+        read_and_parse_group_denylist(denylist_path)
+            .context("Failed to read and parse group denylist")?
+    } else {
+        GroupDenylist::new()
+    };
+
     let result: anyhow::Result<()> = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
@@ -292,6 +301,7 @@ fn run_forked_server(
                 &unix_user,
                 db_pool,
                 db_is_mariadb,
+                &group_denylist,
             )
             .await?;
             Ok(())

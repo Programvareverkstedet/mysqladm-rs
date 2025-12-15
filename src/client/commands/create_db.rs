@@ -3,11 +3,12 @@ use futures_util::SinkExt;
 use tokio_stream::StreamExt;
 
 use crate::{
-    client::commands::erroneous_server_response,
+    client::commands::{erroneous_server_response, print_authorization_owner_hint},
     core::{
         protocol::{
-            ClientToServerMessageStream, Request, Response, print_create_databases_output_status,
-            print_create_databases_output_status_json,
+            ClientToServerMessageStream, CreateDatabaseError, Request, Response,
+            print_create_databases_output_status, print_create_databases_output_status_json,
+            request_validation::ValidationError,
         },
         types::MySQLDatabase,
     },
@@ -40,13 +41,24 @@ pub async fn create_databases(
         response => return erroneous_server_response(response),
     };
 
-    server_connection.send(Request::Exit).await?;
-
     if args.json {
         print_create_databases_output_status_json(&result);
     } else {
         print_create_databases_output_status(&result);
+
+        if result.iter().any(|(_, res)| {
+            matches!(
+                res,
+                Err(CreateDatabaseError::ValidationError(
+                    ValidationError::AuthorizationError(_)
+                ))
+            )
+        }) {
+            print_authorization_owner_hint(&mut server_connection).await?
+        }
     }
+
+    server_connection.send(Request::Exit).await?;
 
     Ok(())
 }

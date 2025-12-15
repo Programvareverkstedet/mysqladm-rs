@@ -9,7 +9,7 @@ use nix::unistd::{User, getuid};
 use tokio_stream::StreamExt;
 
 use crate::{
-    client::commands::erroneous_server_response,
+    client::commands::{erroneous_server_response, print_authorization_owner_hint},
     core::{
         completion::{mysql_database_completer, mysql_user_completer},
         database_privileges::{
@@ -19,8 +19,8 @@ use crate::{
             parse_privilege_data_from_editor_content, reduce_privilege_diffs,
         },
         protocol::{
-            ClientToServerMessageStream, Request, Response,
-            print_modify_database_privileges_output_status,
+            ClientToServerMessageStream, ModifyDatabasePrivilegesError, Request, Response,
+            print_modify_database_privileges_output_status, request_validation::ValidationError,
         },
         types::{MySQLDatabase, MySQLUser},
     },
@@ -219,6 +219,8 @@ pub async fn edit_database_privileges(
         diff_privileges(&existing_privilege_rows, &privileges_to_change)
     };
 
+    // TODO: validate authorization before existence
+
     let user_existence_map = users_exist(&mut server_connection, &diffs).await?;
     let database_existence_map = databases_exist(&mut server_connection, &diffs).await?;
 
@@ -273,6 +275,19 @@ pub async fn edit_database_privileges(
     };
 
     print_modify_database_privileges_output_status(&result);
+
+    if result.iter().any(|(_, res)| {
+        matches!(
+            res,
+            Err(ModifyDatabasePrivilegesError::UserValidationError(
+                ValidationError::AuthorizationError(_)
+            ) | ModifyDatabasePrivilegesError::DatabaseValidationError(
+                ValidationError::AuthorizationError(_)
+            ))
+        )
+    }) {
+        print_authorization_owner_hint(&mut server_connection).await?
+    }
 
     server_connection.send(Request::Exit).await?;
 
