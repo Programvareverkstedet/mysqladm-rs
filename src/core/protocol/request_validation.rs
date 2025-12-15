@@ -53,15 +53,16 @@ impl NameValidationError {
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
-pub enum OwnerValidationError {
+pub enum AuthorizationError {
     #[error("No matching owner prefix found")]
     NoMatch,
 
+    // TODO: I don't think this should ever happen?
     #[error("Name cannot be empty")]
     StringEmpty,
 }
 
-impl OwnerValidationError {
+impl AuthorizationError {
     pub fn to_error_message(self, db_or_user: DbOrUser) -> String {
         let user = UnixUser::from_enviroment();
 
@@ -76,7 +77,7 @@ impl OwnerValidationError {
         groups.sort();
 
         match self {
-            OwnerValidationError::NoMatch => format!(
+            AuthorizationError::NoMatch => format!(
                 indoc! {r#"
                   Invalid {} name prefix: '{}' does not match your username or any of your groups.
                   Are you sure you are allowed to create {} names with this prefix?
@@ -98,7 +99,7 @@ impl OwnerValidationError {
                     .join("\n"),
             )
             .to_owned(),
-            OwnerValidationError::StringEmpty => format!(
+            AuthorizationError::StringEmpty => format!(
                 "'{}' is not a valid {} name.",
                 db_or_user.name(),
                 db_or_user.lowercased_noun()
@@ -109,27 +110,27 @@ impl OwnerValidationError {
 
     pub fn error_type(&self) -> &'static str {
         match self {
-            OwnerValidationError::NoMatch => "no-match",
-            OwnerValidationError::StringEmpty => "string-empty",
+            AuthorizationError::NoMatch => "no-match",
+            AuthorizationError::StringEmpty => "string-empty",
         }
     }
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
-pub enum AuthorizationError {
-    #[error("Sanitization error: {0}")]
-    SanitizationError(NameValidationError),
+pub enum ValidationError {
+    #[error("Name validation error: {0}")]
+    NameValidationError(NameValidationError),
 
-    #[error("Ownership error: {0}")]
-    OwnershipError(OwnerValidationError),
+    #[error("Authorization error: {0}")]
+    AuthorizationError(AuthorizationError),
     // AuthorizationHandlerError(String),
 }
 
-impl AuthorizationError {
+impl ValidationError {
     pub fn to_error_message(&self, db_or_user: DbOrUser) -> String {
         match self {
-            AuthorizationError::SanitizationError(err) => err.to_error_message(db_or_user),
-            AuthorizationError::OwnershipError(err) => err.to_error_message(db_or_user),
+            ValidationError::NameValidationError(err) => err.to_error_message(db_or_user),
+            ValidationError::AuthorizationError(err) => err.to_error_message(db_or_user),
             // AuthorizationError::AuthorizationHandlerError(msg) => {
             //     format!(
             //         "Authorization handler error for '{}': {}",
@@ -142,12 +143,11 @@ impl AuthorizationError {
 
     pub fn error_type(&self) -> String {
         match self {
-            AuthorizationError::SanitizationError(err) => {
-                format!("sanitization-error/{}", err.error_type())
+            ValidationError::NameValidationError(err) => {
+                format!("name-validation-error/{}", err.error_type())
             }
-            // TODO: maybe rename this to authorization error?
-            AuthorizationError::OwnershipError(err) => {
-                format!("ownership-error/{}", err.error_type())
+            ValidationError::AuthorizationError(err) => {
+                format!("authorization-error/{}", err.error_type())
             } // AuthorizationError::AuthorizationHandlerError(_) => {
               //     "authorization-handler-error".to_string()
               // }
@@ -172,27 +172,27 @@ pub fn validate_name(name: &str) -> Result<(), NameValidationError> {
     }
 }
 
-pub fn validate_ownership_by_unix_user(
+pub fn validate_authorization_by_unix_user(
     name: &str,
     user: &UnixUser,
-) -> Result<(), OwnerValidationError> {
+) -> Result<(), AuthorizationError> {
     let prefixes = std::iter::once(user.username.to_owned())
         .chain(user.groups.iter().cloned())
         .collect::<Vec<String>>();
 
-    validate_ownership_by_prefixes(name, &prefixes)
+    validate_authorization_by_prefixes(name, &prefixes)
 }
 
 /// Core logic for validating the ownership of a database name.
 /// This function checks if the given name matches any of the given prefixes.
 /// These prefixes will in most cases be the user's unix username and any
 /// unix groups the user is a member of.
-pub fn validate_ownership_by_prefixes(
+pub fn validate_authorization_by_prefixes(
     name: &str,
     prefixes: &[String],
-) -> Result<(), OwnerValidationError> {
+) -> Result<(), AuthorizationError> {
     if name.is_empty() {
-        return Err(OwnerValidationError::StringEmpty);
+        return Err(AuthorizationError::StringEmpty);
     }
 
     if prefixes
@@ -201,7 +201,7 @@ pub fn validate_ownership_by_prefixes(
         .collect::<Vec<_>>()
         .is_empty()
     {
-        return Err(OwnerValidationError::NoMatch);
+        return Err(AuthorizationError::NoMatch);
     };
 
     Ok(())
@@ -210,11 +210,11 @@ pub fn validate_ownership_by_prefixes(
 pub fn validate_db_or_user_request(
     db_or_user: &DbOrUser,
     unix_user: &UnixUser,
-) -> Result<(), AuthorizationError> {
-    validate_name(db_or_user.name()).map_err(AuthorizationError::SanitizationError)?;
+) -> Result<(), ValidationError> {
+    validate_name(db_or_user.name()).map_err(ValidationError::NameValidationError)?;
 
-    validate_ownership_by_unix_user(db_or_user.name(), unix_user)
-        .map_err(AuthorizationError::OwnershipError)?;
+    validate_authorization_by_unix_user(db_or_user.name(), unix_user)
+        .map_err(ValidationError::AuthorizationError)?;
 
     Ok(())
 }
@@ -246,34 +246,34 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_owner_by_prefixes() {
+    fn test_validate_authorization_by_prefixes() {
         let prefixes = vec!["user".to_string(), "group".to_string()];
 
         assert_eq!(
-            validate_ownership_by_prefixes("", &prefixes),
-            Err(OwnerValidationError::StringEmpty)
+            validate_authorization_by_prefixes("", &prefixes),
+            Err(AuthorizationError::StringEmpty)
         );
 
         assert_eq!(
-            validate_ownership_by_prefixes("user_testdb", &prefixes),
+            validate_authorization_by_prefixes("user_testdb", &prefixes),
             Ok(())
         );
         assert_eq!(
-            validate_ownership_by_prefixes("group_testdb", &prefixes),
+            validate_authorization_by_prefixes("group_testdb", &prefixes),
             Ok(())
         );
         assert_eq!(
-            validate_ownership_by_prefixes("group_test_db", &prefixes),
+            validate_authorization_by_prefixes("group_test_db", &prefixes),
             Ok(())
         );
         assert_eq!(
-            validate_ownership_by_prefixes("group_test-db", &prefixes),
+            validate_authorization_by_prefixes("group_test-db", &prefixes),
             Ok(())
         );
 
         assert_eq!(
-            validate_ownership_by_prefixes("nonexistent_testdb", &prefixes),
-            Err(OwnerValidationError::NoMatch)
+            validate_authorization_by_prefixes("nonexistent_testdb", &prefixes),
+            Err(AuthorizationError::NoMatch)
         );
     }
 }

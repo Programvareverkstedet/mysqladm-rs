@@ -102,7 +102,7 @@ pub async fn create_database_users(
 
     for db_user in db_users {
         if let Err(err) = validate_db_or_user_request(&DbOrUser::User(db_user.clone()), unix_user)
-            .map_err(CreateUserError::AuthorizationError)
+            .map_err(CreateUserError::ValidationError)
         {
             results.insert(db_user, Err(err));
             continue;
@@ -146,7 +146,7 @@ pub async fn drop_database_users(
 
     for db_user in db_users {
         if let Err(err) = validate_db_or_user_request(&DbOrUser::User(db_user.clone()), unix_user)
-            .map_err(DropUserError::AuthorizationError)
+            .map_err(DropUserError::ValidationError)
         {
             results.insert(db_user, Err(err));
             continue;
@@ -188,7 +188,7 @@ pub async fn set_password_for_database_user(
     _db_is_mariadb: bool,
 ) -> SetUserPasswordResponse {
     validate_db_or_user_request(&DbOrUser::User(db_user.clone()), unix_user)
-        .map_err(SetPasswordError::AuthorizationError)?;
+        .map_err(SetPasswordError::ValidationError)?;
 
     match unsafe_user_exists(db_user, &mut *connection).await {
         Ok(false) => return Err(SetPasswordError::UserDoesNotExist),
@@ -274,7 +274,7 @@ pub async fn lock_database_users(
 
     for db_user in db_users {
         if let Err(err) = validate_db_or_user_request(&DbOrUser::User(db_user.clone()), unix_user)
-            .map_err(LockUserError::AuthorizationError)
+            .map_err(LockUserError::ValidationError)
         {
             results.insert(db_user, Err(err));
             continue;
@@ -332,7 +332,7 @@ pub async fn unlock_database_users(
 
     for db_user in db_users {
         if let Err(err) = validate_db_or_user_request(&DbOrUser::User(db_user.clone()), unix_user)
-            .map_err(UnlockUserError::AuthorizationError)
+            .map_err(UnlockUserError::ValidationError)
         {
             results.insert(db_user, Err(err));
             continue;
@@ -438,7 +438,7 @@ pub async fn list_database_users(
 
     for db_user in db_users {
         if let Err(err) = validate_db_or_user_request(&DbOrUser::User(db_user.clone()), unix_user)
-            .map_err(ListUsersError::AuthorizationError)
+            .map_err(ListUsersError::ValidationError)
         {
             results.insert(db_user, Err(err));
             continue;

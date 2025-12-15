@@ -5,7 +5,7 @@ use serde_json::json;
 use thiserror::Error;
 
 use crate::core::{
-    protocol::request_validation::AuthorizationError,
+    protocol::request_validation::ValidationError,
     types::{DbOrUser, MySQLUser},
 };
 
@@ -15,8 +15,8 @@ pub type CreateUsersResponse = BTreeMap<MySQLUser, Result<(), CreateUserError>>;
 
 #[derive(Error, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum CreateUserError {
-    #[error("Authorization error: {0}")]
-    AuthorizationError(#[from] AuthorizationError),
+    #[error("Validation error: {0}")]
+    ValidationError(#[from] ValidationError),
 
     #[error("User already exists")]
     UserAlreadyExists,
@@ -65,7 +65,7 @@ pub fn print_create_users_output_status_json(output: &CreateUsersResponse) {
 impl CreateUserError {
     pub fn to_error_message(&self, username: &MySQLUser) -> String {
         match self {
-            CreateUserError::AuthorizationError(err) => {
+            CreateUserError::ValidationError(err) => {
                 err.to_error_message(DbOrUser::User(username.clone()))
             }
             CreateUserError::UserAlreadyExists => {
@@ -79,7 +79,7 @@ impl CreateUserError {
 
     pub fn error_type(&self) -> String {
         match self {
-            CreateUserError::AuthorizationError(err) => err.error_type(),
+            CreateUserError::ValidationError(err) => err.error_type(),
             CreateUserError::UserAlreadyExists => "user-already-exists".to_string(),
             CreateUserError::MySqlError(_) => "mysql-error".to_string(),
         }

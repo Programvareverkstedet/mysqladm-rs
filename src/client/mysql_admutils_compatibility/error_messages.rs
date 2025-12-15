@@ -1,7 +1,7 @@
 use crate::core::{
     protocol::{
         CreateDatabaseError, CreateUserError, DropDatabaseError, DropUserError,
-        GetDatabasesPrivilegeDataError, ListUsersError, request_validation::AuthorizationError,
+        GetDatabasesPrivilegeDataError, ListUsersError, request_validation::ValidationError,
     },
     types::DbOrUser,
 };
@@ -23,7 +23,7 @@ pub fn name_validation_error_to_error_message(db_or_user: DbOrUser) -> String {
     )
 }
 
-pub fn owner_validation_error_message(db_or_user: DbOrUser) -> String {
+pub fn authorization_error_message(db_or_user: DbOrUser) -> String {
     format!(
         "You are not in charge of mysql-{}: '{}'.  Skipping.",
         db_or_user.lowercased_noun(),
@@ -36,16 +36,16 @@ pub fn handle_create_user_error(error: CreateUserError, name: &str) {
         .next()
         .unwrap_or_else(|| "mysql-useradm".to_string());
     match error {
-        CreateUserError::AuthorizationError(AuthorizationError::SanitizationError(_)) => {
+        CreateUserError::ValidationError(ValidationError::NameValidationError(_)) => {
             eprintln!(
                 "{}",
                 name_validation_error_to_error_message(DbOrUser::User(name.into()))
             );
         }
-        CreateUserError::AuthorizationError(AuthorizationError::OwnershipError(_)) => {
+        CreateUserError::ValidationError(ValidationError::AuthorizationError(_)) => {
             eprintln!(
                 "{}",
-                owner_validation_error_message(DbOrUser::User(name.into()))
+                authorization_error_message(DbOrUser::User(name.into()))
             );
         }
         CreateUserError::MySqlError(_) | CreateUserError::UserAlreadyExists => {
@@ -59,16 +59,16 @@ pub fn handle_drop_user_error(error: DropUserError, name: &str) {
         .next()
         .unwrap_or_else(|| "mysql-useradm".to_string());
     match error {
-        DropUserError::AuthorizationError(AuthorizationError::SanitizationError(_)) => {
+        DropUserError::ValidationError(ValidationError::NameValidationError(_)) => {
             eprintln!(
                 "{}",
                 name_validation_error_to_error_message(DbOrUser::User(name.into()))
             );
         }
-        DropUserError::AuthorizationError(AuthorizationError::OwnershipError(_)) => {
+        DropUserError::ValidationError(ValidationError::AuthorizationError(_)) => {
             eprintln!(
                 "{}",
-                owner_validation_error_message(DbOrUser::User(name.into()))
+                authorization_error_message(DbOrUser::User(name.into()))
             );
         }
         DropUserError::MySqlError(_) | DropUserError::UserDoesNotExist => {
@@ -82,16 +82,16 @@ pub fn handle_list_users_error(error: ListUsersError, name: &str) {
         .next()
         .unwrap_or_else(|| "mysql-useradm".to_string());
     match error {
-        ListUsersError::AuthorizationError(AuthorizationError::SanitizationError(_)) => {
+        ListUsersError::ValidationError(ValidationError::NameValidationError(_)) => {
             eprintln!(
                 "{}",
                 name_validation_error_to_error_message(DbOrUser::User(name.into()))
             );
         }
-        ListUsersError::AuthorizationError(AuthorizationError::OwnershipError(_)) => {
+        ListUsersError::ValidationError(ValidationError::AuthorizationError(_)) => {
             eprintln!(
                 "{}",
-                owner_validation_error_message(DbOrUser::User(name.into()))
+                authorization_error_message(DbOrUser::User(name.into()))
             );
         }
         ListUsersError::UserDoesNotExist => {
@@ -113,17 +113,17 @@ pub fn handle_create_database_error(error: CreateDatabaseError, name: &str) {
         .next()
         .unwrap_or_else(|| "mysql-dbadm".to_string());
     match error {
-        CreateDatabaseError::AuthorizationError(AuthorizationError::SanitizationError(_)) => {
+        CreateDatabaseError::ValidationError(ValidationError::NameValidationError(_)) => {
             eprintln!(
                 "{}",
                 name_validation_error_to_error_message(DbOrUser::Database(name.into()))
             );
         }
 
-        CreateDatabaseError::AuthorizationError(AuthorizationError::OwnershipError(_)) => {
+        CreateDatabaseError::ValidationError(ValidationError::AuthorizationError(_)) => {
             eprintln!(
                 "{}",
-                owner_validation_error_message(DbOrUser::Database(name.into()))
+                authorization_error_message(DbOrUser::Database(name.into()))
             );
         }
         CreateDatabaseError::MySqlError(_) => {
@@ -140,16 +140,16 @@ pub fn handle_drop_database_error(error: DropDatabaseError, name: &str) {
         .next()
         .unwrap_or_else(|| "mysql-dbadm".to_string());
     match error {
-        DropDatabaseError::AuthorizationError(AuthorizationError::SanitizationError(_)) => {
+        DropDatabaseError::ValidationError(ValidationError::NameValidationError(_)) => {
             eprintln!(
                 "{}",
                 name_validation_error_to_error_message(DbOrUser::Database(name.into()))
             );
         }
-        DropDatabaseError::AuthorizationError(AuthorizationError::OwnershipError(_)) => {
+        DropDatabaseError::ValidationError(ValidationError::AuthorizationError(_)) => {
             eprintln!(
                 "{}",
-                owner_validation_error_message(DbOrUser::Database(name.into()))
+                authorization_error_message(DbOrUser::Database(name.into()))
             );
         }
         DropDatabaseError::MySqlError(_) => {
@@ -170,12 +170,12 @@ pub fn format_show_database_error_message(
         .unwrap_or_else(|| "mysql-dbadm".to_string());
 
     match error {
-        GetDatabasesPrivilegeDataError::AuthorizationError(
-            AuthorizationError::SanitizationError(_),
-        ) => name_validation_error_to_error_message(DbOrUser::Database(name.into())),
-        GetDatabasesPrivilegeDataError::AuthorizationError(AuthorizationError::OwnershipError(
+        GetDatabasesPrivilegeDataError::ValidationError(ValidationError::NameValidationError(
             _,
-        )) => owner_validation_error_message(DbOrUser::Database(name.into())),
+        )) => name_validation_error_to_error_message(DbOrUser::Database(name.into())),
+        GetDatabasesPrivilegeDataError::ValidationError(ValidationError::AuthorizationError(_)) => {
+            authorization_error_message(DbOrUser::Database(name.into()))
+        }
         GetDatabasesPrivilegeDataError::MySqlError(err) => {
             format!(
                 "{}: Failed to look up privileges for database '{}': {}",

@@ -5,7 +5,7 @@ use serde_json::json;
 use thiserror::Error;
 
 use crate::core::{
-    protocol::request_validation::AuthorizationError,
+    protocol::request_validation::ValidationError,
     types::{DbOrUser, MySQLDatabase},
 };
 
@@ -15,8 +15,8 @@ pub type DropDatabasesResponse = BTreeMap<MySQLDatabase, Result<(), DropDatabase
 
 #[derive(Error, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum DropDatabaseError {
-    #[error("Authorization error: {0}")]
-    AuthorizationError(#[from] AuthorizationError),
+    #[error("Validation error: {0}")]
+    ValidationError(#[from] ValidationError),
 
     #[error("Database does not exist")]
     DatabaseDoesNotExist,
@@ -68,7 +68,7 @@ pub fn print_drop_databases_output_status_json(output: &DropDatabasesResponse) {
 impl DropDatabaseError {
     pub fn to_error_message(&self, database_name: &MySQLDatabase) -> String {
         match self {
-            DropDatabaseError::AuthorizationError(err) => {
+            DropDatabaseError::ValidationError(err) => {
                 err.to_error_message(DbOrUser::Database(database_name.clone()))
             }
             DropDatabaseError::DatabaseDoesNotExist => {
@@ -82,7 +82,7 @@ impl DropDatabaseError {
 
     pub fn error_type(&self) -> String {
         match self {
-            DropDatabaseError::AuthorizationError(err) => err.error_type(),
+            DropDatabaseError::ValidationError(err) => err.error_type(),
             DropDatabaseError::DatabaseDoesNotExist => "database-does-not-exist".to_string(),
             DropDatabaseError::MySqlError(_) => "mysql-error".to_string(),
         }

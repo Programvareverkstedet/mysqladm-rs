@@ -95,7 +95,7 @@ pub async fn create_databases(
     for database_name in database_names {
         if let Err(err) =
             validate_db_or_user_request(&DbOrUser::Database(database_name.clone()), unix_user)
-                .map_err(CreateDatabaseError::AuthorizationError)
+                .map_err(CreateDatabaseError::ValidationError)
         {
             results.insert(database_name.to_owned(), Err(err));
             continue;
@@ -147,7 +147,7 @@ pub async fn drop_databases(
     for database_name in database_names {
         if let Err(err) =
             validate_db_or_user_request(&DbOrUser::Database(database_name.clone()), unix_user)
-                .map_err(DropDatabaseError::AuthorizationError)
+                .map_err(DropDatabaseError::ValidationError)
         {
             results.insert(database_name.to_owned(), Err(err));
             continue;
@@ -242,7 +242,7 @@ pub async fn list_databases(
     for database_name in database_names {
         if let Err(err) =
             validate_db_or_user_request(&DbOrUser::Database(database_name.clone()), unix_user)
-                .map_err(ListDatabasesError::AuthorizationError)
+                .map_err(ListDatabasesError::ValidationError)
         {
             results.insert(database_name.to_owned(), Err(err));
             continue;

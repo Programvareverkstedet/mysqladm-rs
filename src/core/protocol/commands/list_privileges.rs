@@ -16,7 +16,7 @@ use crate::core::{
         DATABASE_PRIVILEGE_FIELDS, DatabasePrivilegeRow, db_priv_field_human_readable_name,
         db_priv_field_single_character_name,
     },
-    protocol::request_validation::AuthorizationError,
+    protocol::request_validation::ValidationError,
     types::{DbOrUser, MySQLDatabase},
 };
 
@@ -118,8 +118,8 @@ pub fn print_list_privileges_output_status_json(output: &ListPrivilegesResponse)
 
 #[derive(Error, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum GetDatabasesPrivilegeDataError {
-    #[error("Authorization error: {0}")]
-    AuthorizationError(#[from] AuthorizationError),
+    #[error("Validation error: {0}")]
+    ValidationError(#[from] ValidationError),
 
     #[error("Database does not exist")]
     DatabaseDoesNotExist,
@@ -131,7 +131,7 @@ pub enum GetDatabasesPrivilegeDataError {
 impl GetDatabasesPrivilegeDataError {
     pub fn to_error_message(&self, database_name: &MySQLDatabase) -> String {
         match self {
-            GetDatabasesPrivilegeDataError::AuthorizationError(err) => {
+            GetDatabasesPrivilegeDataError::ValidationError(err) => {
                 err.to_error_message(DbOrUser::Database(database_name.clone()))
             }
             GetDatabasesPrivilegeDataError::DatabaseDoesNotExist => {
@@ -145,7 +145,7 @@ impl GetDatabasesPrivilegeDataError {
 
     pub fn error_type(&self) -> String {
         match self {
-            GetDatabasesPrivilegeDataError::AuthorizationError(err) => err.error_type(),
+            GetDatabasesPrivilegeDataError::ValidationError(err) => err.error_type(),
             GetDatabasesPrivilegeDataError::DatabaseDoesNotExist => {
                 "database-does-not-exist".to_string()
             }

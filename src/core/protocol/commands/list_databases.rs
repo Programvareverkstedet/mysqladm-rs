@@ -8,7 +8,7 @@ use thiserror::Error;
 
 use crate::{
     core::{
-        protocol::request_validation::AuthorizationError,
+        protocol::request_validation::ValidationError,
         types::{DbOrUser, MySQLDatabase},
     },
     server::sql::database_operations::DatabaseRow,
@@ -20,8 +20,8 @@ pub type ListDatabasesResponse = BTreeMap<MySQLDatabase, Result<DatabaseRow, Lis
 
 #[derive(Error, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ListDatabasesError {
-    #[error("Authorization error: {0}")]
-    AuthorizationError(#[from] AuthorizationError),
+    #[error("Validation error: {0}")]
+    ValidationError(#[from] ValidationError),
 
     #[error("Database does not exist")]
     DatabaseDoesNotExist,
@@ -104,7 +104,7 @@ pub fn print_list_databases_output_status_json(output: &ListDatabasesResponse) {
 impl ListDatabasesError {
     pub fn to_error_message(&self, database_name: &MySQLDatabase) -> String {
         match self {
-            ListDatabasesError::AuthorizationError(err) => {
+            ListDatabasesError::ValidationError(err) => {
                 err.to_error_message(DbOrUser::Database(database_name.clone()))
             }
             ListDatabasesError::DatabaseDoesNotExist => {
@@ -118,7 +118,7 @@ impl ListDatabasesError {
 
     pub fn error_type(&self) -> String {
         match self {
-            ListDatabasesError::AuthorizationError(err) => err.error_type(),
+            ListDatabasesError::ValidationError(err) => err.error_type(),
             ListDatabasesError::DatabaseDoesNotExist => "database-does-not-exist".to_string(),
             ListDatabasesError::MySqlError(_) => "mysql-error".to_string(),
         }

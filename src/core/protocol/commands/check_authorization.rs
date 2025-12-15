@@ -4,15 +4,15 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use thiserror::Error;
 
-use crate::core::{protocol::request_validation::AuthorizationError, types::DbOrUser};
+use crate::core::{protocol::request_validation::ValidationError, types::DbOrUser};
 
 pub type CheckAuthorizationRequest = Vec<DbOrUser>;
 
 pub type CheckAuthorizationResponse = BTreeMap<DbOrUser, Result<(), CheckAuthorizationError>>;
 
 #[derive(Error, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[error("Authorization error: {0}")]
-pub struct CheckAuthorizationError(#[from] pub AuthorizationError);
+#[error("Validation error: {0}")]
+pub struct CheckAuthorizationError(#[from] pub ValidationError);
 
 pub fn print_check_authorization_output_status(output: &CheckAuthorizationResponse) {
     for (db_or_user, result) in output {

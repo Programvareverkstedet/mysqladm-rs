@@ -5,7 +5,7 @@ use serde_json::json;
 use thiserror::Error;
 
 use crate::core::{
-    protocol::request_validation::AuthorizationError,
+    protocol::request_validation::ValidationError,
     types::{DbOrUser, MySQLDatabase},
 };
 
@@ -15,8 +15,8 @@ pub type CreateDatabasesResponse = BTreeMap<MySQLDatabase, Result<(), CreateData
 
 #[derive(Error, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum CreateDatabaseError {
-    #[error("Authorization error: {0}")]
-    AuthorizationError(#[from] AuthorizationError),
+    #[error("Validation error: {0}")]
+    ValidationError(#[from] ValidationError),
 
     #[error("Database already exists")]
     DatabaseAlreadyExists,
@@ -65,7 +65,7 @@ pub fn print_create_databases_output_status_json(output: &CreateDatabasesRespons
 impl CreateDatabaseError {
     pub fn to_error_message(&self, database_name: &MySQLDatabase) -> String {
         match self {
-            CreateDatabaseError::AuthorizationError(err) => {
+            CreateDatabaseError::ValidationError(err) => {
                 err.to_error_message(DbOrUser::Database(database_name.clone()))
             }
             CreateDatabaseError::DatabaseAlreadyExists => {
@@ -79,7 +79,7 @@ impl CreateDatabaseError {
 
     pub fn error_type(&self) -> String {
         match self {
-            CreateDatabaseError::AuthorizationError(err) => err.error_type(),
+            CreateDatabaseError::ValidationError(err) => err.error_type(),
             CreateDatabaseError::DatabaseAlreadyExists => "database-already-exists".to_string(),
             CreateDatabaseError::MySqlError(_) => "mysql-error".to_string(),
         }

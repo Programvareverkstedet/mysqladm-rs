@@ -5,7 +5,7 @@ use serde_json::json;
 use thiserror::Error;
 
 use crate::core::{
-    protocol::request_validation::AuthorizationError,
+    protocol::request_validation::ValidationError,
     types::{DbOrUser, MySQLUser},
 };
 
@@ -15,8 +15,8 @@ pub type DropUsersResponse = BTreeMap<MySQLUser, Result<(), DropUserError>>;
 
 #[derive(Error, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum DropUserError {
-    #[error("Authorization error: {0}")]
-    AuthorizationError(#[from] AuthorizationError),
+    #[error("Validation error: {0}")]
+    ValidationError(#[from] ValidationError),
 
     #[error("User does not exist")]
     UserDoesNotExist,
@@ -65,7 +65,7 @@ pub fn print_drop_users_output_status_json(output: &DropUsersResponse) {
 impl DropUserError {
     pub fn to_error_message(&self, username: &MySQLUser) -> String {
         match self {
-            DropUserError::AuthorizationError(err) => {
+            DropUserError::ValidationError(err) => {
                 err.to_error_message(DbOrUser::User(username.clone()))
             }
             DropUserError::UserDoesNotExist => {
@@ -79,7 +79,7 @@ impl DropUserError {
 
     pub fn error_type(&self) -> String {
         match self {
-            DropUserError::AuthorizationError(err) => err.error_type(),
+            DropUserError::ValidationError(err) => err.error_type(),
             DropUserError::UserDoesNotExist => "user-does-not-exist".to_string(),
             DropUserError::MySqlError(_) => "mysql-error".to_string(),
         }

@@ -5,7 +5,7 @@ use serde_json::json;
 use thiserror::Error;
 
 use crate::core::{
-    protocol::request_validation::AuthorizationError,
+    protocol::request_validation::ValidationError,
     types::{DbOrUser, MySQLUser},
 };
 
@@ -15,8 +15,8 @@ pub type UnlockUsersResponse = BTreeMap<MySQLUser, Result<(), UnlockUserError>>;
 
 #[derive(Error, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum UnlockUserError {
-    #[error("Authorization error: {0}")]
-    AuthorizationError(#[from] AuthorizationError),
+    #[error("Validation error: {0}")]
+    ValidationError(#[from] ValidationError),
 
     #[error("User does not exist")]
     UserDoesNotExist,
@@ -68,7 +68,7 @@ pub fn print_unlock_users_output_status_json(output: &UnlockUsersResponse) {
 impl UnlockUserError {
     pub fn to_error_message(&self, username: &MySQLUser) -> String {
         match self {
-            UnlockUserError::AuthorizationError(err) => {
+            UnlockUserError::ValidationError(err) => {
                 err.to_error_message(DbOrUser::User(username.clone()))
             }
             UnlockUserError::UserDoesNotExist => {
@@ -85,7 +85,7 @@ impl UnlockUserError {
 
     pub fn error_type(&self) -> String {
         match self {
-            UnlockUserError::AuthorizationError(err) => err.error_type(),
+            UnlockUserError::ValidationError(err) => err.error_type(),
             UnlockUserError::UserDoesNotExist => "user-does-not-exist".to_string(),
             UnlockUserError::UserIsAlreadyUnlocked => "user-is-already-unlocked".to_string(),
             UnlockUserError::MySqlError(_) => "mysql-error".to_string(),

@@ -149,7 +149,7 @@ pub async fn get_databases_privilege_data(
     for database_name in database_names.iter() {
         if let Err(err) =
             validate_db_or_user_request(&DbOrUser::Database(database_name.clone()), unix_user)
-                .map_err(GetDatabasesPrivilegeDataError::AuthorizationError)
+                .map_err(GetDatabasesPrivilegeDataError::ValidationError)
         {
             results.insert(database_name.to_owned(), Err(err));
             continue;
@@ -409,7 +409,7 @@ pub async fn apply_privilege_diffs(
             &DbOrUser::Database(diff.get_database_name().to_owned()),
             unix_user,
         )
-        .map_err(ModifyDatabasePrivilegesError::UserAuthorizationError)
+        .map_err(ModifyDatabasePrivilegesError::UserValidationError)
         {
             results.insert(key, Err(err));
             continue;
@@ -417,7 +417,7 @@ pub async fn apply_privilege_diffs(
 
         if let Err(err) =
             validate_db_or_user_request(&DbOrUser::User(diff.get_user_name().to_owned()), unix_user)
-                .map_err(ModifyDatabasePrivilegesError::UserAuthorizationError)
+                .map_err(ModifyDatabasePrivilegesError::UserValidationError)
         {
             results.insert(key, Err(err));
             continue;

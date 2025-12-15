@@ -5,7 +5,7 @@ use thiserror::Error;
 
 use crate::core::{
     database_privileges::{DatabasePrivilegeRow, DatabasePrivilegeRowDiff, DatabasePrivilegesDiff},
-    protocol::request_validation::AuthorizationError,
+    protocol::request_validation::ValidationError,
     types::{DbOrUser, MySQLDatabase, MySQLUser},
 };
 
@@ -16,11 +16,11 @@ pub type ModifyPrivilegesResponse =
 
 #[derive(Error, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ModifyDatabasePrivilegesError {
-    #[error("Database authorization error: {0}")]
-    DatabaseAuthorizationError(AuthorizationError),
+    #[error("Database validation error: {0}")]
+    DatabaseValidationError(ValidationError),
 
-    #[error("User authorization error: {0}")]
-    UserAuthorizationError(AuthorizationError),
+    #[error("User validation error: {0}")]
+    UserValidationError(ValidationError),
 
     #[error("Database does not exist")]
     DatabaseDoesNotExist,
@@ -69,10 +69,10 @@ pub fn print_modify_database_privileges_output_status(output: &ModifyPrivilegesR
 impl ModifyDatabasePrivilegesError {
     pub fn to_error_message(&self, database_name: &MySQLDatabase, username: &MySQLUser) -> String {
         match self {
-            ModifyDatabasePrivilegesError::DatabaseAuthorizationError(err) => {
+            ModifyDatabasePrivilegesError::DatabaseValidationError(err) => {
                 err.to_error_message(DbOrUser::Database(database_name.clone()))
             }
-            ModifyDatabasePrivilegesError::UserAuthorizationError(err) => {
+            ModifyDatabasePrivilegesError::UserValidationError(err) => {
                 err.to_error_message(DbOrUser::User(username.clone()))
             }
             ModifyDatabasePrivilegesError::DatabaseDoesNotExist => {
@@ -97,8 +97,8 @@ impl ModifyDatabasePrivilegesError {
     pub fn error_type(&self) -> String {
         match self {
             // TODO: should these be subtyped?
-            ModifyDatabasePrivilegesError::DatabaseAuthorizationError(err) => err.error_type(),
-            ModifyDatabasePrivilegesError::UserAuthorizationError(err) => err.error_type(),
+            ModifyDatabasePrivilegesError::DatabaseValidationError(err) => err.error_type(),
+            ModifyDatabasePrivilegesError::UserValidationError(err) => err.error_type(),
             ModifyDatabasePrivilegesError::DatabaseDoesNotExist => {
                 "database-does-not-exist".to_string()
             }

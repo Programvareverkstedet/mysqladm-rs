@@ -7,7 +7,7 @@ use thiserror::Error;
 
 use crate::{
     core::{
-        protocol::request_validation::AuthorizationError,
+        protocol::request_validation::ValidationError,
         types::{DbOrUser, MySQLUser},
     },
     server::sql::user_operations::DatabaseUser,
@@ -19,8 +19,8 @@ pub type ListUsersResponse = BTreeMap<MySQLUser, Result<DatabaseUser, ListUsersE
 
 #[derive(Error, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ListUsersError {
-    #[error("Authorization error: {0}")]
-    AuthorizationError(#[from] AuthorizationError),
+    #[error("Validation error: {0}")]
+    ValidationError(#[from] ValidationError),
 
     #[error("User does not exist")]
     UserDoesNotExist,
@@ -99,7 +99,7 @@ pub fn print_list_users_output_status_json(output: &ListUsersResponse) {
 impl ListUsersError {
     pub fn to_error_message(&self, username: &MySQLUser) -> String {
         match self {
-            ListUsersError::AuthorizationError(err) => {
+            ListUsersError::ValidationError(err) => {
                 err.to_error_message(DbOrUser::User(username.clone()))
             }
             ListUsersError::UserDoesNotExist => {
@@ -113,7 +113,7 @@ impl ListUsersError {
 
     pub fn error_type(&self) -> String {
         match self {
-            ListUsersError::AuthorizationError(err) => err.error_type(),
+            ListUsersError::ValidationError(err) => err.error_type(),
             ListUsersError::UserDoesNotExist => "user-does-not-exist".to_string(),
             ListUsersError::MySqlError(_) => "mysql-error".to_string(),
         }
