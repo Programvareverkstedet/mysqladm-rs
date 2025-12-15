@@ -7,7 +7,8 @@ use serde::{Deserialize, Serialize};
 use sqlx::MySqlConnection;
 use sqlx::prelude::*;
 
-use crate::core::protocol::request_validation::AuthorizationError;
+use crate::core::protocol::request_validation::validate_db_or_user_request;
+use crate::core::types::DbOrUser;
 use crate::{
     core::{
         common::UnixUser,
@@ -22,7 +23,7 @@ use crate::{
     },
     server::{
         common::{create_user_group_matching_regex, try_get_with_binary_fallback},
-        input_sanitization::{quote_literal, validate_name, validate_ownership_by_unix_user},
+        sql::quote_literal,
     },
 };
 
@@ -100,16 +101,7 @@ pub async fn create_database_users(
     let mut results = BTreeMap::new();
 
     for db_user in db_users {
-        if let Err(err) = validate_name(&db_user)
-            .map_err(AuthorizationError::SanitizationError)
-            .map_err(CreateUserError::AuthorizationError)
-        {
-            results.insert(db_user, Err(err));
-            continue;
-        }
-
-        if let Err(err) = validate_ownership_by_unix_user(&db_user, unix_user)
-            .map_err(AuthorizationError::OwnershipError)
+        if let Err(err) = validate_db_or_user_request(&DbOrUser::User(db_user.clone()), unix_user)
             .map_err(CreateUserError::AuthorizationError)
         {
             results.insert(db_user, Err(err));
@@ -153,16 +145,7 @@ pub async fn drop_database_users(
     let mut results = BTreeMap::new();
 
     for db_user in db_users {
-        if let Err(err) = validate_name(&db_user)
-            .map_err(AuthorizationError::SanitizationError)
-            .map_err(DropUserError::AuthorizationError)
-        {
-            results.insert(db_user, Err(err));
-            continue;
-        }
-
-        if let Err(err) = validate_ownership_by_unix_user(&db_user, unix_user)
-            .map_err(AuthorizationError::OwnershipError)
+        if let Err(err) = validate_db_or_user_request(&DbOrUser::User(db_user.clone()), unix_user)
             .map_err(DropUserError::AuthorizationError)
         {
             results.insert(db_user, Err(err));
@@ -204,12 +187,7 @@ pub async fn set_password_for_database_user(
     connection: &mut MySqlConnection,
     _db_is_mariadb: bool,
 ) -> SetUserPasswordResponse {
-    validate_name(db_user)
-        .map_err(AuthorizationError::SanitizationError)
-        .map_err(SetPasswordError::AuthorizationError)?;
-
-    validate_ownership_by_unix_user(db_user, unix_user)
-        .map_err(AuthorizationError::OwnershipError)
+    validate_db_or_user_request(&DbOrUser::User(db_user.clone()), unix_user)
         .map_err(SetPasswordError::AuthorizationError)?;
 
     match unsafe_user_exists(db_user, &mut *connection).await {
@@ -295,16 +273,7 @@ pub async fn lock_database_users(
     let mut results = BTreeMap::new();
 
     for db_user in db_users {
-        if let Err(err) = validate_name(&db_user)
-            .map_err(AuthorizationError::SanitizationError)
-            .map_err(LockUserError::AuthorizationError)
-        {
-            results.insert(db_user, Err(err));
-            continue;
-        }
-
-        if let Err(err) = validate_ownership_by_unix_user(&db_user, unix_user)
-            .map_err(AuthorizationError::OwnershipError)
+        if let Err(err) = validate_db_or_user_request(&DbOrUser::User(db_user.clone()), unix_user)
             .map_err(LockUserError::AuthorizationError)
         {
             results.insert(db_user, Err(err));
@@ -362,16 +331,7 @@ pub async fn unlock_database_users(
     let mut results = BTreeMap::new();
 
     for db_user in db_users {
-        if let Err(err) = validate_name(&db_user)
-            .map_err(AuthorizationError::SanitizationError)
-            .map_err(UnlockUserError::AuthorizationError)
-        {
-            results.insert(db_user, Err(err));
-            continue;
-        }
-
-        if let Err(err) = validate_ownership_by_unix_user(&db_user, unix_user)
-            .map_err(AuthorizationError::OwnershipError)
+        if let Err(err) = validate_db_or_user_request(&DbOrUser::User(db_user.clone()), unix_user)
             .map_err(UnlockUserError::AuthorizationError)
         {
             results.insert(db_user, Err(err));
@@ -477,16 +437,7 @@ pub async fn list_database_users(
     let mut results = BTreeMap::new();
 
     for db_user in db_users {
-        if let Err(err) = validate_name(&db_user)
-            .map_err(AuthorizationError::SanitizationError)
-            .map_err(ListUsersError::AuthorizationError)
-        {
-            results.insert(db_user, Err(err));
-            continue;
-        }
-
-        if let Err(err) = validate_ownership_by_unix_user(&db_user, unix_user)
-            .map_err(AuthorizationError::OwnershipError)
+        if let Err(err) = validate_db_or_user_request(&DbOrUser::User(db_user.clone()), unix_user)
             .map_err(ListUsersError::AuthorizationError)
         {
             results.insert(db_user, Err(err));

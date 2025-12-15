@@ -31,14 +31,16 @@ use crate::{
             DiffDoesNotApplyError, GetAllDatabasesPrivilegeDataError,
             GetDatabasesPrivilegeDataError, ListAllPrivilegesResponse, ListPrivilegesResponse,
             ModifyDatabasePrivilegesError, ModifyPrivilegesResponse,
-            request_validation::AuthorizationError,
+            request_validation::validate_db_or_user_request,
         },
-        types::{MySQLDatabase, MySQLUser},
+        types::{DbOrUser, MySQLDatabase, MySQLUser},
     },
     server::{
         common::{create_user_group_matching_regex, try_get_with_binary_fallback},
-        input_sanitization::{quote_identifier, validate_name, validate_ownership_by_unix_user},
-        sql::{database_operations::unsafe_database_exists, user_operations::unsafe_user_exists},
+        sql::{
+            database_operations::unsafe_database_exists, quote_identifier,
+            user_operations::unsafe_user_exists,
+        },
     },
 };
 
@@ -145,17 +147,9 @@ pub async fn get_databases_privilege_data(
     let mut results = BTreeMap::new();
 
     for database_name in database_names.iter() {
-        if let Err(err) = validate_name(database_name)
-            .map_err(AuthorizationError::SanitizationError)
-            .map_err(GetDatabasesPrivilegeDataError::AuthorizationError)
-        {
-            results.insert(database_name.to_owned(), Err(err));
-            continue;
-        }
-
-        if let Err(err) = validate_ownership_by_unix_user(database_name, unix_user)
-            .map_err(AuthorizationError::OwnershipError)
-            .map_err(GetDatabasesPrivilegeDataError::AuthorizationError)
+        if let Err(err) =
+            validate_db_or_user_request(&DbOrUser::Database(database_name.clone()), unix_user)
+                .map_err(GetDatabasesPrivilegeDataError::AuthorizationError)
         {
             results.insert(database_name.to_owned(), Err(err));
             continue;
@@ -411,33 +405,19 @@ pub async fn apply_privilege_diffs(
             diff.get_database_name().to_owned(),
             diff.get_user_name().to_owned(),
         );
-        if let Err(err) = validate_name(diff.get_database_name())
-            .map_err(AuthorizationError::SanitizationError)
-            .map_err(ModifyDatabasePrivilegesError::DatabaseAuthorizationError)
+        if let Err(err) = validate_db_or_user_request(
+            &DbOrUser::Database(diff.get_database_name().to_owned()),
+            unix_user,
+        )
+        .map_err(ModifyDatabasePrivilegesError::UserAuthorizationError)
         {
             results.insert(key, Err(err));
             continue;
         }
 
-        if let Err(err) = validate_ownership_by_unix_user(diff.get_database_name(), unix_user)
-            .map_err(AuthorizationError::OwnershipError)
-            .map_err(ModifyDatabasePrivilegesError::DatabaseAuthorizationError)
-        {
-            results.insert(key, Err(err));
-            continue;
-        }
-
-        if let Err(err) = validate_name(diff.get_user_name())
-            .map_err(AuthorizationError::SanitizationError)
-            .map_err(ModifyDatabasePrivilegesError::UserAuthorizationError)
-        {
-            results.insert(key, Err(err));
-            continue;
-        }
-
-        if let Err(err) = validate_ownership_by_unix_user(diff.get_user_name(), unix_user)
-            .map_err(AuthorizationError::OwnershipError)
-            .map_err(ModifyDatabasePrivilegesError::UserAuthorizationError)
+        if let Err(err) =
+            validate_db_or_user_request(&DbOrUser::User(diff.get_user_name().to_owned()), unix_user)
+                .map_err(ModifyDatabasePrivilegesError::UserAuthorizationError)
         {
             results.insert(key, Err(err));
             continue;
