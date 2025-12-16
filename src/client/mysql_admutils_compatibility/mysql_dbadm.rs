@@ -18,7 +18,7 @@ use crate::{
     },
     core::{
         bootstrap::bootstrap_server_connection_and_drop_privileges,
-        completion::mysql_database_completer,
+        completion::{mysql_database_completer, prefix_completer},
         database_privileges::DatabasePrivilegeRow,
         protocol::{
             ClientToServerMessageStream, ListPrivilegesError, Request, Response,
@@ -124,6 +124,7 @@ pub enum Command {
 pub struct CreateArgs {
     /// The name of the DATABASE(s) to create.
     #[arg(num_args = 1..)]
+    #[cfg_attr(not(feature = "suid-sgid-mode"), arg(add = ArgValueCompleter::new(prefix_completer)))]
     name: Vec<MySQLDatabase>,
 }
 

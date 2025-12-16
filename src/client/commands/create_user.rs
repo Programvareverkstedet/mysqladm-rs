@@ -1,4 +1,5 @@
 use clap::Parser;
+use clap_complete::ArgValueCompleter;
 use dialoguer::Confirm;
 use futures_util::SinkExt;
 use tokio_stream::StreamExt;
@@ -9,6 +10,7 @@ use crate::{
         read_password_from_stdin_with_double_check,
     },
     core::{
+        completion::prefix_completer,
         protocol::{
             ClientToServerMessageStream, CreateUserError, Request, Response,
             print_create_users_output_status, print_create_users_output_status_json,
@@ -22,6 +24,7 @@ use crate::{
 pub struct CreateUserArgs {
     /// The MySQL user(s) to create
     #[arg(num_args = 1.., value_name = "USER_NAME")]
+    #[cfg_attr(not(feature = "suid-sgid-mode"), arg(add = ArgValueCompleter::new(prefix_completer)))]
     username: Vec<MySQLUser>,
 
     /// Do not ask for a password, leave it unset

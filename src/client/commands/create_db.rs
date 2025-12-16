@@ -1,10 +1,12 @@
 use clap::Parser;
+use clap_complete::ArgValueCompleter;
 use futures_util::SinkExt;
 use tokio_stream::StreamExt;
 
 use crate::{
     client::commands::{erroneous_server_response, print_authorization_owner_hint},
     core::{
+        completion::prefix_completer,
         protocol::{
             ClientToServerMessageStream, CreateDatabaseError, Request, Response,
             print_create_databases_output_status, print_create_databases_output_status_json,
@@ -18,6 +20,7 @@ use crate::{
 pub struct CreateDbArgs {
     /// The MySQL database(s) to create
     #[arg(num_args = 1.., value_name = "DB_NAME")]
+    #[cfg_attr(not(feature = "suid-sgid-mode"), arg(add = ArgValueCompleter::new(prefix_completer)))]
     name: Vec<MySQLDatabase>,
 
     /// Print the information as JSON

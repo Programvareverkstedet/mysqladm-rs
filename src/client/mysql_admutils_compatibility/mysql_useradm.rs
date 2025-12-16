@@ -18,7 +18,7 @@ use crate::{
     },
     core::{
         bootstrap::bootstrap_server_connection_and_drop_privileges,
-        completion::mysql_user_completer,
+        completion::{mysql_user_completer, prefix_completer},
         protocol::{
             ClientToServerMessageStream, Request, Response, create_client_to_server_message_stream,
         },
@@ -87,6 +87,7 @@ pub enum Command {
 pub struct CreateArgs {
     /// The name of the USER(s) to create.
     #[arg(num_args = 1..)]
+    #[cfg_attr(not(feature = "suid-sgid-mode"), arg(add = ArgValueCompleter::new(prefix_completer)))]
     name: Vec<MySQLUser>,
 }
 
