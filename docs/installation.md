@@ -48,7 +48,9 @@ If you named it differently, please edit `/etc/muscl/muscl.conf` accordingly.
 
 For systemd-based setups, we recommend using `systemd-creds` to provide the database password, see the section below.
 
-## Setting the myscl password with `systemd-creds`
+## Setting the myscl password ...
+
+### ... with `systemd-creds`
 
 The debian package assumes that you will provide the password for `muscl`'s database user with `systemd-creds`.
 
@@ -75,6 +77,19 @@ If you are running systemd older than version 254 (see `systemctl --version`), y
 ```ini
 [Service]
 LoadCredentialEncrypted=muscl_mysql_password:/etc/credstore.encrypted/muscl_mysql_password
+```
+
+### ... without `systemd-creds`
+
+If you do not have systemd, or if you do not want to use `systemd-creds`, you can also set the password in any other file on the system.
+Be careful to ensure that the file is not readable by unprivileged users, as it would yield them too much access to the mysql server.
+Edit `/etc/muscl/muscl.conf` and set the `mysql_password_file` option below `[database]` to point to the file containing the password.
+
+If you are using systemd, you should also create an override to unset the `ImportCredential=` line. Run `systemctl edit muscl.service` and add the following lines:
+
+```ini
+[Service]
+ImportCredential=
 ```
 
 ## Configuring group denylists
