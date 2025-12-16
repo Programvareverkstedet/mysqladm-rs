@@ -1,3 +1,6 @@
+[authorization]
+group_denylist_file = "/etc/muscl/group_denylist.txt"
+
 [mysql]
 # Hostname and port of the database.
 host = "localhost"
@@ -22,6 +25,3 @@ password_file = "/run/credentials/muscl.service/muscl_mysql_password"
 
 # Database connection timeout in seconds
 timeout = 2
-
-[authorization]
-group_denylist_file = "/etc/muscl/group_denylist.txt"

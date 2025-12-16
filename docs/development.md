@@ -13,7 +13,7 @@ This will start a mariadb instance with the root password `secret`, and expose t
 Run the following command to create a configuration file with the default settings:
 
 ```bash
-cp ./example-config.toml ./config.toml
+cp ./assets/example-config.toml ./config.toml
 ```
 
 If you used the docker command above, you can use these settings as is, but if you are running mariadb/mysql on another host, port or with another password, adjust the corresponding fields in `config.toml`.

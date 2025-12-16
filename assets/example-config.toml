@@ -7,6 +7,9 @@
 # (see `systemctl status muscl.socket`)
 socket_path = "/run/muscl/muscl.sock"
 
+[authorization]
+group_denylist_file = "/etc/muscl/group_denylist.txt"
+
 [mysql]
 
 # Hostname and port of the database.
