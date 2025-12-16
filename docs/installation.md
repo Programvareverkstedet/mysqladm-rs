@@ -41,7 +41,12 @@ GRANT GRANT OPTION, CREATE, DROP ON *.* TO 'muscl'@'%';
 FLUSH PRIVILEGES;
 ```
 
-Now you should add the login credentials to the muscl configuration file, typically located at `/etc/muscl/config.toml`.
+Make sure to remember the username and password, as we will now need to add them to the muscl configuration.
+
+The configuration already comes preconfigured expecting the database user to be named `muscl`.
+If you named it differently, please edit `/etc/muscl/muscl.conf` accordingly.
+
+For systemd-based setups, we recommend using `systemd-creds` to provide the database password, see the section below.
 
 ## Setting the myscl password with `systemd-creds`
 
