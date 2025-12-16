@@ -17,19 +17,39 @@ pub use create_user::*;
 pub use drop_db::*;
 pub use drop_user::*;
 pub use edit_privs::*;
-use futures_util::SinkExt;
-use itertools::Itertools;
 pub use lock_user::*;
 pub use passwd_user::*;
 pub use show_db::*;
 pub use show_privs::*;
 pub use show_user::*;
-use tokio_stream::StreamExt;
 pub use unlock_user::*;
 
 use clap::Subcommand;
+use futures_util::SinkExt;
+use itertools::Itertools;
+use tokio_stream::StreamExt;
 
 use crate::core::protocol::{ClientToServerMessageStream, Request, Response};
+
+const EDIT_PRIVS_EXAMPLES: &str = color_print::cstr!(
+    r#"
+<bold><underline>Examples:</underline></bold>
+  # Open interactive editor to edit privileges
+  muscl edit-privs
+
+  # Set privileges `SELECT`, `INSERT`, and `UPDATE` for user `my_user` on database `my_db`
+  muscl edit-privs my_db my_user siu
+
+  # Set all privileges for user `my_other_user` on database `my_other_db`
+  muscl edit-privs my_other_db my_other_user A
+
+  # Add the `DELETE` privilege for user `my_user` on database `my_db`
+  muscl edit-privs my_db my_user +d
+
+  # Set miscellaneous privileges for multiple users on database `my_db`
+  muscl edit-privs -p my_db:my_user:siu -p my_db:my_other_user:+ct -p my_db:yet_another_user:-d
+"#
+);
 
 #[derive(Subcommand, Debug, Clone)]
 #[command(subcommand_required = true)]
@@ -101,27 +121,10 @@ pub enum ClientCommand {
     ///    where the privileges are a string of characters, each representing a single privilege.
     ///    (See the character-to-privilege mapping above.)
     ///
-    ///   Example usage of non-interactive mode:
-    ///
-    ///     Set privileges `SELECT`, `INSERT`, and `UPDATE` for user `my_user` on database `my_db`:
-    ///
-    ///       `muscl edit-privs my_db my_user siu`
-    ///
-    ///     Set all privileges for user `my_other_user` on database `my_other_db`:
-    ///
-    ///       `muscl edit-privs my_other_db my_other_user A`
-    ///
-    ///     Add the `DELETE` privilege for user `my_user` on database `my_db`:
-    ///
-    ///       `muscl edit-privs -p my_db my_user +d
-    ///
-    ///     Set miscellaneous privileges for multiple users on database `my_db`:
-    ///
-    ///       `muscl edit-privs -p my_db:my_user:siu -p my_db:my_other_user:+ct`
-    ///
     #[command(
         verbatim_doc_comment,
-        override_usage = "muscl edit-privs [OPTIONS] [ -p <DB_NAME:USER_NAME:[+-]PRIVILEGES>... | <DB_NAME> <USER_NAME> <[+-]PRIVILEGES> ]"
+        override_usage = "muscl edit-privs [OPTIONS] [ -p <DB_NAME:USER_NAME:[+-]PRIVILEGES>... | <DB_NAME> <USER_NAME> <[+-]PRIVILEGES> ]",
+        after_long_help = EDIT_PRIVS_EXAMPLES,
     )]
     EditPrivs(EditPrivsArgs),
 
