@@ -58,67 +58,88 @@ pub fn read_and_parse_group_denylist(denylist_path: &Path) -> anyhow::Result<Gro
 
         let parts: Vec<&str> = trimmed_line.splitn(2, ':').collect();
         if parts.len() != 2 {
-            anyhow::bail!(
+            tracing::warn!(
                 "Invalid format in denylist file at {:?} on line {}: {}",
                 denylist_path,
                 line_number + 1,
                 line
             );
+            continue;
         }
 
         match parts[0] {
             "gid" => {
-                let gid: u32 = parts[1].parse().with_context(|| {
-                    format!(
-                        "Invalid GID in denylist file at {:?} on line {}: {}",
-                        denylist_path,
-                        line_number + 1,
-                        parts[1]
-                    )
-                })?;
-                let group = Group::from_gid(nix::unistd::Gid::from_raw(gid))
-                    .context(format!(
-                        "Failed to get group for GID {} in denylist file at {:?} on line {}",
-                        gid,
-                        denylist_path,
-                        line_number + 1
-                    ))?
-                    .ok_or_else(|| {
-                        anyhow::anyhow!(
+                let gid: u32 = match parts[1].parse() {
+                    Ok(gid) => gid,
+                    Err(err) => {
+                        tracing::warn!(
+                            "Invalid GID '{}' in denylist file at {:?} on line {}: {}",
+                            parts[1],
+                            denylist_path,
+                            line_number + 1,
+                            err
+                        );
+                        continue;
+                    }
+                };
+                let group = match Group::from_gid(nix::unistd::Gid::from_raw(gid)) {
+                    Ok(Some(g)) => g,
+                    Ok(None) => {
+                        tracing::warn!(
                             "No group found for GID {} in denylist file at {:?} on line {}",
                             gid,
                             denylist_path,
                             line_number + 1
-                        )
-                    })?;
+                        );
+                        continue;
+                    }
+                    Err(err) => {
+                        tracing::warn!(
+                            "Failed to get group for GID {} in denylist file at {:?} on line {}: {}",
+                            gid,
+                            denylist_path,
+                            line_number + 1,
+                            err
+                        );
+                        continue;
+                    }
+                };
+
                 groups.insert(group.gid.as_raw());
             }
-            "group" => {
-                let group = Group::from_name(parts[1])
-                    .context(format!(
-                        "Failed to get group for name '{}' in denylist file at {:?} on line {}",
+            "group" => match Group::from_name(parts[1]) {
+                Ok(Some(group)) => {
+                    groups.insert(group.gid.as_raw());
+                }
+                Ok(None) => {
+                    tracing::warn!(
+                        "No group found for name '{}' in denylist file at {:?} on line {}",
                         parts[1],
                         denylist_path,
                         line_number + 1
-                    ))?
-                    .ok_or_else(|| {
-                        anyhow::anyhow!(
-                            "No group found for name '{}' in denylist file at {:?} on line {}",
-                            parts[1],
-                            denylist_path,
-                            line_number + 1
-                        )
-                    })?;
-                groups.insert(group.gid.as_raw());
-            }
+                    );
+                    continue;
+                }
+                Err(err) => {
+                    tracing::warn!(
+                        "Failed to get group for name '{}' in denylist file at {:?} on line {}: {}",
+                        parts[1],
+                        denylist_path,
+                        line_number + 1,
+                        err
+                    );
+                    continue;
+                }
+            },
             _ => {
-                anyhow::bail!(
+                tracing::warn!(
                     "Invalid prefix '{}' in denylist file at {:?} on line {}: {}",
                     parts[0],
                     denylist_path,
                     line_number + 1,
                     line
                 );
+                continue;
             }
         }
     }
