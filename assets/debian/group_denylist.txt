@@ -33,7 +33,6 @@ group:operator
 group:plocate
 group:plugdev
 group:polkitd
-group:postgres
 group:proxy
 group:render
 group:root
@@ -42,7 +41,6 @@ group:shadow
 group:src
 group:staff
 group:sudo
-group:sync
 group:sys
 group:systemd-journal
 group:systemd-network
