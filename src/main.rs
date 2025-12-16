@@ -62,9 +62,12 @@ const fn long_version() -> &'static str {
 
 const LONG_VERSION: &str = long_version();
 
-const EXAMPLES: &str = color_print::cstr!(
+const EXAMPLES: &str = const_format::concatcp!(
+    color_print::cstr!("<bold><underline>Examples:</underline></bold>"),
     r#"
-<bold><underline>Examples:</underline></bold>
+  # Display help information for any specific command
+  muscl <command> --help
+
   # Create two users 'alice_user1' and 'alice_user2'
   muscl create-user alice_user1 alice_user2
 
@@ -79,7 +82,7 @@ const EXAMPLES: &str = color_print::cstr!(
 
   # Show which users have privileges on which databases
   muscl show-privs
-"#
+"#,
 );
 
 const AFTER_LONG_HELP: &str = const_format::concatcp!(EXAMPLES, "\n", KIND_REGARDS,);
