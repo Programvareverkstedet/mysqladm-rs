@@ -58,7 +58,7 @@ jobs:
             CREATE_DEB_ARGS+=("--deb-version" "${{ inputs.deb_version }}")
           fi
 
-          ./create-deb.sh "${CREATE_DEB_ARGS[@]}"
+          ./scripts/create-deb.sh "${CREATE_DEB_ARGS[@]}"
 
       - name: Upload deb package artifact
         uses: actions/upload-artifact@v3

@@ -59,7 +59,7 @@ Before running this, you will need to install `cargo-deb` and make sure you have
 cargo install cargo-deb
 
 # Run the script to create the deb package
-./create-deb.sh
+./scripts/create-deb.sh
 
 # Inspect the resulting deb package
 dpkg --contents target/debian/muscl_*.deb
