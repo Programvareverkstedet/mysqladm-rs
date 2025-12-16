@@ -26,6 +26,10 @@ pub struct ShowDbArgs {
     /// Print the information as JSON
     #[arg(short, long)]
     json: bool,
+
+    /// Show sizes in bytes instead of human-readable format
+    #[arg(short, long)]
+    bytes: bool,
 }
 
 pub async fn show_databases(
@@ -60,7 +64,7 @@ pub async fn show_databases(
     if args.json {
         print_list_databases_output_status_json(&databases);
     } else {
-        print_list_databases_output_status(&databases);
+        print_list_databases_output_status(&databases, args.bytes);
 
         if databases.iter().any(|(_, res)| {
             matches!(

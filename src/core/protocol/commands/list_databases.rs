@@ -30,7 +30,10 @@ pub enum ListDatabasesError {
     MySqlError(String),
 }
 
-pub fn print_list_databases_output_status(output: &ListDatabasesResponse) {
+pub fn print_list_databases_output_status(
+    output: &ListDatabasesResponse,
+    display_size_as_bytes: bool,
+) {
     let mut final_database_list: Vec<&DatabaseRow> = Vec::new();
     for (db_name, db_result) in output {
         match db_result {
@@ -52,7 +55,11 @@ pub fn print_list_databases_output_status(output: &ListDatabasesResponse) {
             "Users",
             "Collation",
             "Character Set",
-            "Size (Bytes)"
+            if display_size_as_bytes {
+                "Size (Bytes)"
+            } else {
+                "Size"
+            }
         ]);
         for db in final_database_list {
             table.add_row(row![
@@ -61,7 +68,11 @@ pub fn print_list_databases_output_status(output: &ListDatabasesResponse) {
                 db.users.iter().map(|user| user.as_str()).join("\n"),
                 db.collation.as_deref().unwrap_or("N/A"),
                 db.character_set.as_deref().unwrap_or("N/A"),
-                db.size_bytes,
+                if display_size_as_bytes {
+                    db.size_bytes.to_string()
+                } else {
+                    humansize::format_size(db.size_bytes, humansize::DECIMAL)
+                }
             ]);
         }
 
