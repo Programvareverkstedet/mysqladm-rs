@@ -77,6 +77,28 @@ If you are running systemd older than version 254 (see `systemctl --version`), y
 LoadCredentialEncrypted=muscl_mysql_password:/etc/credstore.encrypted/muscl_mysql_password
 ```
 
+## Configuring group denylists
+
+In `/etc/muscl/muscl.conf`, you will find an option below `[authorization]` named `group_denylist_file`,
+which points to `/etc/muscl/group_denylist.txt` by default.
+
+In this file, you can add unix group names or GIDs to disallow the groups from being used as prefixes.
+
+The deb package comes with a default denylist that disallows some common system groups.
+
+The format of the file is one group name or GID per line. Lines starting with `#` and empty lines are ignored.
+
+```
+# Disallow using the 'root' group as a prefix
+gid:0
+
+# Disallow using the 'adm' group as a prefix
+group:adm
+```
+
+> [!NOTE]
+> If a user is named the same as a disallowed group, that user will still be able to use their username as a prefix.
+
 ## A note on minimum version requirements
 
 The muscl server will work with older versions of systemd, but the recommended version is 254 or newer.
