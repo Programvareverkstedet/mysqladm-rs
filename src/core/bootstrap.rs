@@ -176,6 +176,8 @@ pub fn drop_privs() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Bootstrap an internal server by forking a child process to run the server, giving it
+/// the other half of a Unix socket pair to communicate with the client process.
 fn bootstrap_internal_server_and_drop_privs(
     config_path: Option<PathBuf>,
 ) -> anyhow::Result<StdUnixStream> {
@@ -237,6 +239,10 @@ fn invoke_server_with_config(config_path: PathBuf) -> anyhow::Result<StdUnixStre
     }
 }
 
+/// Construct a MySQL connection pool that consists of exactly one connection.
+///
+/// This is used for the internal server in SUID/SGID mode, where the server session
+/// only ever will get a single client.
 async fn construct_single_connection_mysql_pool(
     config: &MysqlConfig,
 ) -> anyhow::Result<sqlx::MySqlPool> {
@@ -262,8 +268,10 @@ async fn construct_single_connection_mysql_pool(
     Ok(pool)
 }
 
-/// Run the server in the forked child process.
+/// Run a single server session in the forked process.
+///
 /// This function will not return, but will exit the process with a success code.
+/// The function assumes that it's caller has already forked the process.
 fn run_forked_server(
     config_path: PathBuf,
     server_socket: StdUnixStream,

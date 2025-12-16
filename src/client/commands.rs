@@ -171,6 +171,10 @@ pub async fn handle_command(
     }
 }
 
+/// Handle an unexpected or erroneous response from the server.
+///
+/// This function checks the provided response and returns an appropriate error message.
+/// It is typically used in `match` branches for expecting a specific response type from the server.
 pub fn erroneous_server_response(
     response: Option<Result<Response, std::io::Error>>,
 ) -> anyhow::Result<()> {
@@ -190,6 +194,11 @@ pub fn erroneous_server_response(
     }
 }
 
+/// Print a hint about which name prefixes the user is authorized to manage
+/// by querying the server for valid name prefixes.
+///
+/// This function should be used when an authorization error occurs,
+/// to help the user understand which databases or users they are allowed to manage.
 pub async fn print_authorization_owner_hint(
     server_connection: &mut ClientToServerMessageStream,
 ) -> anyhow::Result<()> {
