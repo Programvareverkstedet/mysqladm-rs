@@ -181,6 +181,20 @@ async fn session_handler_with_db_connection(
                 let result = check_authorization(dbs_or_users, unix_user).await;
                 Response::CheckAuthorization(result)
             }
+            Request::ListValidNamePrefixes => {
+                let mut result = Vec::with_capacity(unix_user.groups.len() + 1);
+                result.push(unix_user.username.to_owned());
+
+                for group in unix_user
+                    .groups
+                    .iter()
+                    .filter(|x| *x != &unix_user.username)
+                {
+                    result.push(group.to_owned());
+                }
+
+                Response::ListValidNamePrefixes(result)
+            }
             Request::CompleteDatabaseName(partial_database_name) => {
                 // TODO: more correct validation here
                 if !partial_database_name

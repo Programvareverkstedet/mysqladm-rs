@@ -11,6 +11,7 @@ mod list_all_users;
 mod list_databases;
 mod list_privileges;
 mod list_users;
+mod list_valid_name_prefixes;
 mod lock_users;
 mod modify_privileges;
 mod passwd_user;
@@ -29,6 +30,7 @@ pub use list_all_users::*;
 pub use list_databases::*;
 pub use list_privileges::*;
 pub use list_users::*;
+pub use list_valid_name_prefixes::*;
 pub use lock_users::*;
 pub use modify_privileges::*;
 pub use passwd_user::*;
@@ -68,6 +70,7 @@ pub fn create_client_to_server_message_stream(socket: UnixStream) -> ClientToSer
 pub enum Request {
     CheckAuthorization(CheckAuthorizationRequest),
 
+    ListValidNamePrefixes,
     CompleteDatabaseName(CompleteDatabaseNameRequest),
     CompleteUserName(CompleteUserNameRequest),
 
@@ -95,6 +98,7 @@ pub enum Request {
 pub enum Response {
     CheckAuthorization(CheckAuthorizationResponse),
 
+    ListValidNamePrefixes(ListValidNamePrefixesResponse),
     CompleteDatabaseName(CompleteDatabaseNameResponse),
     CompleteUserName(CompleteUserNameResponse),
 
