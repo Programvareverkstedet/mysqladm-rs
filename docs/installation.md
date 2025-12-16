@@ -16,7 +16,7 @@ sudo -i
 VERSION_CODENAME=$(lsb_release -cs)
 
 # Add the repository
-echo "deb [signed-by=/etc/apt/keyrings/pvvgit-projects.asc] https://git.pvv.ntnu.no/api/packages/Projects/debian $VERSION_CODENAME main" | tee -a /etc/apt/sources.list.d/gitea.list
+echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/pvvgit-projects.asc] https://git.pvv.ntnu.no/api/packages/Projects/debian $VERSION_CODENAME main" | tee -a /etc/apt/sources.list.d/gitea.list
 
 # Pull the repository key
 curl https://git.pvv.ntnu.no/api/packages/Projects/debian/repository.key -o /etc/apt/keyrings/pvvgit-projects.asc
