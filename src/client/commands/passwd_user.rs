@@ -116,5 +116,9 @@ pub async fn passwd_user(
 
     server_connection.send(Request::Exit).await?;
 
+    if result.is_err() {
+        std::process::exit(1);
+    }
+
     Ok(())
 }

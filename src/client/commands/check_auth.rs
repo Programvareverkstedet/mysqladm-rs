@@ -63,5 +63,9 @@ pub async fn check_authorization(
         print_check_authorization_output_status(&result);
     }
 
+    if result.values().any(|res| res.is_err()) {
+        std::process::exit(1);
+    }
+
     Ok(())
 }

@@ -26,10 +26,6 @@ pub struct ShowUserArgs {
     /// Print the information as JSON
     #[arg(short, long)]
     json: bool,
-
-    /// Return a non-zero exit code if any of the results were erroneous
-    #[arg(short, long)]
-    fail: bool,
 }
 
 pub async fn show_users(
@@ -83,7 +79,7 @@ pub async fn show_users(
 
     server_connection.send(Request::Exit).await?;
 
-    if args.fail && users.values().any(|result| result.is_err()) {
+    if users.values().any(|result| result.is_err()) {
         std::process::exit(1);
     }
 

@@ -26,10 +26,6 @@ pub struct ShowDbArgs {
     /// Print the information as JSON
     #[arg(short, long)]
     json: bool,
-
-    /// Return a non-zero exit code if any of the results were erroneous
-    #[arg(short, long)]
-    fail: bool,
 }
 
 pub async fn show_databases(
@@ -80,7 +76,7 @@ pub async fn show_databases(
 
     server_connection.send(Request::Exit).await?;
 
-    if args.fail && databases.values().any(|res| res.is_err()) {
+    if databases.values().any(|res| res.is_err()) {
         std::process::exit(1);
     }
 

@@ -33,10 +33,6 @@ pub struct ShowPrivsArgs {
     /// This flag has no effect when used with --json
     #[arg(short, long)]
     long: bool,
-
-    /// Return a non-zero exit code if any of the results were erroneous
-    #[arg(short, long)]
-    fail: bool,
 }
 
 pub async fn show_database_privileges(
@@ -88,7 +84,7 @@ pub async fn show_database_privileges(
 
     server_connection.send(Request::Exit).await?;
 
-    if args.fail && privilege_data.values().any(|res| res.is_err()) {
+    if privilege_data.values().any(|res| res.is_err()) {
         std::process::exit(1);
     }
 

@@ -291,6 +291,10 @@ pub async fn edit_database_privileges(
 
     server_connection.send(Request::Exit).await?;
 
+    if result.values().any(|res| res.is_err()) {
+        std::process::exit(1);
+    }
+
     Ok(())
 }
 

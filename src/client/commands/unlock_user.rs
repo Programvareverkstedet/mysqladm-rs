@@ -67,5 +67,9 @@ pub async fn unlock_users(
 
     server_connection.send(Request::Exit).await?;
 
+    if result.values().any(|result| result.is_err()) {
+        std::process::exit(1);
+    }
+
     Ok(())
 }
