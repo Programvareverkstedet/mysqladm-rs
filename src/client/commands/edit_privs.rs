@@ -19,7 +19,8 @@ use crate::{
             parse_privilege_data_from_editor_content, reduce_privilege_diffs,
         },
         protocol::{
-            ClientToServerMessageStream, ModifyDatabasePrivilegesError, Request, Response,
+            ClientToServerMessageStream, ListDatabasesError, ListUsersError,
+            ModifyDatabasePrivilegesError, Request, Response,
             print_modify_database_privileges_output_status, request_validation::ValidationError,
         },
         types::{MySQLDatabase, MySQLUser},
@@ -92,7 +93,7 @@ pub struct SinglePrivilegeEditArgs {
 async fn users_exist(
     server_connection: &mut ClientToServerMessageStream,
     privilege_diff: &BTreeSet<DatabasePrivilegesDiff>,
-) -> anyhow::Result<BTreeMap<MySQLUser, bool>> {
+) -> anyhow::Result<BTreeMap<MySQLUser, Result<(), ListUsersError>>> {
     let user_list = privilege_diff
         .iter()
         .map(|diff| diff.get_user_name().clone())
@@ -112,7 +113,7 @@ async fn users_exist(
 
     let result = result
         .into_iter()
-        .map(|(user, user_result)| (user, user_result.is_ok()))
+        .map(|(user, user_result)| (user, user_result.map(|_| ())))
         .collect();
 
     Ok(result)
@@ -121,7 +122,7 @@ async fn users_exist(
 async fn databases_exist(
     server_connection: &mut ClientToServerMessageStream,
     privilege_diff: &BTreeSet<DatabasePrivilegesDiff>,
-) -> anyhow::Result<BTreeMap<MySQLDatabase, bool>> {
+) -> anyhow::Result<BTreeMap<MySQLDatabase, Result<(), ListDatabasesError>>> {
     let database_list = privilege_diff
         .iter()
         .map(|diff| diff.get_database_name().clone())
@@ -141,12 +142,13 @@ async fn databases_exist(
 
     let result = result
         .into_iter()
-        .map(|(database, db_result)| (database, db_result.is_ok()))
+        .map(|(database, db_result)| (database, db_result.map(|_| ())))
         .collect();
 
     Ok(result)
 }
 
+// TODO: reduce the complexity of this function
 pub async fn edit_database_privileges(
     args: EditPrivsArgs,
     // NOTE: this is only used for backwards compat with mysql-admutils
@@ -219,10 +221,8 @@ pub async fn edit_database_privileges(
         diff_privileges(&existing_privilege_rows, &privileges_to_change)
     };
 
-    // TODO: validate authorization before existence
-
-    let user_existence_map = users_exist(&mut server_connection, &diffs).await?;
     let database_existence_map = databases_exist(&mut server_connection, &diffs).await?;
+    let user_existence_map = users_exist(&mut server_connection, &diffs).await?;
 
     let diffs = reduce_privilege_diffs(&existing_privilege_rows, diffs)?
         .into_iter()
@@ -230,14 +230,14 @@ pub async fn edit_database_privileges(
             let database_name = diff.get_database_name();
             let username = diff.get_user_name();
 
-            if let Some(false) = database_existence_map.get(database_name) {
-                println!("Database '{}' does not exist.", database_name);
+            if let Some(Err(err)) = database_existence_map.get(database_name) {
+                println!("{}", err.to_error_message(database_name));
                 println!("Skipping...");
                 return false;
             }
 
-            if let Some(false) = user_existence_map.get(username) {
-                println!("User '{}' does not exist.", username);
+            if let Some(Err(err)) = user_existence_map.get(username) {
+                println!("{}", err.to_error_message(username));
                 println!("Skipping...");
                 return false;
             }
@@ -245,6 +245,26 @@ pub async fn edit_database_privileges(
             true
         })
         .collect::<BTreeSet<_>>();
+
+    if database_existence_map.values().any(|res| {
+        matches!(
+            res,
+            Err(ListDatabasesError::ValidationError(
+                ValidationError::AuthorizationError(_)
+            ))
+        )
+    }) || user_existence_map.values().any(|res| {
+        matches!(
+            res,
+            Err(ListUsersError::ValidationError(
+                ValidationError::AuthorizationError(_)
+            ))
+        )
+    }) {
+        println!();
+        print_authorization_owner_hint(&mut server_connection).await?;
+        println!();
+    }
 
     if diffs.is_empty() {
         println!("No changes to make.");
