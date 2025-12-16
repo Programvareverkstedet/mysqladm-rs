@@ -35,8 +35,8 @@ pub fn print_unlock_users_output_status(output: &UnlockUsersResponse) {
                 println!("User '{}' unlocked successfully.", username);
             }
             Err(err) => {
-                println!("{}", err.to_error_message(username));
-                println!("Skipping...");
+                eprintln!("{}", err.to_error_message(username));
+                eprintln!("Skipping...");
             }
         }
         println!();

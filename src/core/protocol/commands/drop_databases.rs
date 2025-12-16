@@ -35,8 +35,8 @@ pub fn print_drop_databases_output_status(output: &DropDatabasesResponse) {
                 );
             }
             Err(err) => {
-                println!("{}", err.to_error_message(database_name));
-                println!("Skipping...");
+                eprintln!("{}", err.to_error_message(database_name));
+                eprintln!("Skipping...");
             }
         }
         println!();

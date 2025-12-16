@@ -32,8 +32,8 @@ pub fn print_create_users_output_status(output: &CreateUsersResponse) {
                 println!("User '{}' created successfully.", username);
             }
             Err(err) => {
-                println!("{}", err.to_error_message(username));
-                println!("Skipping...");
+                eprintln!("{}", err.to_error_message(username));
+                eprintln!("Skipping...");
             }
         }
         println!();

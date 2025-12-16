@@ -21,7 +21,7 @@ pub fn print_check_authorization_output_status(output: &CheckAuthorizationRespon
                 println!("'{}': OK", db_or_user.name());
             }
             Err(err) => {
-                println!(
+                eprintln!(
                     "'{}': {}",
                     db_or_user.name(),
                     err.to_error_message(db_or_user)

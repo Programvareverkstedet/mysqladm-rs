@@ -53,8 +53,11 @@ pub async fn drop_databases(
             ))
             .interact()?;
 
+        //
         if !confirmation {
+            // TODO: should we return with an error code here?
             println!("Aborting drop operation.");
+            server_connection.send(Request::Exit).await?;
             return Ok(());
         }
     }

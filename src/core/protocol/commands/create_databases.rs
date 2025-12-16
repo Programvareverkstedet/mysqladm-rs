@@ -32,8 +32,8 @@ pub fn print_create_databases_output_status(output: &CreateDatabasesResponse) {
                 println!("Database '{}' created successfully.", database_name);
             }
             Err(err) => {
-                println!("{}", err.to_error_message(database_name));
-                println!("Skipping...");
+                eprintln!("{}", err.to_error_message(database_name));
+                eprintln!("Skipping...");
             }
         }
         println!();

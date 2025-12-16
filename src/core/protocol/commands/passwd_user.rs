@@ -28,8 +28,8 @@ pub fn print_set_password_output_status(output: &SetUserPasswordResponse, userna
             println!("Password for user '{}' set successfully.", username);
         }
         Err(err) => {
-            println!("{}", err.to_error_message(username));
-            println!("Skipping...");
+            eprintln!("{}", err.to_error_message(username));
+            eprintln!("Skipping...");
         }
     }
 }

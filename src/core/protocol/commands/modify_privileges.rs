@@ -58,8 +58,8 @@ pub fn print_modify_database_privileges_output_status(output: &ModifyPrivilegesR
                 );
             }
             Err(err) => {
-                println!("{}", err.to_error_message(database_name, username));
-                println!("Skipping...");
+                eprintln!("{}", err.to_error_message(database_name, username));
+                eprintln!("Skipping...");
             }
         }
         println!();

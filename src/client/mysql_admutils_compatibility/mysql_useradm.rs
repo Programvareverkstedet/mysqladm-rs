@@ -292,7 +292,7 @@ async fn show_users(
         Some(Ok(Response::ListAllUsers(result))) => match result {
             Ok(users) => users,
             Err(err) => {
-                println!("Failed to list users: {:?}", err);
+                eprintln!("Failed to list users: {:?}", err);
                 return Ok(());
             }
         },

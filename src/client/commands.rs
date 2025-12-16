@@ -202,7 +202,7 @@ pub async fn print_authorization_owner_hint(
         response => return erroneous_server_response(response),
     };
 
-    println!(
+    eprintln!(
         "Note: You are allowed to manage databases and users with the following prefixes:\n{}",
         response.into_iter().map(|p| format!(" - {}", p)).join("\n")
     );
