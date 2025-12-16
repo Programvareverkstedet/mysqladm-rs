@@ -1,6 +1,7 @@
 [Unit]
 Description=Muscl MySQL admin tool
 Requires=muscl.socket
+After=mysql.service mariadb.service
 
 [Service]
 Type=notify
