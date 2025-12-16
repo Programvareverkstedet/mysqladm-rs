@@ -55,13 +55,26 @@ pub type ClientToServerMessageStream = SerdeFramed<
     Bincode<Response, Request>,
 >;
 
-pub fn create_server_to_client_message_stream(socket: UnixStream) -> ServerToClientMessageStream {
-    let length_delimited = Framed::new(socket, LengthDelimitedCodec::new());
+const MAX_REQUEST_FRAME_LENGTH: usize = 100 * 1024; // 100 KB
+const MAX_RESPONSE_FRAME_LENGTH: usize = 1024 * 1024; // 1 MB
+
+pub fn create_client_to_server_message_stream(socket: UnixStream) -> ClientToServerMessageStream {
+    let codec = {
+        let mut codec = LengthDelimitedCodec::new();
+        codec.set_max_frame_length(MAX_REQUEST_FRAME_LENGTH);
+        codec
+    };
+    let length_delimited = Framed::new(socket, codec);
     tokio_serde::Framed::new(length_delimited, Bincode::default())
 }
 
-pub fn create_client_to_server_message_stream(socket: UnixStream) -> ClientToServerMessageStream {
-    let length_delimited = Framed::new(socket, LengthDelimitedCodec::new());
+pub fn create_server_to_client_message_stream(socket: UnixStream) -> ServerToClientMessageStream {
+    let codec = {
+        let mut codec = LengthDelimitedCodec::new();
+        codec.set_max_frame_length(MAX_RESPONSE_FRAME_LENGTH);
+        codec
+    };
+    let length_delimited = Framed::new(socket, codec);
     tokio_serde::Framed::new(length_delimited, Bincode::default())
 }
 
