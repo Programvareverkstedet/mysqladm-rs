@@ -23,7 +23,7 @@ use crate::core::{
 pub type ListPrivilegesRequest = Option<Vec<MySQLDatabase>>;
 
 pub type ListPrivilegesResponse =
-    BTreeMap<MySQLDatabase, Result<Vec<DatabasePrivilegeRow>, GetDatabasesPrivilegeDataError>>;
+    BTreeMap<MySQLDatabase, Result<Vec<DatabasePrivilegeRow>, ListPrivilegesError>>;
 
 pub fn print_list_privileges_output_status(output: &ListPrivilegesResponse, long_names: bool) {
     let mut final_privs_map: BTreeMap<MySQLDatabase, Vec<DatabasePrivilegeRow>> = BTreeMap::new();
@@ -117,7 +117,7 @@ pub fn print_list_privileges_output_status_json(output: &ListPrivilegesResponse)
 }
 
 #[derive(Error, Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum GetDatabasesPrivilegeDataError {
+pub enum ListPrivilegesError {
     #[error("Validation error: {0}")]
     ValidationError(#[from] ValidationError),
 
@@ -128,16 +128,16 @@ pub enum GetDatabasesPrivilegeDataError {
     MySqlError(String),
 }
 
-impl GetDatabasesPrivilegeDataError {
+impl ListPrivilegesError {
     pub fn to_error_message(&self, database_name: &MySQLDatabase) -> String {
         match self {
-            GetDatabasesPrivilegeDataError::ValidationError(err) => {
+            ListPrivilegesError::ValidationError(err) => {
                 err.to_error_message(DbOrUser::Database(database_name.clone()))
             }
-            GetDatabasesPrivilegeDataError::DatabaseDoesNotExist => {
+            ListPrivilegesError::DatabaseDoesNotExist => {
                 format!("Database '{}' does not exist.", database_name)
             }
-            GetDatabasesPrivilegeDataError::MySqlError(err) => {
+            ListPrivilegesError::MySqlError(err) => {
                 format!("MySQL error: {}", err)
             }
         }
@@ -145,11 +145,9 @@ impl GetDatabasesPrivilegeDataError {
 
     pub fn error_type(&self) -> String {
         match self {
-            GetDatabasesPrivilegeDataError::ValidationError(err) => err.error_type(),
-            GetDatabasesPrivilegeDataError::DatabaseDoesNotExist => {
-                "database-does-not-exist".to_string()
-            }
-            GetDatabasesPrivilegeDataError::MySqlError(_) => "mysql-error".to_string(),
+            ListPrivilegesError::ValidationError(err) => err.error_type(),
+            ListPrivilegesError::DatabaseDoesNotExist => "database-does-not-exist".to_string(),
+            ListPrivilegesError::MySqlError(_) => "mysql-error".to_string(),
         }
     }
 }

@@ -9,7 +9,7 @@ use crate::{
     core::{
         completion::mysql_database_completer,
         protocol::{
-            ClientToServerMessageStream, GetDatabasesPrivilegeDataError, Request, Response,
+            ClientToServerMessageStream, ListPrivilegesError, Request, Response,
             print_list_privileges_output_status, print_list_privileges_output_status_json,
             request_validation::ValidationError,
         },
@@ -77,7 +77,7 @@ pub async fn show_database_privileges(
         if privilege_data.iter().any(|(_, res)| {
             matches!(
                 res,
-                Err(GetDatabasesPrivilegeDataError::ValidationError(
+                Err(ListPrivilegesError::ValidationError(
                     ValidationError::AuthorizationError(_)
                 ))
             )

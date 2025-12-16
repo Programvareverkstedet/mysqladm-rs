@@ -21,7 +21,7 @@ use crate::{
         completion::mysql_database_completer,
         database_privileges::DatabasePrivilegeRow,
         protocol::{
-            ClientToServerMessageStream, GetDatabasesPrivilegeDataError, Request, Response,
+            ClientToServerMessageStream, ListPrivilegesError, Request, Response,
             create_client_to_server_message_stream,
         },
         types::MySQLDatabase,
@@ -314,7 +314,7 @@ async fn show_databases(
             .map(
                 |(name, rows)| match rows.map(|rows| (name.to_owned(), rows)) {
                     Ok(rows) => Ok(rows),
-                    Err(GetDatabasesPrivilegeDataError::DatabaseDoesNotExist) => Ok((name, vec![])),
+                    Err(ListPrivilegesError::DatabaseDoesNotExist) => Ok((name, vec![])),
                     Err(err) => Err(format_show_database_error_message(err, &name)),
                 },
             )

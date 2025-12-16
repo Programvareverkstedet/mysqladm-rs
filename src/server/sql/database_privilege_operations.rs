@@ -28,9 +28,9 @@ use crate::{
             DatabasePrivilegesDiff,
         },
         protocol::{
-            DiffDoesNotApplyError, GetAllDatabasesPrivilegeDataError,
-            GetDatabasesPrivilegeDataError, ListAllPrivilegesResponse, ListPrivilegesResponse,
-            ModifyDatabasePrivilegesError, ModifyPrivilegesResponse,
+            DiffDoesNotApplyError, ListAllPrivilegesError, ListAllPrivilegesResponse,
+            ListPrivilegesError, ListPrivilegesResponse, ModifyDatabasePrivilegesError,
+            ModifyPrivilegesResponse,
             request_validation::{GroupDenylist, validate_db_or_user_request},
         },
         types::{DbOrUser, MySQLDatabase, MySQLUser},
@@ -153,7 +153,7 @@ pub async fn get_databases_privilege_data(
             unix_user,
             group_denylist,
         )
-        .map_err(GetDatabasesPrivilegeDataError::ValidationError)
+        .map_err(ListPrivilegesError::ValidationError)
         {
             results.insert(database_name.to_owned(), Err(err));
             continue;
@@ -165,14 +165,14 @@ pub async fn get_databases_privilege_data(
         {
             results.insert(
                 database_name.to_owned(),
-                Err(GetDatabasesPrivilegeDataError::DatabaseDoesNotExist),
+                Err(ListPrivilegesError::DatabaseDoesNotExist),
             );
             continue;
         }
 
         let result = unsafe_get_database_privileges(database_name, connection)
             .await
-            .map_err(|e| GetDatabasesPrivilegeDataError::MySqlError(e.to_string()));
+            .map_err(|e| ListPrivilegesError::MySqlError(e.to_string()));
 
         results.insert(database_name.to_owned(), result);
     }
@@ -210,7 +210,7 @@ pub async fn get_all_database_privileges(
         .bind(create_user_group_matching_regex(unix_user, group_denylist))
         .fetch_all(connection)
         .await
-        .map_err(|e| GetAllDatabasesPrivilegeDataError::MySqlError(e.to_string()));
+        .map_err(|e| ListAllPrivilegesError::MySqlError(e.to_string()));
 
     if let Err(e) = &result {
         tracing::error!("Failed to get all database privileges: {:?}", e);

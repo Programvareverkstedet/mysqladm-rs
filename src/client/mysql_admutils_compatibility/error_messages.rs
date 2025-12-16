@@ -1,7 +1,7 @@
 use crate::core::{
     protocol::{
         CreateDatabaseError, CreateUserError, DropDatabaseError, DropUserError,
-        GetDatabasesPrivilegeDataError, ListUsersError, request_validation::ValidationError,
+        ListPrivilegesError, ListUsersError, request_validation::ValidationError,
     },
     types::DbOrUser,
 };
@@ -161,28 +161,25 @@ pub fn handle_drop_database_error(error: DropDatabaseError, name: &str) {
     }
 }
 
-pub fn format_show_database_error_message(
-    error: GetDatabasesPrivilegeDataError,
-    name: &str,
-) -> String {
+pub fn format_show_database_error_message(error: ListPrivilegesError, name: &str) -> String {
     let argv0 = std::env::args()
         .next()
         .unwrap_or_else(|| "mysql-dbadm".to_string());
 
     match error {
-        GetDatabasesPrivilegeDataError::ValidationError(ValidationError::NameValidationError(
-            _,
-        )) => name_validation_error_to_error_message(DbOrUser::Database(name.into())),
-        GetDatabasesPrivilegeDataError::ValidationError(ValidationError::AuthorizationError(_)) => {
+        ListPrivilegesError::ValidationError(ValidationError::NameValidationError(_)) => {
+            name_validation_error_to_error_message(DbOrUser::Database(name.into()))
+        }
+        ListPrivilegesError::ValidationError(ValidationError::AuthorizationError(_)) => {
             authorization_error_message(DbOrUser::Database(name.into()))
         }
-        GetDatabasesPrivilegeDataError::MySqlError(err) => {
+        ListPrivilegesError::MySqlError(err) => {
             format!(
                 "{}: Failed to look up privileges for database '{}': {}",
                 argv0, name, err
             )
         }
-        GetDatabasesPrivilegeDataError::DatabaseDoesNotExist => {
+        ListPrivilegesError::DatabaseDoesNotExist => {
             format!("{}: Database '{}' doesn't exist.", argv0, name)
         }
     }
