@@ -85,6 +85,7 @@ const EXAMPLES: &str = const_format::concatcp!(
 "#,
 );
 
+const BEFORE_LONG_HELP: &str = const_format::concatcp!("\x1b[1m", ASCII_BANNER, "\x1b[0m");
 const AFTER_LONG_HELP: &str = const_format::concatcp!(EXAMPLES, "\n", KIND_REGARDS,);
 
 /// Database administration tool for non-admin users to manage their own MySQL databases and users.
@@ -101,7 +102,7 @@ const AFTER_LONG_HELP: &str = const_format::concatcp!(EXAMPLES, "\n", KIND_REGAR
   about,
   disable_help_subcommand = true,
   propagate_version = true,
-  before_long_help = ASCII_BANNER,
+  before_long_help = BEFORE_LONG_HELP,
   after_long_help = AFTER_LONG_HELP,
   long_version = LONG_VERSION,
   // NOTE: All non-registered "subcommands" are processed before Arg::parse() is called.
