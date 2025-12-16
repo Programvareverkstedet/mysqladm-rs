@@ -290,7 +290,7 @@ fn run_forked_server(
     let result: anyhow::Result<()> = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
-        .unwrap()
+        .context("Failed to start Tokio runtime")?
         .block_on(async {
             let socket = TokioUnixStream::from_std(server_socket)?;
             let db_pool = construct_single_connection_mysql_pool(&config.mysql).await?;
