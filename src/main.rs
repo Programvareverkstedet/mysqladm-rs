@@ -62,6 +62,28 @@ const fn long_version() -> &'static str {
 
 const LONG_VERSION: &str = long_version();
 
+const EXAMPLES: &str = color_print::cstr!(
+    r#"
+<bold><underline>Examples:</underline></bold>
+  # Create two users 'alice_user1' and 'alice_user2'
+  muscl create-user alice_user1 alice_user2
+
+  # Create two databases 'alice_db1' and 'alice_db2'
+  muscl create-db alice_db1 alice_db2
+
+  # Grant Select, Update, Insert and Delete privileges on 'alice_db1' to 'alice_user1'
+  muscl edit-privs alice_db1 alice_user1 +suid
+
+  # Show all databases
+  muscl show-db
+
+  # Show which users have privileges on which databases
+  muscl show-privs
+"#
+);
+
+const AFTER_LONG_HELP: &str = const_format::concatcp!(EXAMPLES, "\n", KIND_REGARDS,);
+
 /// Database administration tool for non-admin users to manage their own MySQL databases and users.
 ///
 /// This tool allows you to manage users and databases in MySQL.
@@ -77,7 +99,7 @@ const LONG_VERSION: &str = long_version();
   disable_help_subcommand = true,
   propagate_version = true,
   before_long_help = ASCII_BANNER,
-  after_long_help = KIND_REGARDS,
+  after_long_help = AFTER_LONG_HELP,
   long_version = LONG_VERSION,
   // NOTE: All non-registered "subcommands" are processed before Arg::parse() is called.
   subcommand_required = true,
