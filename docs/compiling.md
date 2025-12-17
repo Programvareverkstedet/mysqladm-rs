@@ -4,7 +4,8 @@ This document describes how to compile `muscl` from source code, along with othe
 
 ## Build
 
-To just compile muscl, there is not many special steps needed. You need to have a working Rust toolchain installed.
+To just compile `muscl`, there is not many special steps needed.
+You need to have a working [Rust toolchain](https://www.rust-lang.org/tools/install) installed.
 
 ```bash
 # Compile in debug mode
@@ -25,7 +26,7 @@ ls target/release-lto # muscl, mysql-dbadm, mysql-useradm, ...
 > [!NOTE]
 > This happens automatically when building the deb package, so you can skip this step if that's the goal.
 
-In order to generate shell completions that work correctly, you want to put `muscl` (or alias symlinks) in your `$PATH`.
+In order to generate shell completions that work correctly, you need to put `muscl` (or alias symlinks) in your `$PATH`.
 
 ```bash
 cargo build --release

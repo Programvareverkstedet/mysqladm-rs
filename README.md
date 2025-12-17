@@ -3,26 +3,30 @@
 
 # muscl 💪
 
-Dropping DBs (dumbbells) and having mysql spasms since 2024
+Dropping DBs (dumbbells) and having MySQL spasms since 2024
 
 ## What is this?
 
-This is a CLI tool that let's unprivileged users perform administrative operations on a MySQL DBMS, given the are authorized to perform the action on the database or database user in question.
-The default authorization mechanism is to only let the user perform these actions on databases and database users that are prefixed with their username,
-or with the name of any unix group that the user is a part of. i.e. `<user>_mydb`, `<user>_mydbuser`, or `<group>_myotherdb`.
+`muscl is a secure MySQL administration tool for multi-user systems.
+It allows unprivileged users to manage their own databases and database users without granting them direct access to the MySQL server.
+Authorization is handled by a prefix-based model tied to Unix users and groups, making it ideal for shared hosting environments, like university servers, tilde servers, or similar.
 
-The available administrative actions include:
+When a user requests an administrative operation, the `muscl` daemon verifies authenticates the user through unix socket peer credentials,
+and then checks the requested item name against the user's username and group list for authorization.
+The default authorization mechanism only allows the user to manage items prefixed with either their username or a group name.
+For example, a user would be allowed to manage items like `<user>_mydb`, `<user>_mydbuser`, or `<group>_myotherdb`.
+
+The available administrative operations include:
 
 - creating/listing/modifying/deleting databases and database users
 - modifying privileges for a database user on a database
 - changing the passwords of the database users
 - locking and unlocking database users
-- ... more to come
+- ... and more
 
-The software is designed to be run as a client and a server. The server has administrative access to the mysql server,
-and is responsible for authorizing any requests from the clients.
-
-This software is designed for multi-user servers, like tilde servers, university servers, etc.
+The software is designed to be run as a client and a server. The clients are run by the unprivileged users,
+and does not have direct access to the MySQL server. Instead, they communicate with the muscl server
+over a IPC, which then performs the requested operations on behalf of the clients.
 
 ## Documentation
 

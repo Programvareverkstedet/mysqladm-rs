@@ -1,6 +1,6 @@
 # Use with NixOS
 
-For NixOS, there is a module available via the nix flake. You can include it in your configuration like this:
+For NixOS, there is a NixOS module available in the nix flake. You can include it in your configuration like this:
 
 ```nix
 {
