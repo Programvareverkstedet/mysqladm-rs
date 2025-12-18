@@ -18,11 +18,28 @@ For example, a user would be allowed to manage items like `<user>_mydb`, `<user>
 
 The available administrative operations include:
 
-- creating/listing/modifying/deleting databases and database users
-- modifying privileges for a database user on a database
-- changing the passwords of the database users
-- locking and unlocking database users
-- ... and more
+```bash
+# Creating, listing, modifying, and deleting databases and database users
+muscl create-db user_testdb
+muscl create-user user_testuser --password strongpassword
+muscl show-db
+muscl drop-db group_projectdb
+
+# Modifying privileges for a database user on a database
+muscl edit-privs user_testdb user_testuser +suid
+muscl edit-privs -p user_testdb:user_testuser:A -p group_projectdb:otheruser:-d
+muscl show-privs --json
+
+# Changing the passwords of the database users
+muscl passwd-user user_testuser
+muscl passwd-user user_otheruser --stdin <<<"hunter2"
+
+# Locking and unlocking database users
+muscl lock-user user_testuser
+muscl unlock-user user_testuser
+
+# And more...
+```
 
 The software is designed to be run as a client and a server. The clients are run by the unprivileged users,
 and does not have direct access to the MySQL server. Instead, they communicate with the muscl server
