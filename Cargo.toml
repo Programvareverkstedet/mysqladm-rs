@@ -59,6 +59,7 @@ anyhow = "1.0.100"
 git2 = { version = "0.20.3", default-features = false }
 
 [dev-dependencies]
+pretty_assertions = "1.4.1"
 regex = "1.12.2"
 
 [features]
