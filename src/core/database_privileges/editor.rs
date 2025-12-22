@@ -15,8 +15,8 @@ use std::cmp::max;
 /// Generates a single row of the privileges table for the editor.
 pub fn format_privileges_line_for_editor(
     privs: &DatabasePrivilegeRow,
-    username_len: usize,
     database_name_len: usize,
+    username_len: usize,
 ) -> String {
     DATABASE_PRIVILEGE_FIELDS
         .into_iter()
@@ -105,8 +105,8 @@ pub fn generate_editor_content_from_privilege_data(
             lock_tables_priv: false,
             references_priv: false,
         },
-        longest_username,
         longest_database_name,
+        longest_username,
     );
 
     format!(
@@ -121,8 +121,8 @@ pub fn generate_editor_content_from_privilege_data(
                 .map(|privs| {
                     format_privileges_line_for_editor(
                         privs,
-                        longest_username,
                         longest_database_name,
+                        longest_username,
                     )
                 })
                 .join("\n")
@@ -321,6 +321,64 @@ pub fn parse_privilege_data_from_editor_content(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn test_generate_editor_content_from_privilege_data() {
+        let permissions = vec![
+            DatabasePrivilegeRow {
+                db: "test_abcdef".into(),
+                user: "test_abcdef".into(),
+                select_priv: true,
+                insert_priv: false,
+                update_priv: true,
+                delete_priv: false,
+                create_priv: true,
+                drop_priv: false,
+                alter_priv: true,
+                index_priv: false,
+                create_tmp_table_priv: true,
+                lock_tables_priv: false,
+                references_priv: true,
+            },
+            DatabasePrivilegeRow {
+                db: "test_abcdefghijlkmno".into(),
+                user: "test_abcdef".into(),
+                select_priv: true,
+                insert_priv: false,
+                update_priv: true,
+                delete_priv: false,
+                create_priv: true,
+                drop_priv: false,
+                alter_priv: true,
+                index_priv: false,
+                create_tmp_table_priv: true,
+                lock_tables_priv: false,
+                references_priv: true,
+            },
+        ];
+
+        let content = generate_editor_content_from_privilege_data(&permissions, "test", None);
+
+        let expected_lines = vec![
+            "",
+            "# Welcome to the privilege editor.",
+            "# Each line defines what privileges a single user has on a single database.",
+            "# The first two columns respectively represent the database name and the user, and the remaining columns are the privileges.",
+            "# If the user should have a certain privilege, write 'Y', otherwise write 'N'.",
+            "#",
+            "# Lines starting with '#' are comments and will be ignored.",
+            "",
+            "Database             User        Select Insert Update Delete Create Drop Alter Index Temp Lock References",
+            "test_abcdef          test_abcdef Y      N      Y      N      Y      N    Y     N     Y    N    Y",
+            "test_abcdefghijlkmno test_abcdef Y      N      Y      N      Y      N    Y     N     Y    N    Y",
+        ];
+
+        let generated_lines: Vec<&str> = content.lines().collect();
+
+        assert_eq!(generated_lines, expected_lines);
+    }
 
     #[test]
     fn ensure_generated_and_parsed_editor_content_is_equal() {
