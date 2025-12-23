@@ -403,14 +403,13 @@ async fn session_handler_with_db_connection(
             }
         };
 
-        // TODO: don't clone the response
         let response_to_display = match &response {
             Response::SetUserPassword(Err(SetPasswordError::MySqlError(_))) => {
-                Response::SetUserPassword(Err(SetPasswordError::MySqlError(
+                &Response::SetUserPassword(Err(SetPasswordError::MySqlError(
                     "<REDACTED>".to_string(),
                 )))
             }
-            response => response.to_owned(),
+            response => response,
         };
         tracing::debug!("Response: {:#?}", response_to_display);
 
