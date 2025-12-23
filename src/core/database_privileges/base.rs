@@ -1,5 +1,5 @@
 //! This module contains some base datastructures and functionality for dealing with
-//! database privileges in MySQL.
+//! database privileges in `MySQL`.
 
 use std::fmt;
 
@@ -49,6 +49,7 @@ pub struct DatabasePrivilegeRow {
 
 impl DatabasePrivilegeRow {
     /// Gets the value of a privilege by its name as a &str.
+    #[must_use]
     pub fn get_privilege_by_name(&self, name: &str) -> Option<bool> {
         match name {
             "select_priv" => Some(self.select_priv),
@@ -83,6 +84,7 @@ impl fmt::Display for DatabasePrivilegeRow {
 }
 
 /// Converts a database privilege field name to a human-readable name.
+#[must_use]
 pub fn db_priv_field_human_readable_name(name: &str) -> String {
     match name {
         "Db" => "Database".to_owned(),
@@ -98,12 +100,13 @@ pub fn db_priv_field_human_readable_name(name: &str) -> String {
         "create_tmp_table_priv" => "Temp".to_owned(),
         "lock_tables_priv" => "Lock".to_owned(),
         "references_priv" => "References".to_owned(),
-        _ => format!("Unknown({})", name),
+        _ => format!("Unknown({name})"),
     }
 }
 
 /// Converts a database privilege field name to a single-character name.
 /// (the characters from the cli privilege editor)
+#[must_use]
 pub fn db_priv_field_single_character_name(name: &str) -> &str {
     match name {
         "select_priv" => "s",

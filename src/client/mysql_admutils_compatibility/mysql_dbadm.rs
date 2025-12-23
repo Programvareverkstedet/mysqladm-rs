@@ -1,5 +1,6 @@
 use clap::{Parser, Subcommand};
 use clap_complete::ArgValueCompleter;
+use clap_verbosity_flag::Verbosity;
 use futures_util::{SinkExt, StreamExt};
 use std::os::unix::net::UnixStream as StdUnixStream;
 use std::path::PathBuf;
@@ -28,7 +29,7 @@ use crate::{
     },
 };
 
-const HELP_DB_PERM: &str = r#"
+const HELP_DB_PERM: &str = r"
 Edit permissions for the DATABASE(s). Running this command will
 spawn the editor stored in the $EDITOR environment variable.
 (pico will be used if the variable is unset)
@@ -49,7 +50,7 @@ The Y/N-values corresponds to the following mysql privileges:
   Temp       - Enables use of CREATE TEMPORARY TABLE
   Lock       - Enables use of LOCK TABLE
   References - Enables use of REFERENCES
-"#;
+";
 
 /// Create, drop or edit permissions for the DATABASE(s),
 /// as determined by the COMMAND.
@@ -156,25 +157,22 @@ pub fn main() -> anyhow::Result<()> {
     let args: Args = Args::parse();
 
     if args.help_editperm {
-        println!("{}", HELP_DB_PERM);
+        println!("{HELP_DB_PERM}");
         return Ok(());
     }
 
     let server_connection = bootstrap_server_connection_and_drop_privileges(
         args.server_socket_path,
         args.config,
-        Default::default(),
+        Verbosity::default(),
     )?;
 
-    let command = match args.command {
-        Some(command) => command,
-        None => {
-            println!(
-                "Try `{} --help' for more information.",
-                std::env::args().next().unwrap_or("mysql-dbadm".to_string())
-            );
-            return Ok(());
-        }
+    let Some(command) = args.command else {
+        println!(
+            "Try `{} --help' for more information.",
+            std::env::args().next().unwrap_or("mysql-dbadm".to_string())
+        );
+        return Ok(());
     };
 
     tokio_run_command(command, server_connection)?;
@@ -194,11 +192,11 @@ fn tokio_run_command(command: Command, server_connection: StdUnixStream) -> anyh
             while let Some(Ok(message)) = message_stream.next().await {
                 match message {
                     Response::Error(err) => {
-                        anyhow::bail!("{}", err);
+                        anyhow::bail!("{err}");
                     }
                     Response::Ready => break,
                     message => {
-                        eprintln!("Unexpected message from server: {:?}", message);
+                        eprintln!("Unexpected message from server: {message:?}");
                     }
                 }
             }
@@ -245,8 +243,8 @@ async fn create_databases(
 
     for (name, result) in result {
         match result {
-            Ok(()) => println!("Database {} created.", name),
-            Err(err) => handle_create_database_error(err, &name),
+            Ok(()) => println!("Database {name} created."),
+            Err(err) => handle_create_database_error(&err, &name),
         }
     }
 
@@ -271,8 +269,8 @@ async fn drop_databases(
 
     for (name, result) in result {
         match result {
-            Ok(()) => println!("Database {} dropped.", name),
-            Err(err) => handle_drop_database_error(err, &name),
+            Ok(()) => println!("Database {name} dropped."),
+            Err(err) => handle_drop_database_error(&err, &name),
         }
     }
 
@@ -312,24 +310,21 @@ async fn show_databases(
     let results: Vec<Result<(MySQLDatabase, Vec<DatabasePrivilegeRow>), String>> = match response {
         Some(Ok(Response::ListPrivileges(result))) => result
             .into_iter()
-            .map(
-                |(name, rows)| match rows.map(|rows| (name.to_owned(), rows)) {
-                    Ok(rows) => Ok(rows),
-                    Err(ListPrivilegesError::DatabaseDoesNotExist) => Ok((name, vec![])),
-                    Err(err) => Err(format_show_database_error_message(err, &name)),
-                },
-            )
+            .map(|(name, rows)| match rows.map(|rows| (name.clone(), rows)) {
+                Ok(rows) => Ok(rows),
+                Err(ListPrivilegesError::DatabaseDoesNotExist) => Ok((name, vec![])),
+                Err(err) => Err(format_show_database_error_message(&err, &name)),
+            })
             .collect(),
         response => return erroneous_server_response(response),
     };
 
-    results.into_iter().try_for_each(|result| match result {
-        Ok((name, rows)) => print_db_privs(&name, rows),
-        Err(err) => {
-            eprintln!("{}", err);
-            Ok(())
+    for result in results {
+        match result {
+            Ok((name, rows)) => print_db_privs(&name, rows),
+            Err(err) => eprintln!("{err}"),
         }
-    })?;
+    }
 
     Ok(())
 }
@@ -339,7 +334,7 @@ fn yn(value: bool) -> &'static str {
     if value { "Y" } else { "N" }
 }
 
-fn print_db_privs(name: &str, rows: Vec<DatabasePrivilegeRow>) -> anyhow::Result<()> {
+fn print_db_privs(name: &str, rows: Vec<DatabasePrivilegeRow>) {
     println!(
         concat!(
             "Database '{}':\n",
@@ -369,6 +364,4 @@ fn print_db_privs(name: &str, rows: Vec<DatabasePrivilegeRow>) -> anyhow::Result
             );
         }
     }
-
-    Ok(())
 }

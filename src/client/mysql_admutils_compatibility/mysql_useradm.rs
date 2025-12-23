@@ -75,7 +75,7 @@ pub enum Command {
     /// delete the USER(s).
     Delete(DeleteArgs),
 
-    /// change the MySQL password for the USER(s).
+    /// change the `MySQL` password for the USER(s).
     Passwd(PasswdArgs),
 
     /// give information about the USERS(s), or, if
@@ -119,17 +119,14 @@ pub struct ShowArgs {
 pub fn main() -> anyhow::Result<()> {
     let args: Args = Args::parse();
 
-    let command = match args.command {
-        Some(command) => command,
-        None => {
-            println!(
-                "Try `{} --help' for more information.",
-                std::env::args()
-                    .next()
-                    .unwrap_or("mysql-useradm".to_string())
-            );
-            return Ok(());
-        }
+    let Some(command) = args.command else {
+        println!(
+            "Try `{} --help' for more information.",
+            std::env::args()
+                .next()
+                .unwrap_or("mysql-useradm".to_string())
+        );
+        return Ok(());
     };
 
     let server_connection = bootstrap_server_connection_and_drop_privileges(
@@ -155,11 +152,11 @@ fn tokio_run_command(command: Command, server_connection: StdUnixStream) -> anyh
             while let Some(Ok(message)) = message_stream.next().await {
                 match message {
                     Response::Error(err) => {
-                        anyhow::bail!("{}", err);
+                        anyhow::bail!("{err}");
                     }
                     Response::Ready => break,
                     message => {
-                        eprintln!("Unexpected message from server: {:?}", message);
+                        eprintln!("Unexpected message from server: {message:?}");
                     }
                 }
             }
@@ -191,8 +188,8 @@ async fn create_user(
 
     for (name, result) in result {
         match result {
-            Ok(()) => println!("User '{}' created.", name),
-            Err(err) => handle_create_user_error(err, &name),
+            Ok(()) => println!("User '{name}' created."),
+            Err(err) => handle_create_user_error(&err, &name),
         }
     }
 
@@ -217,8 +214,8 @@ async fn drop_users(
 
     for (name, result) in result {
         match result {
-            Ok(()) => println!("User '{}' deleted.", name),
-            Err(err) => handle_drop_user_error(err, &name),
+            Ok(()) => println!("User '{name}' deleted."),
+            Err(err) => handle_drop_user_error(&err, &name),
         }
     }
 
@@ -248,7 +245,7 @@ async fn passwd_users(
         .filter_map(|(name, result)| match result {
             Ok(user) => Some(user),
             Err(err) => {
-                handle_list_users_error(err, &name);
+                handle_list_users_error(&err, &name);
                 None
             }
         })
@@ -256,7 +253,7 @@ async fn passwd_users(
 
     for user in users {
         let password = read_password_from_stdin_with_double_check(&user.user)?;
-        let message = Request::PasswdUser((user.user.to_owned(), password));
+        let message = Request::PasswdUser((user.user.clone(), password));
         server_connection.send(message).await?;
         match server_connection.next().await {
             Some(Ok(Response::SetUserPassword(result))) => match result {
@@ -292,7 +289,7 @@ async fn show_users(
         Some(Ok(Response::ListAllUsers(result))) => match result {
             Ok(users) => users,
             Err(err) => {
-                eprintln!("Failed to list users: {:?}", err);
+                eprintln!("Failed to list users: {err:?}");
                 return Ok(());
             }
         },
@@ -301,7 +298,7 @@ async fn show_users(
             .filter_map(|(name, result)| match result {
                 Ok(user) => Some(user),
                 Err(err) => {
-                    handle_list_users_error(err, &name);
+                    handle_list_users_error(&err, &name);
                     None
                 }
             })

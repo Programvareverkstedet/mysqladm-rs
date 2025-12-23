@@ -6,7 +6,7 @@ use crate::core::{
     types::DbOrUser,
 };
 
-pub fn name_validation_error_to_error_message(db_or_user: DbOrUser) -> String {
+pub fn name_validation_error_to_error_message(db_or_user: &DbOrUser) -> String {
     let argv0 = std::env::args().next().unwrap_or_else(|| match db_or_user {
         DbOrUser::Database(_) => "mysql-dbadm".to_string(),
         DbOrUser::User(_) => "mysql-useradm".to_string(),
@@ -23,7 +23,7 @@ pub fn name_validation_error_to_error_message(db_or_user: DbOrUser) -> String {
     )
 }
 
-pub fn authorization_error_message(db_or_user: DbOrUser) -> String {
+pub fn authorization_error_message(db_or_user: &DbOrUser) -> String {
     format!(
         "You are not in charge of mysql-{}: '{}'.  Skipping.",
         db_or_user.lowercased_noun(),
@@ -31,7 +31,7 @@ pub fn authorization_error_message(db_or_user: DbOrUser) -> String {
     )
 }
 
-pub fn handle_create_user_error(error: CreateUserError, name: &str) {
+pub fn handle_create_user_error(error: &CreateUserError, name: &str) {
     let argv0 = std::env::args()
         .next()
         .unwrap_or_else(|| "mysql-useradm".to_string());
@@ -39,22 +39,22 @@ pub fn handle_create_user_error(error: CreateUserError, name: &str) {
         CreateUserError::ValidationError(ValidationError::NameValidationError(_)) => {
             eprintln!(
                 "{}",
-                name_validation_error_to_error_message(DbOrUser::User(name.into()))
+                name_validation_error_to_error_message(&DbOrUser::User(name.into()))
             );
         }
         CreateUserError::ValidationError(ValidationError::AuthorizationError(_)) => {
             eprintln!(
                 "{}",
-                authorization_error_message(DbOrUser::User(name.into()))
+                authorization_error_message(&DbOrUser::User(name.into()))
             );
         }
         CreateUserError::MySqlError(_) | CreateUserError::UserAlreadyExists => {
-            eprintln!("{}: Failed to create user '{}'.", argv0, name);
+            eprintln!("{argv0}: Failed to create user '{name}'.");
         }
     }
 }
 
-pub fn handle_drop_user_error(error: DropUserError, name: &str) {
+pub fn handle_drop_user_error(error: &DropUserError, name: &str) {
     let argv0 = std::env::args()
         .next()
         .unwrap_or_else(|| "mysql-useradm".to_string());
@@ -62,22 +62,22 @@ pub fn handle_drop_user_error(error: DropUserError, name: &str) {
         DropUserError::ValidationError(ValidationError::NameValidationError(_)) => {
             eprintln!(
                 "{}",
-                name_validation_error_to_error_message(DbOrUser::User(name.into()))
+                name_validation_error_to_error_message(&DbOrUser::User(name.into()))
             );
         }
         DropUserError::ValidationError(ValidationError::AuthorizationError(_)) => {
             eprintln!(
                 "{}",
-                authorization_error_message(DbOrUser::User(name.into()))
+                authorization_error_message(&DbOrUser::User(name.into()))
             );
         }
         DropUserError::MySqlError(_) | DropUserError::UserDoesNotExist => {
-            eprintln!("{}: Failed to delete user '{}'.", argv0, name);
+            eprintln!("{argv0}: Failed to delete user '{name}'.");
         }
     }
 }
 
-pub fn handle_list_users_error(error: ListUsersError, name: &str) {
+pub fn handle_list_users_error(error: &ListUsersError, name: &str) {
     let argv0 = std::env::args()
         .next()
         .unwrap_or_else(|| "mysql-useradm".to_string());
@@ -85,30 +85,27 @@ pub fn handle_list_users_error(error: ListUsersError, name: &str) {
         ListUsersError::ValidationError(ValidationError::NameValidationError(_)) => {
             eprintln!(
                 "{}",
-                name_validation_error_to_error_message(DbOrUser::User(name.into()))
+                name_validation_error_to_error_message(&DbOrUser::User(name.into()))
             );
         }
         ListUsersError::ValidationError(ValidationError::AuthorizationError(_)) => {
             eprintln!(
                 "{}",
-                authorization_error_message(DbOrUser::User(name.into()))
+                authorization_error_message(&DbOrUser::User(name.into()))
             );
         }
         ListUsersError::UserDoesNotExist => {
-            eprintln!(
-                "{}: User '{}' does not exist. You must create it first.",
-                argv0, name,
-            );
+            eprintln!("{argv0}: User '{name}' does not exist. You must create it first.",);
         }
         ListUsersError::MySqlError(_) => {
-            eprintln!("{}: Failed to look up password for user '{}'", argv0, name);
+            eprintln!("{argv0}: Failed to look up password for user '{name}'");
         }
     }
 }
 
 // ----------------------------------------------------------------------------
 
-pub fn handle_create_database_error(error: CreateDatabaseError, name: &str) {
+pub fn handle_create_database_error(error: &CreateDatabaseError, name: &str) {
     let argv0 = std::env::args()
         .next()
         .unwrap_or_else(|| "mysql-dbadm".to_string());
@@ -116,26 +113,26 @@ pub fn handle_create_database_error(error: CreateDatabaseError, name: &str) {
         CreateDatabaseError::ValidationError(ValidationError::NameValidationError(_)) => {
             eprintln!(
                 "{}",
-                name_validation_error_to_error_message(DbOrUser::Database(name.into()))
+                name_validation_error_to_error_message(&DbOrUser::Database(name.into()))
             );
         }
 
         CreateDatabaseError::ValidationError(ValidationError::AuthorizationError(_)) => {
             eprintln!(
                 "{}",
-                authorization_error_message(DbOrUser::Database(name.into()))
+                authorization_error_message(&DbOrUser::Database(name.into()))
             );
         }
         CreateDatabaseError::MySqlError(_) => {
-            eprintln!("{}: Cannot create database '{}'.", argv0, name);
+            eprintln!("{argv0}: Cannot create database '{name}'.");
         }
         CreateDatabaseError::DatabaseAlreadyExists => {
-            eprintln!("{}: Database '{}' already exists.", argv0, name);
+            eprintln!("{argv0}: Database '{name}' already exists.");
         }
     }
 }
 
-pub fn handle_drop_database_error(error: DropDatabaseError, name: &str) {
+pub fn handle_drop_database_error(error: &DropDatabaseError, name: &str) {
     let argv0 = std::env::args()
         .next()
         .unwrap_or_else(|| "mysql-dbadm".to_string());
@@ -143,44 +140,41 @@ pub fn handle_drop_database_error(error: DropDatabaseError, name: &str) {
         DropDatabaseError::ValidationError(ValidationError::NameValidationError(_)) => {
             eprintln!(
                 "{}",
-                name_validation_error_to_error_message(DbOrUser::Database(name.into()))
+                name_validation_error_to_error_message(&DbOrUser::Database(name.into()))
             );
         }
         DropDatabaseError::ValidationError(ValidationError::AuthorizationError(_)) => {
             eprintln!(
                 "{}",
-                authorization_error_message(DbOrUser::Database(name.into()))
+                authorization_error_message(&DbOrUser::Database(name.into()))
             );
         }
         DropDatabaseError::MySqlError(_) => {
-            eprintln!("{}: Cannot drop database '{}'.", argv0, name);
+            eprintln!("{argv0}: Cannot drop database '{name}'.");
         }
         DropDatabaseError::DatabaseDoesNotExist => {
-            eprintln!("{}: Database '{}' doesn't exist.", argv0, name);
+            eprintln!("{argv0}: Database '{name}' doesn't exist.");
         }
     }
 }
 
-pub fn format_show_database_error_message(error: ListPrivilegesError, name: &str) -> String {
+pub fn format_show_database_error_message(error: &ListPrivilegesError, name: &str) -> String {
     let argv0 = std::env::args()
         .next()
         .unwrap_or_else(|| "mysql-dbadm".to_string());
 
     match error {
         ListPrivilegesError::ValidationError(ValidationError::NameValidationError(_)) => {
-            name_validation_error_to_error_message(DbOrUser::Database(name.into()))
+            name_validation_error_to_error_message(&DbOrUser::Database(name.into()))
         }
         ListPrivilegesError::ValidationError(ValidationError::AuthorizationError(_)) => {
-            authorization_error_message(DbOrUser::Database(name.into()))
+            authorization_error_message(&DbOrUser::Database(name.into()))
         }
         ListPrivilegesError::MySqlError(err) => {
-            format!(
-                "{}: Failed to look up privileges for database '{}': {}",
-                argv0, name, err
-            )
+            format!("{argv0}: Failed to look up privileges for database '{name}': {err}")
         }
         ListPrivilegesError::DatabaseDoesNotExist => {
-            format!("{}: Database '{}' doesn't exist.", argv0, name)
+            format!("{argv0}: Database '{name}' doesn't exist.")
         }
     }
 }

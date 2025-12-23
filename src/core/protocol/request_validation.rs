@@ -22,7 +22,8 @@ pub enum NameValidationError {
 }
 
 impl NameValidationError {
-    pub fn to_error_message(self, db_or_user: DbOrUser) -> String {
+    #[must_use]
+    pub fn to_error_message(self, db_or_user: &DbOrUser) -> String {
         match self {
             NameValidationError::EmptyString => {
                 format!("{} name can not be empty.", db_or_user.capitalized_noun())
@@ -32,15 +33,16 @@ impl NameValidationError {
                 db_or_user.capitalized_noun()
             ),
             NameValidationError::InvalidCharacters => format!(
-                indoc! {r#"
+                indoc! {r"
                   Invalid characters in {} name: '{}', only A-Z, a-z, 0-9, _ (underscore) and - (dash) are permitted.
-                "#},
+                "},
                 db_or_user.lowercased_noun(),
                 db_or_user.name(),
             ),
         }
     }
 
+    #[must_use]
     pub fn error_type(&self) -> &'static str {
         match self {
             NameValidationError::EmptyString => "empty-string",
@@ -64,7 +66,8 @@ pub enum AuthorizationError {
 }
 
 impl AuthorizationError {
-    pub fn to_error_message(self, db_or_user: DbOrUser) -> String {
+    #[must_use]
+    pub fn to_error_message(self, db_or_user: &DbOrUser) -> String {
         match self {
             AuthorizationError::IllegalPrefix => format!(
                 "Illegal {} name prefix: you are not allowed to manage databases or users prefixed with '{}'",
@@ -82,6 +85,7 @@ impl AuthorizationError {
         }
     }
 
+    #[must_use]
     pub fn error_type(&self) -> &'static str {
         match self {
             AuthorizationError::IllegalPrefix => "illegal-prefix",
@@ -102,7 +106,8 @@ pub enum ValidationError {
 }
 
 impl ValidationError {
-    pub fn to_error_message(&self, db_or_user: DbOrUser) -> String {
+    #[must_use]
+    pub fn to_error_message(&self, db_or_user: &DbOrUser) -> String {
         match self {
             ValidationError::NameValidationError(err) => err.to_error_message(db_or_user),
             ValidationError::AuthorizationError(err) => err.to_error_message(db_or_user),
@@ -116,6 +121,7 @@ impl ValidationError {
         }
     }
 
+    #[must_use]
     pub fn error_type(&self) -> String {
         match self {
             ValidationError::NameValidationError(err) => {
@@ -153,7 +159,7 @@ pub fn validate_authorization_by_unix_user(
     name: &str,
     user: &UnixUser,
 ) -> Result<(), AuthorizationError> {
-    let prefixes = std::iter::once(user.username.to_owned())
+    let prefixes = std::iter::once(user.username.clone())
         .chain(user.groups.iter().cloned())
         .collect::<Vec<String>>();
 
@@ -174,12 +180,12 @@ pub fn validate_authorization_by_prefixes(
 
     if prefixes
         .iter()
-        .filter(|p| name.starts_with(&(p.to_string() + "_")))
+        .filter(|p| name.starts_with(&((*p).clone() + "_")))
         .collect::<Vec<_>>()
         .is_empty()
     {
         return Err(AuthorizationError::IllegalPrefix);
-    };
+    }
 
     Ok(())
 }

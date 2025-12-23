@@ -44,7 +44,7 @@ impl MysqlConfig {
         if let Some(password_file) = &self.password_file {
             let password = fs::read_to_string(password_file)
                 .with_context(|| {
-                    format!("Failed to read MySQL password file at {:?}", password_file)
+                    format!("Failed to read MySQL password file at {password_file:?}")
                 })?
                 .trim()
                 .to_owned();
@@ -96,8 +96,8 @@ impl ServerConfig {
         tracing::debug!("Reading config file at {:?}", config_path);
 
         fs::read_to_string(config_path)
-            .context(format!("Failed to read config file at {:?}", config_path))
+            .context(format!("Failed to read config file at {config_path:?}"))
             .and_then(|c| toml::from_str(&c).context("Failed to parse config file"))
-            .context(format!("Failed to parse config file at {:?}", config_path))
+            .context(format!("Failed to parse config file at {config_path:?}"))
     }
 }

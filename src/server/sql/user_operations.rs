@@ -34,13 +34,13 @@ pub(super) async fn unsafe_user_exists(
     connection: &mut MySqlConnection,
 ) -> Result<bool, sqlx::Error> {
     let result = sqlx::query(
-        r#"
+        r"
           SELECT EXISTS(
             SELECT 1
             FROM `mysql`.`user`
             WHERE `User` = ?
           )
-        "#,
+        ",
     )
     .bind(db_user)
     .fetch_one(connection)
@@ -62,15 +62,15 @@ pub async fn complete_user_name(
     group_denylist: &GroupDenylist,
 ) -> Vec<MySQLUser> {
     let result = sqlx::query(
-        r#"
+        r"
           SELECT `User` AS `user`
           FROM `mysql`.`user`
           WHERE `User` REGEXP ?
             AND `User` LIKE ?
-        "#,
+        ",
     )
     .bind(create_user_group_matching_regex(unix_user, group_denylist))
-    .bind(format!("{}%", user_prefix))
+    .bind(format!("{user_prefix}%"))
     .fetch_all(connection)
     .await;
 
@@ -236,12 +236,12 @@ const DATABASE_USER_LOCK_STATUS_QUERY_MARIADB: &str = r#"
     AND `Host` = '%'
 "#;
 
-const DATABASE_USER_LOCK_STATUS_QUERY_MYSQL: &str = r#"
+const DATABASE_USER_LOCK_STATUS_QUERY_MYSQL: &str = r"
     SELECT `mysql`.`user`.`account_locked` = 'Y'
     FROM `mysql`.`user`
     WHERE `User` = ?
     AND `Host` = '%'
-"#;
+";
 
 // NOTE: this function is unsafe because it does no input validation.
 async fn database_user_is_locked_unsafe(
@@ -430,14 +430,14 @@ JOIN `global_priv` ON
   AND `user`.`Host` = `global_priv`.`Host`
 "#;
 
-const DB_USER_SELECT_STATEMENT_MYSQL: &str = r#"
+const DB_USER_SELECT_STATEMENT_MYSQL: &str = r"
 SELECT
   `user`.`User`,
   `user`.`Host`,
   `user`.`authentication_string` != '' AS `has_password`,
   `user`.`account_locked` = 'Y' AS `account_locked`
 FROM `user`
-"#;
+";
 
 pub async fn list_database_users(
     db_users: Vec<MySQLUser>,
@@ -472,8 +472,10 @@ pub async fn list_database_users(
             tracing::error!("Failed to list database user '{}': {:?}", &db_user, err);
         }
 
-        if let Ok(Some(user)) = result.as_mut() {
-            append_databases_where_user_has_privileges(user, &mut *connection).await;
+        if let Ok(Some(user)) = result.as_mut()
+            && let Err(err) = set_databases_where_user_has_privileges(user, &mut *connection).await
+        {
+            result = Err(err);
         }
 
         match result {
@@ -510,27 +512,33 @@ pub async fn list_all_database_users_for_unix_user(
 
     if let Ok(users) = result.as_mut() {
         for user in users {
-            append_databases_where_user_has_privileges(user, &mut *connection).await;
+            if let Err(mysql_error) =
+                set_databases_where_user_has_privileges(user, &mut *connection).await
+            {
+                return Err(ListAllUsersError::MySqlError(mysql_error.to_string()));
+            }
         }
     }
 
     result
 }
 
-pub async fn append_databases_where_user_has_privileges(
+/// This function sets the `databases` field of the given `DatabaseUser`
+/// where the user has any privileges.
+pub async fn set_databases_where_user_has_privileges(
     db_user: &mut DatabaseUser,
     connection: &mut MySqlConnection,
-) {
+) -> Result<(), sqlx::Error> {
     let database_list = sqlx::query(
         formatdoc!(
-            r#"
+            r"
                 SELECT `Db` AS `database`
                 FROM `db`
                 WHERE `User` = ? AND ({})
-            "#,
+            ",
             DATABASE_PRIVILEGE_FIELDS
                 .iter()
-                .map(|field| format!("`{}` = 'Y'", field))
+                .map(|field| format!("`{field}` = 'Y'"))
                 .join(" OR "),
         )
         .as_str(),
@@ -547,11 +555,11 @@ pub async fn append_databases_where_user_has_privileges(
         );
     }
 
-    db_user.databases = database_list
-        .map(|rows| {
-            rows.into_iter()
-                .map(|row| try_get_with_binary_fallback(&row, "database").unwrap())
-                .collect()
-        })
-        .unwrap_or_default();
+    db_user.databases = database_list.and_then(|rows| {
+        rows.into_iter()
+            .map(|row| try_get_with_binary_fallback(&row, "database"))
+            .collect::<Result<Vec<String>, sqlx::Error>>()
+    })?;
+
+    Ok(())
 }

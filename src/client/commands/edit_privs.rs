@@ -67,7 +67,7 @@ pub struct EditPrivsArgs {
 
 #[derive(Args, Debug, Clone)]
 pub struct SinglePrivilegeEditArgs {
-    /// The MySQL database to edit privileges for
+    /// The `MySQL` database to edit privileges for
     #[cfg_attr(not(feature = "suid-sgid-mode"), arg(add = ArgValueCompleter::new(mysql_database_completer)))]
     #[arg(
         value_name = "DB_NAME",
@@ -76,7 +76,7 @@ pub struct SinglePrivilegeEditArgs {
     )]
     pub db_name: Option<MySQLDatabase>,
 
-    /// The MySQL database to edit privileges for
+    /// The `MySQL` database to edit privileges for
     #[cfg_attr(not(feature = "suid-sgid-mode"), arg(add = ArgValueCompleter::new(mysql_user_completer)))]
     #[arg(value_name = "USER_NAME")]
     pub user_name: Option<MySQLUser>,
@@ -212,13 +212,13 @@ pub async fn edit_database_privileges(
         response => return erroneous_server_response(response),
     };
 
-    let diffs: BTreeSet<DatabasePrivilegesDiff> = if !privs.is_empty() {
-        let privileges_to_change = parse_privilege_tables(&privs)?;
-        create_or_modify_privilege_rows(&existing_privilege_rows, &privileges_to_change)?
-    } else {
+    let diffs: BTreeSet<DatabasePrivilegesDiff> = if privs.is_empty() {
         let privileges_to_change =
             edit_privileges_with_editor(&existing_privilege_rows, use_database.as_ref())?;
         diff_privileges(&existing_privilege_rows, &privileges_to_change)
+    } else {
+        let privileges_to_change = parse_privilege_tables(&privs)?;
+        create_or_modify_privilege_rows(&existing_privilege_rows, &privileges_to_change)?
     };
 
     let database_existence_map = databases_exist(&mut server_connection, &diffs).await?;
@@ -306,12 +306,12 @@ pub async fn edit_database_privileges(
             ))
         )
     }) {
-        print_authorization_owner_hint(&mut server_connection).await?
+        print_authorization_owner_hint(&mut server_connection).await?;
     }
 
     server_connection.send(Request::Exit).await?;
 
-    if result.values().any(|res| res.is_err()) {
+    if result.values().any(std::result::Result::is_err) {
         std::process::exit(1);
     }
 
@@ -328,8 +328,7 @@ fn parse_privilege_tables(
             priv_edit_entry
                 .as_database_privileges_diff()
                 .context(format!(
-                    "Failed parsing database privileges: `{}`",
-                    priv_edit_entry
+                    "Failed parsing database privileges: `{priv_edit_entry}`"
                 ))
         })
         .collect::<anyhow::Result<BTreeSet<DatabasePrivilegeRowDiff>>>()
@@ -352,7 +351,7 @@ fn edit_privileges_with_editor(
 
     match result {
         None => Ok(privilege_data.to_vec()),
-        Some(result) => parse_privilege_data_from_editor_content(result)
+        Some(result) => parse_privilege_data_from_editor_content(&result)
             .context("Could not parse privilege data from editor"),
     }
 }

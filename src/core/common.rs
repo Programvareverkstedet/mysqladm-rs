@@ -10,13 +10,13 @@ pub const DEFAULT_CONFIG_PATH: &str = "/etc/muscl/config.toml";
 pub const DEFAULT_SOCKET_PATH: &str = "/run/muscl/muscl.sock";
 
 pub const ASCII_BANNER: &str = indoc! {
-  r#"
+  r"
                                 __
      ____ ___  __  ____________/ /
     / __ `__ \/ / / / ___/ ___/ /
    / / / / / / /_/ (__  ) /__/ /
   /_/ /_/ /_/\__,_/____/\___/_/
-  "#
+  "
 };
 
 pub const KIND_REGARDS: &str = concat!(
@@ -95,7 +95,7 @@ impl UnixUser {
 
         Ok(UnixUser {
             username: libc_user.name,
-            groups: groups.iter().map(|g| g.name.to_owned()).collect(),
+            groups: groups.iter().map(|g| g.name.clone()).collect(),
         })
     }
 

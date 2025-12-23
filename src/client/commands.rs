@@ -39,13 +39,13 @@ pub fn erroneous_server_response(
 ) -> anyhow::Result<()> {
     match response {
         Some(Ok(Response::Error(e))) => {
-            anyhow::bail!("Server returned error: {}", e);
+            anyhow::bail!("Server returned error: {e}");
         }
         Some(Err(e)) => {
             anyhow::bail!(e);
         }
         Some(response) => {
-            anyhow::bail!("Unexpected response from server: {:?}", response);
+            anyhow::bail!("Unexpected response from server: {response:?}");
         }
         None => {
             anyhow::bail!("No response from server");
@@ -72,7 +72,7 @@ async fn print_authorization_owner_hint(
 
     eprintln!(
         "Note: You are allowed to manage databases and users with the following prefixes:\n{}",
-        response.into_iter().map(|p| format!(" - {}", p)).join("\n")
+        response.into_iter().map(|p| format!(" - {p}")).join("\n")
     );
 
     Ok(())

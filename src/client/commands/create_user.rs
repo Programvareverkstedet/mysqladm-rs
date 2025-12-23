@@ -22,7 +22,7 @@ use crate::{
 
 #[derive(Parser, Debug, Clone)]
 pub struct CreateUserArgs {
-    /// The MySQL user(s) to create
+    /// The `MySQL` user(s) to create
     #[arg(num_args = 1.., value_name = "USER_NAME")]
     #[cfg_attr(not(feature = "suid-sgid-mode"), arg(add = ArgValueCompleter::new(prefix_completer)))]
     username: Vec<MySQLUser>,
@@ -46,7 +46,7 @@ pub async fn create_users(
         anyhow::bail!("No usernames provided");
     }
 
-    let message = Request::CreateUsers(args.username.to_owned());
+    let message = Request::CreateUsers(args.username.clone());
     if let Err(err) = server_connection.send(message).await {
         server_connection.close().await.ok();
         anyhow::bail!(anyhow::Error::from(err).context("Failed to communicate with server"));
@@ -70,20 +70,19 @@ pub async fn create_users(
                 ))
             )
         }) {
-            print_authorization_owner_hint(&mut server_connection).await?
+            print_authorization_owner_hint(&mut server_connection).await?;
         }
 
         let successfully_created_users = result
             .iter()
-            .filter_map(|(username, result)| result.as_ref().ok().map(|_| username))
+            .filter_map(|(username, result)| result.as_ref().ok().map(|()| username))
             .collect::<Vec<_>>();
 
         for username in successfully_created_users {
             if !args.no_password
                 && Confirm::new()
                     .with_prompt(format!(
-                        "Do you want to set a password for user '{}'?",
-                        username
+                        "Do you want to set a password for user '{username}'?"
                     ))
                     .default(false)
                     .interact()?
@@ -98,7 +97,7 @@ pub async fn create_users(
 
                 match server_connection.next().await {
                     Some(Ok(Response::SetUserPassword(result))) => {
-                        print_set_password_output_status(&result, username)
+                        print_set_password_output_status(&result, username);
                     }
                     response => return erroneous_server_response(response),
                 }
@@ -110,7 +109,7 @@ pub async fn create_users(
 
     server_connection.send(Request::Exit).await?;
 
-    if result.values().any(|res| res.is_err()) {
+    if result.values().any(std::result::Result::is_err) {
         std::process::exit(1);
     }
 

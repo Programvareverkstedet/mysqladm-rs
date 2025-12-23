@@ -66,20 +66,22 @@ pub fn print_drop_databases_output_status_json(output: &DropDatabasesResponse) {
 }
 
 impl DropDatabaseError {
+    #[must_use]
     pub fn to_error_message(&self, database_name: &MySQLDatabase) -> String {
         match self {
             DropDatabaseError::ValidationError(err) => {
-                err.to_error_message(DbOrUser::Database(database_name.clone()))
+                err.to_error_message(&DbOrUser::Database(database_name.clone()))
             }
             DropDatabaseError::DatabaseDoesNotExist => {
-                format!("Database {} does not exist.", database_name)
+                format!("Database {database_name} does not exist.")
             }
             DropDatabaseError::MySqlError(err) => {
-                format!("MySQL error: {}", err)
+                format!("MySQL error: {err}")
             }
         }
     }
 
+    #[must_use]
     pub fn error_type(&self) -> String {
         match self {
             DropDatabaseError::ValidationError(err) => err.error_type(),

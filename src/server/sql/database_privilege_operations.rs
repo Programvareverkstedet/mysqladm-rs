@@ -50,12 +50,11 @@ use crate::{
 fn get_mysql_row_priv_field(row: &MySqlRow, position: usize) -> Result<bool, sqlx::Error> {
     let field = DATABASE_PRIVILEGE_FIELDS[position];
     let value = row.try_get(position)?;
-    match rev_yn(value) {
-        Some(val) => Ok(val),
-        _ => {
-            tracing::warn!(r#"Invalid value for privilege "{}": '{}'"#, field, value);
-            Ok(false)
-        }
+    if let Some(val) = rev_yn(value) {
+        Ok(val)
+    } else {
+        tracing::warn!(r#"Invalid value for privilege "{}": '{}'"#, field, value);
+        Ok(false)
     }
 }
 
@@ -147,7 +146,7 @@ pub async fn get_databases_privilege_data(
 ) -> ListPrivilegesResponse {
     let mut results = BTreeMap::new();
 
-    for database_name in database_names.iter() {
+    for database_name in &database_names {
         if let Err(err) = validate_db_or_user_request(
             &DbOrUser::Database(database_name.clone()),
             unix_user,
@@ -159,15 +158,22 @@ pub async fn get_databases_privilege_data(
             continue;
         }
 
-        if !unsafe_database_exists(database_name, connection)
-            .await
-            .unwrap()
-        {
-            results.insert(
-                database_name.to_owned(),
-                Err(ListPrivilegesError::DatabaseDoesNotExist),
-            );
-            continue;
+        match unsafe_database_exists(database_name, connection).await {
+            Ok(false) => {
+                results.insert(
+                    database_name.to_owned(),
+                    Err(ListPrivilegesError::DatabaseDoesNotExist),
+                );
+                continue;
+            }
+            Err(e) => {
+                results.insert(
+                    database_name.to_owned(),
+                    Err(ListPrivilegesError::MySqlError(e.to_string())),
+                );
+                continue;
+            }
+            Ok(true) => {}
         }
 
         let result = unsafe_get_database_privileges(database_name, connection)
@@ -185,13 +191,13 @@ pub async fn get_databases_privilege_data(
 /// TODO: make this constant
 fn get_all_db_privs_query() -> String {
     format!(
-        indoc! {r#"
+        indoc! {r"
             SELECT {} FROM `db` WHERE `db` IN
             (SELECT DISTINCT CAST(`SCHEMA_NAME` AS CHAR(64)) AS `database`
               FROM `information_schema`.`SCHEMATA`
               WHERE `SCHEMA_NAME` NOT IN ('information_schema', 'performance_schema', 'mysql', 'sys')
                 AND `SCHEMA_NAME` REGEXP ?)
-        "#},
+        "},
         DATABASE_PRIVILEGE_FIELDS
             .iter()
             .map(|field| quote_identifier(field))
@@ -234,25 +240,23 @@ async fn unsafe_apply_privilege_diff(
             let question_marks =
                 std::iter::repeat_n("?", DATABASE_PRIVILEGE_FIELDS.len()).join(",");
 
-            sqlx::query(
-                format!("INSERT INTO `db` ({}) VALUES ({})", tables, question_marks).as_str(),
-            )
-            .bind(p.db.to_string())
-            .bind(p.user.to_string())
-            .bind(yn(p.select_priv))
-            .bind(yn(p.insert_priv))
-            .bind(yn(p.update_priv))
-            .bind(yn(p.delete_priv))
-            .bind(yn(p.create_priv))
-            .bind(yn(p.drop_priv))
-            .bind(yn(p.alter_priv))
-            .bind(yn(p.index_priv))
-            .bind(yn(p.create_tmp_table_priv))
-            .bind(yn(p.lock_tables_priv))
-            .bind(yn(p.references_priv))
-            .execute(connection)
-            .await
-            .map(|_| ())
+            sqlx::query(format!("INSERT INTO `db` ({tables}) VALUES ({question_marks})").as_str())
+                .bind(p.db.to_string())
+                .bind(p.user.to_string())
+                .bind(yn(p.select_priv))
+                .bind(yn(p.insert_priv))
+                .bind(yn(p.update_priv))
+                .bind(yn(p.delete_priv))
+                .bind(yn(p.create_priv))
+                .bind(yn(p.drop_priv))
+                .bind(yn(p.alter_priv))
+                .bind(yn(p.index_priv))
+                .bind(yn(p.create_tmp_table_priv))
+                .bind(yn(p.lock_tables_priv))
+                .bind(yn(p.references_priv))
+                .execute(connection)
+                .await
+                .map(|_| ())
         }
         DatabasePrivilegesDiff::Modified(p) => {
             let changes = DATABASE_PRIVILEGE_FIELDS
@@ -274,25 +278,23 @@ async fn unsafe_apply_privilege_diff(
                 }
             }
 
-            sqlx::query(
-                format!("UPDATE `db` SET {} WHERE `Db` = ? AND `User` = ?", changes).as_str(),
-            )
-            .bind(p.select_priv.map(change_to_yn))
-            .bind(p.insert_priv.map(change_to_yn))
-            .bind(p.update_priv.map(change_to_yn))
-            .bind(p.delete_priv.map(change_to_yn))
-            .bind(p.create_priv.map(change_to_yn))
-            .bind(p.drop_priv.map(change_to_yn))
-            .bind(p.alter_priv.map(change_to_yn))
-            .bind(p.index_priv.map(change_to_yn))
-            .bind(p.create_tmp_table_priv.map(change_to_yn))
-            .bind(p.lock_tables_priv.map(change_to_yn))
-            .bind(p.references_priv.map(change_to_yn))
-            .bind(p.db.to_string())
-            .bind(p.user.to_string())
-            .execute(connection)
-            .await
-            .map(|_| ())
+            sqlx::query(format!("UPDATE `db` SET {changes} WHERE `Db` = ? AND `User` = ?").as_str())
+                .bind(p.select_priv.map(change_to_yn))
+                .bind(p.insert_priv.map(change_to_yn))
+                .bind(p.update_priv.map(change_to_yn))
+                .bind(p.delete_priv.map(change_to_yn))
+                .bind(p.create_priv.map(change_to_yn))
+                .bind(p.drop_priv.map(change_to_yn))
+                .bind(p.alter_priv.map(change_to_yn))
+                .bind(p.index_priv.map(change_to_yn))
+                .bind(p.create_tmp_table_priv.map(change_to_yn))
+                .bind(p.lock_tables_priv.map(change_to_yn))
+                .bind(p.references_priv.map(change_to_yn))
+                .bind(p.db.to_string())
+                .bind(p.user.to_string())
+                .execute(connection)
+                .await
+                .map(|_| ())
         }
         DatabasePrivilegesDiff::Deleted(p) => {
             sqlx::query("DELETE FROM `db` WHERE `Db` = ? AND `User` = ?")
@@ -433,23 +435,37 @@ pub async fn apply_privilege_diffs(
             continue;
         }
 
-        if !unsafe_database_exists(diff.get_database_name(), connection)
-            .await
-            .unwrap()
-        {
-            results.insert(
-                key,
-                Err(ModifyDatabasePrivilegesError::DatabaseDoesNotExist),
-            );
-            continue;
+        match unsafe_database_exists(diff.get_database_name(), connection).await {
+            Ok(false) => {
+                results.insert(
+                    key,
+                    Err(ModifyDatabasePrivilegesError::DatabaseDoesNotExist),
+                );
+                continue;
+            }
+            Err(e) => {
+                results.insert(
+                    key,
+                    Err(ModifyDatabasePrivilegesError::MySqlError(e.to_string())),
+                );
+                continue;
+            }
+            Ok(true) => {}
         }
 
-        if !unsafe_user_exists(diff.get_user_name(), connection)
-            .await
-            .unwrap()
-        {
-            results.insert(key, Err(ModifyDatabasePrivilegesError::UserDoesNotExist));
-            continue;
+        match unsafe_user_exists(diff.get_user_name(), connection).await {
+            Ok(false) => {
+                results.insert(key, Err(ModifyDatabasePrivilegesError::UserDoesNotExist));
+                continue;
+            }
+            Err(e) => {
+                results.insert(
+                    key,
+                    Err(ModifyDatabasePrivilegesError::MySqlError(e.to_string())),
+                );
+                continue;
+            }
+            Ok(true) => {}
         }
 
         if let Err(err) = validate_diff(&diff, connection).await {

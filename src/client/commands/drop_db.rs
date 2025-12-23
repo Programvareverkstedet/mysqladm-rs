@@ -19,7 +19,7 @@ use crate::{
 
 #[derive(Parser, Debug, Clone)]
 pub struct DropDbArgs {
-    /// The MySQL database(s) to drop
+    /// The `MySQL` database(s) to drop
     #[arg(num_args = 1.., value_name = "DB_NAME")]
     #[cfg_attr(not(feature = "suid-sgid-mode"), arg(add = ArgValueCompleter::new(mysql_database_completer)))]
     name: Vec<MySQLDatabase>,
@@ -47,7 +47,7 @@ pub async fn drop_databases(
                 "Are you sure you want to drop the databases?\n\n{}\n\nThis action cannot be undone",
                 args.name
                     .iter()
-                    .map(|d| format!("- {}", d))
+                    .map(|d| format!("- {d}"))
                     .collect::<Vec<_>>()
                     .join("\n")
             ))
@@ -62,7 +62,7 @@ pub async fn drop_databases(
         }
     }
 
-    let message = Request::DropDatabases(args.name.to_owned());
+    let message = Request::DropDatabases(args.name.clone());
     server_connection.send(message).await?;
 
     let result = match server_connection.next().await {
@@ -83,13 +83,13 @@ pub async fn drop_databases(
                 ))
             )
         }) {
-            print_authorization_owner_hint(&mut server_connection).await?
+            print_authorization_owner_hint(&mut server_connection).await?;
         }
-    };
+    }
 
     server_connection.send(Request::Exit).await?;
 
-    if result.values().any(|res| res.is_err()) {
+    if result.values().any(std::result::Result::is_err) {
         std::process::exit(1);
     }
 

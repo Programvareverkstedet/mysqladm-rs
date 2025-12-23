@@ -78,7 +78,7 @@ pub async fn session_handler(
                 ))
                 .await
                 .ok();
-            anyhow::bail!("Failed to get username from uid: {}", e);
+            anyhow::bail!("Failed to get username from uid: {e}");
         }
     };
 
@@ -181,10 +181,10 @@ async fn session_handler_with_db_connection(
             request => request.to_owned(),
         };
 
-        if request_to_display != Request::Exit {
-            tracing::info!("Received request: {:#?}", request_to_display);
-        } else {
+        if request_to_display == Request::Exit {
             tracing::debug!("Received request: {:#?}", request_to_display);
+        } else {
+            tracing::info!("Received request: {:#?}", request_to_display);
         }
 
         let response = match request {
@@ -194,22 +194,20 @@ async fn session_handler_with_db_connection(
             }
             Request::ListValidNamePrefixes => {
                 let mut result = Vec::with_capacity(unix_user.groups.len() + 1);
-                result.push(unix_user.username.to_owned());
+                result.push(unix_user.username.clone());
 
                 for group in get_user_filtered_groups(unix_user, group_denylist) {
-                    result.push(group.to_owned());
+                    result.push(group.clone());
                 }
 
                 Response::ListValidNamePrefixes(result)
             }
             Request::CompleteDatabaseName(partial_database_name) => {
                 // TODO: more correct validation here
-                if !partial_database_name
+                if partial_database_name
                     .chars()
                     .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
                 {
-                    Response::CompleteDatabaseName(vec![])
-                } else {
                     let result = complete_database_name(
                         partial_database_name,
                         unix_user,
@@ -219,16 +217,16 @@ async fn session_handler_with_db_connection(
                     )
                     .await;
                     Response::CompleteDatabaseName(result)
+                } else {
+                    Response::CompleteDatabaseName(vec![])
                 }
             }
             Request::CompleteUserName(partial_user_name) => {
                 // TODO: more correct validation here
-                if !partial_user_name
+                if partial_user_name
                     .chars()
                     .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
                 {
-                    Response::CompleteUserName(vec![])
-                } else {
                     let result = complete_user_name(
                         partial_user_name,
                         unix_user,
@@ -238,6 +236,8 @@ async fn session_handler_with_db_connection(
                     )
                     .await;
                     Response::CompleteUserName(result)
+                } else {
+                    Response::CompleteUserName(vec![])
                 }
             }
             Request::CreateDatabases(databases_names) => {
@@ -262,8 +262,8 @@ async fn session_handler_with_db_connection(
                 .await;
                 Response::DropDatabases(result)
             }
-            Request::ListDatabases(database_names) => match database_names {
-                Some(database_names) => {
+            Request::ListDatabases(database_names) => {
+                if let Some(database_names) = database_names {
                     let result = list_databases(
                         database_names,
                         unix_user,
@@ -273,8 +273,7 @@ async fn session_handler_with_db_connection(
                     )
                     .await;
                     Response::ListDatabases(result)
-                }
-                None => {
+                } else {
                     let result = list_all_databases_for_user(
                         unix_user,
                         db_connection,
@@ -284,9 +283,9 @@ async fn session_handler_with_db_connection(
                     .await;
                     Response::ListAllDatabases(result)
                 }
-            },
-            Request::ListPrivileges(database_names) => match database_names {
-                Some(database_names) => {
+            }
+            Request::ListPrivileges(database_names) => {
+                if let Some(database_names) = database_names {
                     let privilege_data = get_databases_privilege_data(
                         database_names,
                         unix_user,
@@ -296,8 +295,7 @@ async fn session_handler_with_db_connection(
                     )
                     .await;
                     Response::ListPrivileges(privilege_data)
-                }
-                None => {
+                } else {
                     let privilege_data = get_all_database_privileges(
                         unix_user,
                         db_connection,
@@ -307,7 +305,7 @@ async fn session_handler_with_db_connection(
                     .await;
                     Response::ListAllPrivileges(privilege_data)
                 }
-            },
+            }
             Request::ModifyPrivileges(database_privilege_diffs) => {
                 let result = apply_privilege_diffs(
                     BTreeSet::from_iter(database_privilege_diffs),
@@ -353,8 +351,8 @@ async fn session_handler_with_db_connection(
                 .await;
                 Response::SetUserPassword(result)
             }
-            Request::ListUsers(db_users) => match db_users {
-                Some(db_users) => {
+            Request::ListUsers(db_users) => {
+                if let Some(db_users) = db_users {
                     let result = list_database_users(
                         db_users,
                         unix_user,
@@ -364,8 +362,7 @@ async fn session_handler_with_db_connection(
                     )
                     .await;
                     Response::ListUsers(result)
-                }
-                None => {
+                } else {
                     let result = list_all_database_users_for_unix_user(
                         unix_user,
                         db_connection,
@@ -375,7 +372,7 @@ async fn session_handler_with_db_connection(
                     .await;
                     Response::ListAllUsers(result)
                 }
-            },
+            }
             Request::LockUsers(db_users) => {
                 let result = lock_database_users(
                     db_users,

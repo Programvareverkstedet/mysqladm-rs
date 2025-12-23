@@ -25,7 +25,7 @@ pub enum SetPasswordError {
 pub fn print_set_password_output_status(output: &SetUserPasswordResponse, username: &MySQLUser) {
     match output {
         Ok(()) => {
-            println!("Password for user '{}' set successfully.", username);
+            println!("Password for user '{username}' set successfully.");
         }
         Err(err) => {
             eprintln!("{}", err.to_error_message(username));
@@ -35,21 +35,23 @@ pub fn print_set_password_output_status(output: &SetUserPasswordResponse, userna
 }
 
 impl SetPasswordError {
+    #[must_use]
     pub fn to_error_message(&self, username: &MySQLUser) -> String {
         match self {
             SetPasswordError::ValidationError(err) => {
-                err.to_error_message(DbOrUser::User(username.clone()))
+                err.to_error_message(&DbOrUser::User(username.clone()))
             }
             SetPasswordError::UserDoesNotExist => {
-                format!("User '{}' does not exist.", username)
+                format!("User '{username}' does not exist.")
             }
             SetPasswordError::MySqlError(err) => {
-                format!("MySQL error: {}", err)
+                format!("MySQL error: {err}")
             }
         }
     }
 
     #[allow(dead_code)]
+    #[must_use]
     pub fn error_type(&self) -> String {
         match self {
             SetPasswordError::ValidationError(err) => err.error_type(),

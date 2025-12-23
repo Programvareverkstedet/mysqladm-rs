@@ -32,7 +32,7 @@ pub fn print_unlock_users_output_status(output: &UnlockUsersResponse) {
     for (username, result) in output {
         match result {
             Ok(()) => {
-                println!("User '{}' unlocked successfully.", username);
+                println!("User '{username}' unlocked successfully.");
             }
             Err(err) => {
                 eprintln!("{}", err.to_error_message(username));
@@ -66,23 +66,25 @@ pub fn print_unlock_users_output_status_json(output: &UnlockUsersResponse) {
 }
 
 impl UnlockUserError {
+    #[must_use]
     pub fn to_error_message(&self, username: &MySQLUser) -> String {
         match self {
             UnlockUserError::ValidationError(err) => {
-                err.to_error_message(DbOrUser::User(username.clone()))
+                err.to_error_message(&DbOrUser::User(username.clone()))
             }
             UnlockUserError::UserDoesNotExist => {
-                format!("User '{}' does not exist.", username)
+                format!("User '{username}' does not exist.")
             }
             UnlockUserError::UserIsAlreadyUnlocked => {
-                format!("User '{}' is already unlocked.", username)
+                format!("User '{username}' is already unlocked.")
             }
             UnlockUserError::MySqlError(err) => {
-                format!("MySQL error: {}", err)
+                format!("MySQL error: {err}")
             }
         }
     }
 
+    #[must_use]
     pub fn error_type(&self) -> String {
         match self {
             UnlockUserError::ValidationError(err) => err.error_type(),

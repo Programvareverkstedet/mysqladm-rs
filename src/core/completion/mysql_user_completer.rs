@@ -12,6 +12,7 @@ use crate::{
     },
 };
 
+#[must_use]
 pub fn mysql_user_completer(current: &std::ffi::OsStr) -> Vec<CompletionCandidate> {
     match tokio::runtime::Builder::new_current_thread()
         .enable_all()
@@ -20,18 +21,18 @@ pub fn mysql_user_completer(current: &std::ffi::OsStr) -> Vec<CompletionCandidat
         Ok(runtime) => match runtime.block_on(mysql_user_completer_(current)) {
             Ok(completions) => completions,
             Err(err) => {
-                eprintln!("Error getting MySQL user completions: {}", err);
+                eprintln!("Error getting MySQL user completions: {err}");
                 Vec::new()
             }
         },
         Err(err) => {
-            eprintln!("Error starting Tokio runtime: {}", err);
+            eprintln!("Error starting Tokio runtime: {err}");
             Vec::new()
         }
     }
 }
 
-/// Connect to the server to get MySQL user completions.
+/// Connect to the server to get `MySQL` user completions.
 async fn mysql_user_completer_(
     current: &std::ffi::OsStr,
 ) -> anyhow::Result<Vec<CompletionCandidate>> {
@@ -44,11 +45,11 @@ async fn mysql_user_completer_(
     while let Some(Ok(message)) = server_connection.next().await {
         match message {
             Response::Error(err) => {
-                anyhow::bail!("{}", err);
+                anyhow::bail!("{err}");
             }
             Response::Ready => break,
             message => {
-                eprintln!("Unexpected message from server: {:?}", message);
+                eprintln!("Unexpected message from server: {message:?}");
             }
         }
     }
@@ -62,7 +63,7 @@ async fn mysql_user_completer_(
 
     let result = match server_connection.next().await {
         Some(Ok(Response::CompleteUserName(suggestions))) => suggestions,
-        response => return erroneous_server_response(response).map(|_| vec![]),
+        response => return erroneous_server_response(response).map(|()| vec![]),
     };
 
     server_connection.send(Request::Exit).await?;

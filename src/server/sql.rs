@@ -3,11 +3,13 @@ pub mod database_privilege_operations;
 pub mod user_operations;
 
 #[inline]
+#[must_use]
 pub fn quote_literal(s: &str) -> String {
     format!("'{}'", s.replace('\'', r"\'"))
 }
 
 #[inline]
+#[must_use]
 pub fn quote_identifier(s: &str) -> String {
     format!("`{}`", s.replace('`', r"\`"))
 }

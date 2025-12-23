@@ -14,7 +14,7 @@ use tokio_stream::StreamExt;
 
 #[derive(Parser, Debug, Clone)]
 pub struct CheckAuthArgs {
-    /// The MySQL database(s) or user(s) to check authorization for
+    /// The `MySQL` database(s) or user(s) to check authorization for
     #[arg(num_args = 1.., value_name = "NAME")]
     name: Vec<String>,
 
@@ -63,7 +63,7 @@ pub async fn check_authorization(
         print_check_authorization_output_status(&result);
     }
 
-    if result.values().any(|res| res.is_err()) {
+    if result.values().any(std::result::Result::is_err) {
         std::process::exit(1);
     }
 

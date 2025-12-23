@@ -32,7 +32,7 @@ pub fn print_lock_users_output_status(output: &LockUsersResponse) {
     for (username, result) in output {
         match result {
             Ok(()) => {
-                println!("User '{}' locked successfully.", username);
+                println!("User '{username}' locked successfully.");
             }
             Err(err) => {
                 eprintln!("{}", err.to_error_message(username));
@@ -66,23 +66,25 @@ pub fn print_lock_users_output_status_json(output: &LockUsersResponse) {
 }
 
 impl LockUserError {
+    #[must_use]
     pub fn to_error_message(&self, username: &MySQLUser) -> String {
         match self {
             LockUserError::ValidationError(err) => {
-                err.to_error_message(DbOrUser::User(username.clone()))
+                err.to_error_message(&DbOrUser::User(username.clone()))
             }
             LockUserError::UserDoesNotExist => {
-                format!("User '{}' does not exist.", username)
+                format!("User '{username}' does not exist.")
             }
             LockUserError::UserIsAlreadyLocked => {
-                format!("User '{}' is already locked.", username)
+                format!("User '{username}' is already locked.")
             }
             LockUserError::MySqlError(err) => {
-                format!("MySQL error: {}", err)
+                format!("MySQL error: {err}")
             }
         }
     }
 
+    #[must_use]
     pub fn error_type(&self) -> String {
         match self {
             LockUserError::ValidationError(err) => err.error_type(),

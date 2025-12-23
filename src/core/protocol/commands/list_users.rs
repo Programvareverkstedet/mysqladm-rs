@@ -97,20 +97,22 @@ pub fn print_list_users_output_status_json(output: &ListUsersResponse) {
 }
 
 impl ListUsersError {
+    #[must_use]
     pub fn to_error_message(&self, username: &MySQLUser) -> String {
         match self {
             ListUsersError::ValidationError(err) => {
-                err.to_error_message(DbOrUser::User(username.clone()))
+                err.to_error_message(&DbOrUser::User(username.clone()))
             }
             ListUsersError::UserDoesNotExist => {
-                format!("User '{}' does not exist.", username)
+                format!("User '{username}' does not exist.")
             }
             ListUsersError::MySqlError(err) => {
-                format!("MySQL error: {}", err)
+                format!("MySQL error: {err}")
             }
         }
     }
 
+    #[must_use]
     pub fn error_type(&self) -> String {
         match self {
             ListUsersError::ValidationError(err) => err.error_type(),

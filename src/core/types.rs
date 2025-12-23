@@ -112,6 +112,7 @@ pub enum DbOrUser {
 }
 
 impl DbOrUser {
+    #[must_use]
     pub fn lowercased_noun(&self) -> &'static str {
         match self {
             DbOrUser::Database(_) => "database",
@@ -119,6 +120,7 @@ impl DbOrUser {
         }
     }
 
+    #[must_use]
     pub fn capitalized_noun(&self) -> &'static str {
         match self {
             DbOrUser::Database(_) => "Database",
@@ -126,6 +128,7 @@ impl DbOrUser {
         }
     }
 
+    #[must_use]
     pub fn name(&self) -> &str {
         match self {
             DbOrUser::Database(db) => db.as_str(),
@@ -133,6 +136,7 @@ impl DbOrUser {
         }
     }
 
+    #[must_use]
     pub fn prefix(&self) -> &str {
         match self {
             DbOrUser::Database(db) => db.split('_').next().unwrap_or("?"),

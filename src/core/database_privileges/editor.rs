@@ -13,6 +13,7 @@ use itertools::Itertools;
 use std::cmp::max;
 
 /// Generates a single row of the privileges table for the editor.
+#[must_use]
 pub fn format_privileges_line_for_editor(
     privs: &DatabasePrivilegeRow,
     database_name_len: usize,
@@ -25,6 +26,7 @@ pub fn format_privileges_line_for_editor(
             "User" => format!("{:width$}", privs.user, width = username_len),
             privilege => format!(
                 "{:width$}",
+                // SAFETY: unwrap is safe here because the field names are static
                 yn(privs.get_privilege_by_name(privilege).unwrap()),
                 width = db_priv_field_human_readable_name(privilege).len()
             ),
@@ -34,14 +36,14 @@ pub fn format_privileges_line_for_editor(
         .to_string()
 }
 
-const EDITOR_COMMENT: &str = r#"
+const EDITOR_COMMENT: &str = r"
 # Welcome to the privilege editor.
 # Each line defines what privileges a single user has on a single database.
 # The first two columns respectively represent the database name and the user, and the remaining columns are the privileges.
 # If the user should have a certain privilege, write 'Y', otherwise write 'N'.
 #
 # Lines starting with '#' are comments and will be ignored.
-"#;
+";
 
 /// Generates the content for the privilege editor.
 ///
@@ -52,9 +54,9 @@ pub fn generate_editor_content_from_privilege_data(
     unix_user: &str,
     database_name: Option<&MySQLDatabase>,
 ) -> String {
-    let example_user = format!("{}_user", unix_user);
+    let example_user = format!("{unix_user}_user");
     let example_db = database_name
-        .unwrap_or(&format!("{}_db", unix_user).into())
+        .unwrap_or(&format!("{unix_user}_db").into())
         .to_string();
 
     // NOTE: `.max()`` fails when the iterator is empty.
@@ -114,7 +116,7 @@ pub fn generate_editor_content_from_privilege_data(
         EDITOR_COMMENT,
         header.join(" "),
         if privilege_data.is_empty() {
-            format!("# {}", example_line)
+            format!("# {example_line}")
         } else {
             privilege_data
                 .iter()
@@ -145,11 +147,8 @@ enum PrivilegeRowParseResult {
 fn parse_privilege_cell_from_editor(yn: &str, name: &str) -> anyhow::Result<bool> {
     let human_readable_name = db_priv_field_human_readable_name(name);
     rev_yn(yn)
-        .ok_or_else(|| anyhow!("Expected Y or N, found {}", yn))
-        .context(format!(
-            "Could not parse '{}' privilege",
-            human_readable_name
-        ))
+        .ok_or_else(|| anyhow!("Expected Y or N, found {yn}"))
+        .context(format!("Could not parse '{human_readable_name}' privilege"))
 }
 
 #[inline]
@@ -272,12 +271,12 @@ fn parse_privilege_row_from_editor(row: &str) -> PrivilegeRowParseResult {
 }
 
 pub fn parse_privilege_data_from_editor_content(
-    content: String,
+    content: &str,
 ) -> anyhow::Result<Vec<DatabasePrivilegeRow>> {
     content
         .trim()
-        .split('\n')
-        .map(|line| line.trim())
+        .lines()
+        .map(str::trim)
         .enumerate()
         .map(|(i, line)| {
             let mut header: Vec<_> = DATABASE_PRIVILEGE_FIELDS
@@ -314,7 +313,7 @@ pub fn parse_privilege_data_from_editor_content(
                 PrivilegeRowParseResult::Empty => Ok(None),
             }
         })
-        .filter_map(|result| result.transpose())
+        .filter_map(std::result::Result::transpose)
         .collect::<anyhow::Result<Vec<DatabasePrivilegeRow>>>()
 }
 
@@ -417,7 +416,7 @@ mod tests {
 
         let content = generate_editor_content_from_privilege_data(&permissions, "user", None);
 
-        let parsed_permissions = parse_privilege_data_from_editor_content(content).unwrap();
+        let parsed_permissions = parse_privilege_data_from_editor_content(&content).unwrap();
 
         assert_eq!(permissions, parsed_permissions);
     }

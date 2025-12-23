@@ -71,21 +71,19 @@ impl Supervisor {
         let config = ServerConfig::read_config_from_path(&config_path)
             .context("Failed to read server configuration")?;
 
-        let group_deny_list = match &config.authorization.group_denylist_file {
-            Some(denylist_path) => {
-                let denylist = read_and_parse_group_denylist(denylist_path)
-                    .context("Failed to read group denylist file")?;
-                tracing::debug!(
-                    "Loaded group denylist with {} entries from {:?}",
-                    denylist.len(),
-                    denylist_path
-                );
-                Arc::new(RwLock::new(denylist))
-            }
-            None => {
-                tracing::debug!("No group denylist file specified, proceeding without a denylist");
-                Arc::new(RwLock::new(GroupDenylist::new()))
-            }
+        let group_deny_list = if let Some(denylist_path) = &config.authorization.group_denylist_file
+        {
+            let denylist = read_and_parse_group_denylist(denylist_path)
+                .context("Failed to read group denylist file")?;
+            tracing::debug!(
+                "Loaded group denylist with {} entries from {:?}",
+                denylist.len(),
+                denylist_path
+            );
+            Arc::new(RwLock::new(denylist))
+        } else {
+            tracing::debug!("No group denylist file specified, proceeding without a denylist");
+            Arc::new(RwLock::new(GroupDenylist::new()))
         };
 
         let mut watchdog_duration = None;
@@ -93,12 +91,13 @@ impl Supervisor {
         #[cfg(target_os = "linux")]
         let watchdog_task =
             if systemd_mode && sd_notify::watchdog_enabled(true, &mut watchdog_micro_seconds) {
-                watchdog_duration = Some(Duration::from_micros(watchdog_micro_seconds));
+                let watchdog_duration_ = Duration::from_micros(watchdog_micro_seconds);
                 tracing::debug!(
                     "Systemd watchdog enabled with {} millisecond interval",
                     watchdog_micro_seconds.div_ceil(1000),
                 );
-                Some(spawn_watchdog_task(watchdog_duration.unwrap()))
+                watchdog_duration = Some(watchdog_duration_);
+                Some(spawn_watchdog_task(watchdog_duration_))
             } else {
                 tracing::debug!("Systemd watchdog not enabled, skipping watchdog thread");
                 None
@@ -221,22 +220,20 @@ impl Supervisor {
         let mut config = self.config.clone().lock_owned().await;
         *config = new_config;
 
-        let group_deny_list = match &config.authorization.group_denylist_file {
-            Some(denylist_path) => {
-                let denylist = read_and_parse_group_denylist(denylist_path)
-                    .context("Failed to read group denylist file")?;
+        let group_deny_list = if let Some(denylist_path) = &config.authorization.group_denylist_file
+        {
+            let denylist = read_and_parse_group_denylist(denylist_path)
+                .context("Failed to read group denylist file")?;
 
-                tracing::debug!(
-                    "Loaded group denylist with {} entries from {:?}",
-                    denylist.len(),
-                    denylist_path
-                );
-                denylist
-            }
-            None => {
-                tracing::debug!("No group denylist file specified, proceeding without a denylist");
-                GroupDenylist::new()
-            }
+            tracing::debug!(
+                "Loaded group denylist with {} entries from {:?}",
+                denylist.len(),
+                denylist_path
+            );
+            denylist
+        } else {
+            tracing::debug!("No group denylist file specified, proceeding without a denylist");
+            GroupDenylist::new()
         };
         let mut group_deny_list_lock = self.group_deny_list.write().await;
         *group_deny_list_lock = group_deny_list;
@@ -387,7 +384,7 @@ impl Supervisor {
                     }
                 }
 
-                _ = self.shutdown_cancel_token.cancelled() => {
+                () = self.shutdown_cancel_token.cancelled() => {
                     tracing::info!("Shutting down server");
                     self.shutdown().await?;
                     break;
@@ -427,7 +424,7 @@ fn spawn_status_notifier_task(task_tracker: TaskTracker) -> JoinHandle<()> {
             let count = task_tracker.len();
 
             let message = if count > 0 {
-                format!("Handling {} connections", count)
+                format!("Handling {count} connections")
             } else {
                 "Waiting for connections".to_string()
             };
@@ -453,7 +450,7 @@ async fn create_unix_listener_with_socket_path(
     tracing::info!("Listening on socket {:?}", socket_path);
 
     match fs::remove_file(socket_path.as_path()) {
-        Ok(_) => {}
+        Ok(()) => {}
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
         Err(e) => return Err(e.into()),
     }
@@ -470,7 +467,7 @@ async fn create_unix_listener_with_systemd_socket() -> anyhow::Result<TokioUnixL
         .next()
         .context("No file descriptors received from systemd")?;
 
-    debug_assert!(fd == 3, "Unexpected file descriptor from systemd: {}", fd);
+    debug_assert!(fd == 3, "Unexpected file descriptor from systemd: {fd}");
 
     tracing::debug!(
         "Received file descriptor from systemd with id: '{}', assuming socket",

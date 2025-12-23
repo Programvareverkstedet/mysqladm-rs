@@ -18,7 +18,7 @@ use crate::{
 
 #[derive(Parser, Debug, Clone)]
 pub struct ShowUserArgs {
-    /// The MySQL user(s) to show
+    /// The `MySQL` user(s) to show
     #[cfg_attr(not(feature = "suid-sgid-mode"), arg(add = ArgValueCompleter::new(mysql_user_completer)))]
     #[arg(num_args = 0.., value_name = "USER_NAME")]
     username: Vec<MySQLUser>,
@@ -35,7 +35,7 @@ pub async fn show_users(
     let message = if args.username.is_empty() {
         Request::ListUsers(None)
     } else {
-        Request::ListUsers(Some(args.username.to_owned()))
+        Request::ListUsers(Some(args.username.clone()))
     };
 
     if let Err(err) = server_connection.send(message).await {
@@ -73,13 +73,13 @@ pub async fn show_users(
                 ))
             )
         }) {
-            print_authorization_owner_hint(&mut server_connection).await?
+            print_authorization_owner_hint(&mut server_connection).await?;
         }
     }
 
     server_connection.send(Request::Exit).await?;
 
-    if users.values().any(|result| result.is_err()) {
+    if users.values().any(std::result::Result::is_err) {
         std::process::exit(1);
     }
 

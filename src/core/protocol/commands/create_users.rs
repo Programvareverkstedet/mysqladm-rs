@@ -29,7 +29,7 @@ pub fn print_create_users_output_status(output: &CreateUsersResponse) {
     for (username, result) in output {
         match result {
             Ok(()) => {
-                println!("User '{}' created successfully.", username);
+                println!("User '{username}' created successfully.");
             }
             Err(err) => {
                 eprintln!("{}", err.to_error_message(username));
@@ -63,20 +63,22 @@ pub fn print_create_users_output_status_json(output: &CreateUsersResponse) {
 }
 
 impl CreateUserError {
+    #[must_use]
     pub fn to_error_message(&self, username: &MySQLUser) -> String {
         match self {
             CreateUserError::ValidationError(err) => {
-                err.to_error_message(DbOrUser::User(username.clone()))
+                err.to_error_message(&DbOrUser::User(username.clone()))
             }
             CreateUserError::UserAlreadyExists => {
-                format!("User '{}' already exists.", username)
+                format!("User '{username}' already exists.")
             }
             CreateUserError::MySqlError(err) => {
-                format!("MySQL error: {}", err)
+                format!("MySQL error: {err}")
             }
         }
     }
 
+    #[must_use]
     pub fn error_type(&self) -> String {
         match self {
             CreateUserError::ValidationError(err) => err.error_type(),

@@ -51,9 +51,7 @@ impl DatabasePrivilegeEdit {
                 .map(|c| format!("'{c}'"))
                 .join(", ");
             anyhow::bail!(
-                "Invalid character(s) in privilege edit entry: {}\n\nValid characters are: {}",
-                invalid_chars,
-                valid_characters,
+                "Invalid character(s) in privilege edit entry: {invalid_chars}\n\nValid characters are: {valid_characters}",
             );
         }
 
@@ -72,7 +70,7 @@ impl std::fmt::Display for DatabasePrivilegeEdit {
             DatabasePrivilegeEditEntryType::Remove => write!(f, "-")?,
         }
         for priv_char in &self.privileges {
-            write!(f, "{}", priv_char)?;
+            write!(f, "{priv_char}")?;
         }
 
         Ok(())
@@ -99,7 +97,7 @@ impl DatabasePrivilegeEditEntry {
     ///   `database_name:username:[+|-]privileges`
     ///
     /// where:
-    /// - database_name is the name of the database to edit privileges for
+    /// - `database_name` is the name of the database to edit privileges for
     /// - username is the name of the user to edit privileges for
     /// - privileges is a string of characters representing the privileges to add, set or remove
     /// - the `+` or `-` prefix indicates whether to add or remove the privileges, if omitted the privileges are set directly
@@ -107,13 +105,13 @@ impl DatabasePrivilegeEditEntry {
     pub fn parse_from_str(arg: &str) -> anyhow::Result<Self> {
         let parts: Vec<&str> = arg.split(':').collect();
         if parts.len() != 3 {
-            anyhow::bail!("Invalid privilege edit entry format: {}", arg);
+            anyhow::bail!("Invalid privilege edit entry format: {arg}");
         }
 
         let (database, user, user_privs) = (parts[0].to_string(), parts[1].to_string(), parts[2]);
 
         if user.is_empty() {
-            anyhow::bail!("Username cannot be empty in privilege edit entry: {}", arg);
+            anyhow::bail!("Username cannot be empty in privilege edit entry: {arg}");
         }
 
         let privilege_edit = DatabasePrivilegeEdit::parse_from_str(user_privs)?;

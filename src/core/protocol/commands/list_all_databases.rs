@@ -12,13 +12,15 @@ pub enum ListAllDatabasesError {
 }
 
 impl ListAllDatabasesError {
+    #[must_use]
     pub fn to_error_message(&self) -> String {
         match self {
-            ListAllDatabasesError::MySqlError(err) => format!("MySQL error: {}", err),
+            ListAllDatabasesError::MySqlError(err) => format!("MySQL error: {err}"),
         }
     }
 
     #[allow(dead_code)]
+    #[must_use]
     pub fn error_type(&self) -> String {
         match self {
             ListAllDatabasesError::MySqlError(_) => "mysql-error".to_string(),

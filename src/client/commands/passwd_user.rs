@@ -21,7 +21,7 @@ use crate::{
 
 #[derive(Parser, Debug, Clone)]
 pub struct PasswdUserArgs {
-    /// The MySQL user whose password is to be changed
+    /// The `MySQL` user whose password is to be changed
     #[cfg_attr(not(feature = "suid-sgid-mode"), arg(add = ArgValueCompleter::new(mysql_user_completer)))]
     #[arg(value_name = "USER_NAME")]
     username: MySQLUser,
@@ -41,9 +41,9 @@ pub struct PasswdUserArgs {
 
 pub fn read_password_from_stdin_with_double_check(username: &MySQLUser) -> anyhow::Result<String> {
     Password::new()
-        .with_prompt(format!("New MySQL password for user '{}'", username))
+        .with_prompt(format!("New MySQL password for user '{username}'"))
         .with_confirmation(
-            format!("Retype new MySQL password for user '{}'", username),
+            format!("Retype new MySQL password for user '{username}'"),
             "Passwords do not match",
         )
         .interact()
@@ -55,7 +55,7 @@ pub async fn passwd_user(
     mut server_connection: ClientToServerMessageStream,
 ) -> anyhow::Result<()> {
     // TODO: create a "user" exists check" command
-    let message = Request::ListUsers(Some(vec![args.username.to_owned()]));
+    let message = Request::ListUsers(Some(vec![args.username.clone()]));
     if let Err(err) = server_connection.send(message).await {
         server_connection.close().await.ok();
         anyhow::bail!(err);
@@ -91,7 +91,7 @@ pub async fn passwd_user(
         read_password_from_stdin_with_double_check(&args.username)?
     };
 
-    let message = Request::PasswdUser((args.username.to_owned(), password));
+    let message = Request::PasswdUser((args.username.clone(), password));
 
     if let Err(err) = server_connection.send(message).await {
         server_connection.close().await.ok();
@@ -111,7 +111,7 @@ pub async fn passwd_user(
             ValidationError::AuthorizationError(_)
         ))
     ) {
-        print_authorization_owner_hint(&mut server_connection).await?
+        print_authorization_owner_hint(&mut server_connection).await?;
     }
 
     server_connection.send(Request::Exit).await?;

@@ -113,20 +113,22 @@ pub fn print_list_databases_output_status_json(output: &ListDatabasesResponse) {
 }
 
 impl ListDatabasesError {
+    #[must_use]
     pub fn to_error_message(&self, database_name: &MySQLDatabase) -> String {
         match self {
             ListDatabasesError::ValidationError(err) => {
-                err.to_error_message(DbOrUser::Database(database_name.clone()))
+                err.to_error_message(&DbOrUser::Database(database_name.clone()))
             }
             ListDatabasesError::DatabaseDoesNotExist => {
-                format!("Database '{}' does not exist.", database_name)
+                format!("Database '{database_name}' does not exist.")
             }
             ListDatabasesError::MySqlError(err) => {
-                format!("MySQL error: {}", err)
+                format!("MySQL error: {err}")
             }
         }
     }
 
+    #[must_use]
     pub fn error_type(&self) -> String {
         match self {
             ListDatabasesError::ValidationError(err) => err.error_type(),

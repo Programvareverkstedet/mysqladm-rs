@@ -18,7 +18,7 @@ use crate::{
 
 #[derive(Parser, Debug, Clone)]
 pub struct CreateDbArgs {
-    /// The MySQL database(s) to create
+    /// The `MySQL` database(s) to create
     #[arg(num_args = 1.., value_name = "DB_NAME")]
     #[cfg_attr(not(feature = "suid-sgid-mode"), arg(add = ArgValueCompleter::new(prefix_completer)))]
     name: Vec<MySQLDatabase>,
@@ -36,7 +36,7 @@ pub async fn create_databases(
         anyhow::bail!("No database names provided");
     }
 
-    let message = Request::CreateDatabases(args.name.to_owned());
+    let message = Request::CreateDatabases(args.name.clone());
     server_connection.send(message).await?;
 
     let result = match server_connection.next().await {
@@ -57,13 +57,13 @@ pub async fn create_databases(
                 ))
             )
         }) {
-            print_authorization_owner_hint(&mut server_connection).await?
+            print_authorization_owner_hint(&mut server_connection).await?;
         }
     }
 
     server_connection.send(Request::Exit).await?;
 
-    if result.values().any(|res| res.is_err()) {
+    if result.values().any(std::result::Result::is_err) {
         std::process::exit(1);
     }
 

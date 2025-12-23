@@ -18,6 +18,7 @@ pub enum DatabasePrivilegeChange {
 }
 
 impl DatabasePrivilegeChange {
+    #[must_use]
     pub fn new(p1: bool, p2: bool) -> Option<DatabasePrivilegeChange> {
         match (p1, p2) {
             (true, false) => Some(DatabasePrivilegeChange::YesToNo),
@@ -49,6 +50,7 @@ pub struct DatabasePrivilegeRowDiff {
 
 impl DatabasePrivilegeRowDiff {
     /// Calculates the difference between two [`DatabasePrivilegeRow`] instances.
+    #[must_use]
     pub fn from_rows(
         row1: &DatabasePrivilegeRow,
         row2: &DatabasePrivilegeRow,
@@ -56,8 +58,8 @@ impl DatabasePrivilegeRowDiff {
         debug_assert!(row1.db == row2.db && row1.user == row2.user);
 
         DatabasePrivilegeRowDiff {
-            db: row1.db.to_owned(),
-            user: row1.user.to_owned(),
+            db: row1.db.clone(),
+            user: row1.user.clone(),
             select_priv: DatabasePrivilegeChange::new(row1.select_priv, row2.select_priv),
             insert_priv: DatabasePrivilegeChange::new(row1.insert_priv, row2.insert_priv),
             update_priv: DatabasePrivilegeChange::new(row1.update_priv, row2.update_priv),
@@ -82,6 +84,7 @@ impl DatabasePrivilegeRowDiff {
     }
 
     /// Returns true if there are no changes in this diff.
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.select_priv.is_none()
             && self.insert_priv.is_none()
@@ -113,7 +116,7 @@ impl DatabasePrivilegeRowDiff {
             "create_tmp_table_priv" => Ok(self.create_tmp_table_priv),
             "lock_tables_priv" => Ok(self.lock_tables_priv),
             "references_priv" => Ok(self.references_priv),
-            _ => anyhow::bail!("Unknown privilege name: {}", privilege_name),
+            _ => anyhow::bail!("Unknown privilege name: {privilege_name}"),
         }
     }
 
@@ -159,7 +162,7 @@ impl DatabasePrivilegeRowDiff {
     /// Removes any no-op changes from the diff, based on the original privilege row.
     fn remove_noops(&mut self, from: &DatabasePrivilegeRow) {
         fn new_value(
-            change: &Option<DatabasePrivilegeChange>,
+            change: Option<&DatabasePrivilegeChange>,
             from_value: bool,
         ) -> Option<DatabasePrivilegeChange> {
             change.as_ref().and_then(|c| match c {
@@ -173,22 +176,24 @@ impl DatabasePrivilegeRowDiff {
             })
         }
 
-        self.select_priv = new_value(&self.select_priv, from.select_priv);
-        self.insert_priv = new_value(&self.insert_priv, from.insert_priv);
-        self.update_priv = new_value(&self.update_priv, from.update_priv);
-        self.delete_priv = new_value(&self.delete_priv, from.delete_priv);
-        self.create_priv = new_value(&self.create_priv, from.create_priv);
-        self.drop_priv = new_value(&self.drop_priv, from.drop_priv);
-        self.alter_priv = new_value(&self.alter_priv, from.alter_priv);
-        self.index_priv = new_value(&self.index_priv, from.index_priv);
-        self.create_tmp_table_priv =
-            new_value(&self.create_tmp_table_priv, from.create_tmp_table_priv);
-        self.lock_tables_priv = new_value(&self.lock_tables_priv, from.lock_tables_priv);
-        self.references_priv = new_value(&self.references_priv, from.references_priv);
+        self.select_priv = new_value(self.select_priv.as_ref(), from.select_priv);
+        self.insert_priv = new_value(self.insert_priv.as_ref(), from.insert_priv);
+        self.update_priv = new_value(self.update_priv.as_ref(), from.update_priv);
+        self.delete_priv = new_value(self.delete_priv.as_ref(), from.delete_priv);
+        self.create_priv = new_value(self.create_priv.as_ref(), from.create_priv);
+        self.drop_priv = new_value(self.drop_priv.as_ref(), from.drop_priv);
+        self.alter_priv = new_value(self.alter_priv.as_ref(), from.alter_priv);
+        self.index_priv = new_value(self.index_priv.as_ref(), from.index_priv);
+        self.create_tmp_table_priv = new_value(
+            self.create_tmp_table_priv.as_ref(),
+            from.create_tmp_table_priv,
+        );
+        self.lock_tables_priv = new_value(self.lock_tables_priv.as_ref(), from.lock_tables_priv);
+        self.references_priv = new_value(self.references_priv.as_ref(), from.references_priv);
     }
 
     fn apply(&self, base: &mut DatabasePrivilegeRow) {
-        fn apply_change(change: &Option<DatabasePrivilegeChange>, target: &mut bool) {
+        fn apply_change(change: Option<&DatabasePrivilegeChange>, target: &mut bool) {
             match change {
                 Some(DatabasePrivilegeChange::YesToNo) => *target = false,
                 Some(DatabasePrivilegeChange::NoToYes) => *target = true,
@@ -196,17 +201,20 @@ impl DatabasePrivilegeRowDiff {
             }
         }
 
-        apply_change(&self.select_priv, &mut base.select_priv);
-        apply_change(&self.insert_priv, &mut base.insert_priv);
-        apply_change(&self.update_priv, &mut base.update_priv);
-        apply_change(&self.delete_priv, &mut base.delete_priv);
-        apply_change(&self.create_priv, &mut base.create_priv);
-        apply_change(&self.drop_priv, &mut base.drop_priv);
-        apply_change(&self.alter_priv, &mut base.alter_priv);
-        apply_change(&self.index_priv, &mut base.index_priv);
-        apply_change(&self.create_tmp_table_priv, &mut base.create_tmp_table_priv);
-        apply_change(&self.lock_tables_priv, &mut base.lock_tables_priv);
-        apply_change(&self.references_priv, &mut base.references_priv);
+        apply_change(self.select_priv.as_ref(), &mut base.select_priv);
+        apply_change(self.insert_priv.as_ref(), &mut base.insert_priv);
+        apply_change(self.update_priv.as_ref(), &mut base.update_priv);
+        apply_change(self.delete_priv.as_ref(), &mut base.delete_priv);
+        apply_change(self.create_priv.as_ref(), &mut base.create_priv);
+        apply_change(self.drop_priv.as_ref(), &mut base.drop_priv);
+        apply_change(self.alter_priv.as_ref(), &mut base.alter_priv);
+        apply_change(self.index_priv.as_ref(), &mut base.index_priv);
+        apply_change(
+            self.create_tmp_table_priv.as_ref(),
+            &mut base.create_tmp_table_priv,
+        );
+        apply_change(self.lock_tables_priv.as_ref(), &mut base.lock_tables_priv);
+        apply_change(self.references_priv.as_ref(), &mut base.references_priv);
     }
 }
 
@@ -214,7 +222,7 @@ impl fmt::Display for DatabasePrivilegeRowDiff {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fn format_change(
             f: &mut fmt::Formatter<'_>,
-            change: &Option<DatabasePrivilegeChange>,
+            change: Option<DatabasePrivilegeChange>,
             field_name: &str,
         ) -> fmt::Result {
             if let Some(change) = change {
@@ -233,17 +241,17 @@ impl fmt::Display for DatabasePrivilegeRowDiff {
             }
         }
 
-        format_change(f, &self.select_priv, "select_priv")?;
-        format_change(f, &self.insert_priv, "insert_priv")?;
-        format_change(f, &self.update_priv, "update_priv")?;
-        format_change(f, &self.delete_priv, "delete_priv")?;
-        format_change(f, &self.create_priv, "create_priv")?;
-        format_change(f, &self.drop_priv, "drop_priv")?;
-        format_change(f, &self.alter_priv, "alter_priv")?;
-        format_change(f, &self.index_priv, "index_priv")?;
-        format_change(f, &self.create_tmp_table_priv, "create_tmp_table_priv")?;
-        format_change(f, &self.lock_tables_priv, "lock_tables_priv")?;
-        format_change(f, &self.references_priv, "references_priv")?;
+        format_change(f, self.select_priv, "select_priv")?;
+        format_change(f, self.insert_priv, "insert_priv")?;
+        format_change(f, self.update_priv, "update_priv")?;
+        format_change(f, self.delete_priv, "delete_priv")?;
+        format_change(f, self.create_priv, "create_priv")?;
+        format_change(f, self.drop_priv, "drop_priv")?;
+        format_change(f, self.alter_priv, "alter_priv")?;
+        format_change(f, self.index_priv, "index_priv")?;
+        format_change(f, self.create_tmp_table_priv, "create_tmp_table_priv")?;
+        format_change(f, self.lock_tables_priv, "lock_tables_priv")?;
+        format_change(f, self.references_priv, "references_priv")?;
 
         Ok(())
     }
@@ -259,6 +267,7 @@ pub enum DatabasePrivilegesDiff {
 }
 
 impl DatabasePrivilegesDiff {
+    #[must_use]
     pub fn get_database_name(&self) -> &MySQLDatabase {
         match self {
             DatabasePrivilegesDiff::New(p) => &p.db,
@@ -268,6 +277,7 @@ impl DatabasePrivilegesDiff {
         }
     }
 
+    #[must_use]
     pub fn get_user_name(&self) -> &MySQLUser {
         match self {
             DatabasePrivilegesDiff::New(p) => &p.user,
@@ -305,7 +315,7 @@ impl DatabasePrivilegesDiff {
         }
 
         if matches!(self, DatabasePrivilegesDiff::Noop { .. }) {
-            *self = other.to_owned();
+            other.clone_into(self);
             return Ok(());
         } else if matches!(other, DatabasePrivilegesDiff::Noop { .. }) {
             return Ok(());
@@ -327,8 +337,8 @@ impl DatabasePrivilegesDiff {
                 inner_diff.mappend(modified);
 
                 if inner_diff.is_empty() {
-                    let db = inner_diff.db.to_owned();
-                    let user = inner_diff.user.to_owned();
+                    let db = inner_diff.db.clone();
+                    let user = inner_diff.user.clone();
                     *self = DatabasePrivilegesDiff::Noop { db, user };
                 }
             }
@@ -352,28 +362,27 @@ pub type DatabasePrivilegeState<'a> = &'a [DatabasePrivilegeRow];
 /// This function calculates the differences between two sets of database privileges.
 /// It returns a set of [`DatabasePrivilegesDiff`] that can be used to display or
 /// apply a set of privilege modifications to the database.
+#[must_use]
 pub fn diff_privileges(
     from: DatabasePrivilegeState<'_>,
     to: &[DatabasePrivilegeRow],
 ) -> BTreeSet<DatabasePrivilegesDiff> {
-    let from_lookup_table: HashMap<(MySQLDatabase, MySQLUser), DatabasePrivilegeRow> =
-        HashMap::from_iter(
-            from.iter()
-                .cloned()
-                .map(|p| ((p.db.to_owned(), p.user.to_owned()), p)),
-        );
+    let from_lookup_table: HashMap<(MySQLDatabase, MySQLUser), DatabasePrivilegeRow> = from
+        .iter()
+        .cloned()
+        .map(|p| ((p.db.clone(), p.user.clone()), p))
+        .collect();
 
-    let to_lookup_table: HashMap<(MySQLDatabase, MySQLUser), DatabasePrivilegeRow> =
-        HashMap::from_iter(
-            to.iter()
-                .cloned()
-                .map(|p| ((p.db.to_owned(), p.user.to_owned()), p)),
-        );
+    let to_lookup_table: HashMap<(MySQLDatabase, MySQLUser), DatabasePrivilegeRow> = to
+        .iter()
+        .cloned()
+        .map(|p| ((p.db.clone(), p.user.clone()), p))
+        .collect();
 
     let mut result = BTreeSet::new();
 
     for p in to {
-        if let Some(old_p) = from_lookup_table.get(&(p.db.to_owned(), p.user.to_owned())) {
+        if let Some(old_p) = from_lookup_table.get(&(p.db.clone(), p.user.clone())) {
             let diff = DatabasePrivilegeRowDiff::from_rows(old_p, p);
             if !diff.is_empty() {
                 result.insert(DatabasePrivilegesDiff::Modified(diff));
@@ -384,7 +393,7 @@ pub fn diff_privileges(
     }
 
     for p in from {
-        if !to_lookup_table.contains_key(&(p.db.to_owned(), p.user.to_owned())) {
+        if !to_lookup_table.contains_key(&(p.db.clone(), p.user.clone())) {
             result.insert(DatabasePrivilegesDiff::Deleted(p.to_owned()));
         }
     }
@@ -400,17 +409,16 @@ pub fn create_or_modify_privilege_rows(
     from: DatabasePrivilegeState<'_>,
     to: &BTreeSet<DatabasePrivilegeRowDiff>,
 ) -> anyhow::Result<BTreeSet<DatabasePrivilegesDiff>> {
-    let from_lookup_table: HashMap<(MySQLDatabase, MySQLUser), DatabasePrivilegeRow> =
-        HashMap::from_iter(
-            from.iter()
-                .cloned()
-                .map(|p| ((p.db.to_owned(), p.user.to_owned()), p)),
-        );
+    let from_lookup_table: HashMap<(MySQLDatabase, MySQLUser), DatabasePrivilegeRow> = from
+        .iter()
+        .cloned()
+        .map(|p| ((p.db.clone(), p.user.clone()), p))
+        .collect();
 
     let mut result = BTreeSet::new();
 
     for diff in to {
-        if let Some(old_p) = from_lookup_table.get(&(diff.db.to_owned(), diff.user.to_owned())) {
+        if let Some(old_p) = from_lookup_table.get(&(diff.db.clone(), diff.user.clone())) {
             let mut modified_diff = diff.to_owned();
             modified_diff.remove_noops(old_p);
             if !modified_diff.is_empty() {
@@ -418,8 +426,8 @@ pub fn create_or_modify_privilege_rows(
             }
         } else {
             let mut new_row = DatabasePrivilegeRow {
-                db: diff.db.to_owned(),
-                user: diff.user.to_owned(),
+                db: diff.db.clone(),
+                user: diff.user.clone(),
                 select_priv: false,
                 insert_priv: false,
                 update_priv: false,
@@ -450,12 +458,11 @@ pub fn reduce_privilege_diffs(
     from: DatabasePrivilegeState<'_>,
     to: BTreeSet<DatabasePrivilegesDiff>,
 ) -> anyhow::Result<BTreeSet<DatabasePrivilegesDiff>> {
-    let from_lookup_table: HashMap<(MySQLDatabase, MySQLUser), DatabasePrivilegeRow> =
-        HashMap::from_iter(
-            from.iter()
-                .cloned()
-                .map(|p| ((p.db.to_owned(), p.user.to_owned()), p)),
-        );
+    let from_lookup_table: HashMap<(MySQLDatabase, MySQLUser), DatabasePrivilegeRow> = from
+        .iter()
+        .cloned()
+        .map(|p| ((p.db.clone(), p.user.clone()), p))
+        .collect();
 
     let mut result: HashMap<(MySQLDatabase, MySQLUser), DatabasePrivilegesDiff> = from_lookup_table
         .iter()
@@ -481,19 +488,19 @@ pub fn reduce_privilege_diffs(
                 existing_diff.mappend(&diff)?;
             }
             Entry::Vacant(vacant_entry) => {
-                vacant_entry.insert(diff.to_owned());
+                vacant_entry.insert(diff.clone());
             }
         }
     }
 
-    for (key, diff) in result.iter_mut() {
+    for (key, diff) in &mut result {
         if let Some(from_row) = from_lookup_table.get(key)
             && let DatabasePrivilegesDiff::Modified(modified_diff) = diff
         {
             modified_diff.remove_noops(from_row);
             if modified_diff.is_empty() {
-                let db = modified_diff.db.to_owned();
-                let user = modified_diff.user.to_owned();
+                let db = modified_diff.db.clone();
+                let user = modified_diff.user.clone();
                 *diff = DatabasePrivilegesDiff::Noop { db, user };
             }
         }
@@ -506,6 +513,7 @@ pub fn reduce_privilege_diffs(
 }
 
 /// Renders a set of [`DatabasePrivilegesDiff`] into a human-readable formatted table.
+#[must_use]
 pub fn display_privilege_diffs(diffs: &BTreeSet<DatabasePrivilegesDiff>) -> String {
     let mut table = Table::new();
     table.set_titles(row!["Database", "User", "Privilege diff",]);

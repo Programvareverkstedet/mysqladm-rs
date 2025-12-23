@@ -57,10 +57,12 @@ pub fn print_check_authorization_output_status_json(output: &CheckAuthorizationR
 }
 
 impl CheckAuthorizationError {
+    #[must_use]
     pub fn to_error_message(&self, db_or_user: &DbOrUser) -> String {
-        self.0.to_error_message(db_or_user.clone())
+        self.0.to_error_message(db_or_user)
     }
 
+    #[must_use]
     pub fn error_type(&self) -> String {
         self.0.error_type()
     }

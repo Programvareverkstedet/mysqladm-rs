@@ -19,7 +19,7 @@ use crate::{
 
 #[derive(Parser, Debug, Clone)]
 pub struct ShowPrivsArgs {
-    /// The MySQL database(s) to show privileges for
+    /// The `MySQL` database(s) to show privileges for
     #[arg(num_args = 0.., value_name = "DB_NAME")]
     #[cfg_attr(not(feature = "suid-sgid-mode"), arg(add = ArgValueCompleter::new(mysql_database_completer)))]
     name: Vec<MySQLDatabase>,
@@ -42,7 +42,7 @@ pub async fn show_database_privileges(
     let message = if args.name.is_empty() {
         Request::ListPrivileges(None)
     } else {
-        Request::ListPrivileges(Some(args.name.to_owned()))
+        Request::ListPrivileges(Some(args.name.clone()))
     };
     server_connection.send(message).await?;
 
@@ -78,13 +78,13 @@ pub async fn show_database_privileges(
                 ))
             )
         }) {
-            print_authorization_owner_hint(&mut server_connection).await?
+            print_authorization_owner_hint(&mut server_connection).await?;
         }
     }
 
     server_connection.send(Request::Exit).await?;
 
-    if privilege_data.values().any(|res| res.is_err()) {
+    if privilege_data.values().any(std::result::Result::is_err) {
         std::process::exit(1);
     }
 

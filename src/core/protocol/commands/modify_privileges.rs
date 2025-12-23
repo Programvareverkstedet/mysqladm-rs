@@ -53,8 +53,7 @@ pub fn print_modify_database_privileges_output_status(output: &ModifyPrivilegesR
         match result {
             Ok(()) => {
                 println!(
-                    "Privileges for user '{}' on database '{}' modified successfully.",
-                    username, database_name
+                    "Privileges for user '{username}' on database '{database_name}' modified successfully."
                 );
             }
             Err(err) => {
@@ -67,19 +66,20 @@ pub fn print_modify_database_privileges_output_status(output: &ModifyPrivilegesR
 }
 
 impl ModifyDatabasePrivilegesError {
+    #[must_use]
     pub fn to_error_message(&self, database_name: &MySQLDatabase, username: &MySQLUser) -> String {
         match self {
             ModifyDatabasePrivilegesError::DatabaseValidationError(err) => {
-                err.to_error_message(DbOrUser::Database(database_name.clone()))
+                err.to_error_message(&DbOrUser::Database(database_name.clone()))
             }
             ModifyDatabasePrivilegesError::UserValidationError(err) => {
-                err.to_error_message(DbOrUser::User(username.clone()))
+                err.to_error_message(&DbOrUser::User(username.clone()))
             }
             ModifyDatabasePrivilegesError::DatabaseDoesNotExist => {
-                format!("Database '{}' does not exist.", database_name)
+                format!("Database '{database_name}' does not exist.")
             }
             ModifyDatabasePrivilegesError::UserDoesNotExist => {
-                format!("User '{}' does not exist.", username)
+                format!("User '{username}' does not exist.")
             }
             ModifyDatabasePrivilegesError::DiffDoesNotApply(diff) => {
                 format!(
@@ -88,12 +88,13 @@ impl ModifyDatabasePrivilegesError {
                 )
             }
             ModifyDatabasePrivilegesError::MySqlError(err) => {
-                format!("MySQL error: {}", err)
+                format!("MySQL error: {err}")
             }
         }
     }
 
     #[allow(dead_code)]
+    #[must_use]
     pub fn error_type(&self) -> String {
         match self {
             ModifyDatabasePrivilegesError::DatabaseValidationError(err) => {
@@ -113,29 +114,26 @@ impl ModifyDatabasePrivilegesError {
 }
 
 impl DiffDoesNotApplyError {
+    #[must_use]
     pub fn to_error_message(&self) -> String {
         match self {
             DiffDoesNotApplyError::RowAlreadyExists(database_name, username) => {
                 format!(
-                    "Privileges for user '{}' on database '{}' already exist.",
-                    username, database_name
+                    "Privileges for user '{username}' on database '{database_name}' already exist."
                 )
             }
             DiffDoesNotApplyError::RowDoesNotExist(database_name, username) => {
                 format!(
-                    "Privileges for user '{}' on database '{}' do not exist.",
-                    username, database_name
+                    "Privileges for user '{username}' on database '{database_name}' do not exist."
                 )
             }
             DiffDoesNotApplyError::RowPrivilegeChangeDoesNotApply(diff, row) => {
-                format!(
-                    "Could not apply privilege change {:?} to row {:?}",
-                    diff, row
-                )
+                format!("Could not apply privilege change {diff:?} to row {row:?}")
             }
         }
     }
 
+    #[must_use]
     pub fn error_type(&self) -> String {
         match self {
             DiffDoesNotApplyError::RowAlreadyExists(_, _) => "row-already-exists".to_string(),

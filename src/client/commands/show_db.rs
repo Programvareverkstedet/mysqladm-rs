@@ -18,7 +18,7 @@ use crate::{
 
 #[derive(Parser, Debug, Clone)]
 pub struct ShowDbArgs {
-    /// The MySQL database(s) to show
+    /// The `MySQL` database(s) to show
     #[arg(num_args = 0.., value_name = "DB_NAME")]
     #[cfg_attr(not(feature = "suid-sgid-mode"), arg(add = ArgValueCompleter::new(mysql_database_completer)))]
     name: Vec<MySQLDatabase>,
@@ -39,7 +39,7 @@ pub async fn show_databases(
     let message = if args.name.is_empty() {
         Request::ListDatabases(None)
     } else {
-        Request::ListDatabases(Some(args.name.to_owned()))
+        Request::ListDatabases(Some(args.name.clone()))
     };
 
     server_connection.send(message).await?;
@@ -74,13 +74,13 @@ pub async fn show_databases(
                 ))
             )
         }) {
-            print_authorization_owner_hint(&mut server_connection).await?
+            print_authorization_owner_hint(&mut server_connection).await?;
         }
     }
 
     server_connection.send(Request::Exit).await?;
 
-    if databases.values().any(|res| res.is_err()) {
+    if databases.values().any(std::result::Result::is_err) {
         std::process::exit(1);
     }
 

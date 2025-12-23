@@ -1,4 +1,9 @@
-use std::{fs, path::PathBuf, sync::Arc, time::Duration};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    sync::Arc,
+    time::Duration,
+};
 
 use anyhow::{Context, anyhow};
 use clap_verbosity_flag::{InfoLevel, Verbosity};
@@ -136,7 +141,7 @@ fn connect_to_external_server(
             Err(e) => match e.kind() {
                 std::io::ErrorKind::NotFound => Err(anyhow::anyhow!("Socket not found")),
                 std::io::ErrorKind::PermissionDenied => Err(anyhow::anyhow!("Permission denied")),
-                _ => Err(anyhow::anyhow!("Failed to connect to socket: {}", e)),
+                _ => Err(anyhow::anyhow!("Failed to connect to socket: {e}")),
             },
         };
     }
@@ -148,7 +153,7 @@ fn connect_to_external_server(
             Err(e) => match e.kind() {
                 std::io::ErrorKind::NotFound => Err(anyhow::anyhow!("Socket not found")),
                 std::io::ErrorKind::PermissionDenied => Err(anyhow::anyhow!("Permission denied")),
-                _ => Err(anyhow::anyhow!("Failed to connect to socket: {}", e)),
+                _ => Err(anyhow::anyhow!("Failed to connect to socket: {e}")),
             },
         };
     }
@@ -192,10 +197,10 @@ fn bootstrap_internal_server_and_drop_privs(
         }
 
         tracing::debug!("Starting server with config at {:?}", config_path);
-        let socket = invoke_server_with_config(config_path)?;
+        let socket = invoke_server_with_config(&config_path)?;
         drop_privs()?;
         return Ok(socket);
-    };
+    }
 
     let config_path = PathBuf::from(DEFAULT_CONFIG_PATH);
     if fs::metadata(&config_path).is_ok() {
@@ -203,10 +208,10 @@ fn bootstrap_internal_server_and_drop_privs(
             anyhow::bail!("Executable is not SUID/SGID - refusing to start internal sever");
         }
         tracing::debug!("Starting server with default config at {:?}", config_path);
-        let socket = invoke_server_with_config(config_path)?;
+        let socket = invoke_server_with_config(&config_path)?;
         drop_privs()?;
         return Ok(socket);
-    };
+    }
 
     anyhow::bail!("No config path provided, and no default config found");
 }
@@ -216,7 +221,7 @@ fn bootstrap_internal_server_and_drop_privs(
 /// Fork a child process to run the server with the provided config.
 /// The server will exit silently by itself when it is done, and this function
 /// will only return for the client with the socket for the server.
-fn invoke_server_with_config(config_path: PathBuf) -> anyhow::Result<StdUnixStream> {
+fn invoke_server_with_config(config_path: &Path) -> anyhow::Result<StdUnixStream> {
     let (server_socket, client_socket) = StdUnixStream::pair()?;
     let unix_user = UnixUser::from_uid(nix::unistd::getuid().as_raw())?;
 
@@ -228,18 +233,18 @@ fn invoke_server_with_config(config_path: PathBuf) -> anyhow::Result<StdUnixStre
         nix::unistd::ForkResult::Child => {
             tracing::debug!("Running server in child process");
 
-            landlock_restrict_server(Some(config_path.as_path()))
+            landlock_restrict_server(Some(config_path))
                 .context("Failed to apply Landlock restrictions to the server process")?;
 
-            match run_forked_server(config_path, server_socket, unix_user) {
+            match run_forked_server(config_path, server_socket, &unix_user) {
                 Err(e) => Err(e),
-                Ok(_) => unreachable!(),
+                Ok(()) => unreachable!(),
             }
         }
     }
 }
 
-/// Construct a MySQL connection pool that consists of exactly one connection.
+/// Construct a `MySQL` connection pool that consists of exactly one connection.
 ///
 /// This is used for the internal server in SUID/SGID mode, where the server session
 /// only ever will get a single client.
@@ -273,11 +278,11 @@ async fn construct_single_connection_mysql_pool(
 /// This function will not return, but will exit the process with a success code.
 /// The function assumes that it's caller has already forked the process.
 fn run_forked_server(
-    config_path: PathBuf,
+    config_path: &Path,
     server_socket: StdUnixStream,
-    unix_user: UnixUser,
+    unix_user: &UnixUser,
 ) -> anyhow::Result<()> {
-    let config = ServerConfig::read_config_from_path(&config_path)
+    let config = ServerConfig::read_config_from_path(config_path)
         .context("Failed to read server config in forked process")?;
 
     let group_denylist = if let Some(denylist_path) = &config.authorization.group_denylist_file {
@@ -306,7 +311,7 @@ fn run_forked_server(
             let db_pool = Arc::new(RwLock::new(db_pool));
             session_handler::session_handler_with_unix_user(
                 socket,
-                &unix_user,
+                unix_user,
                 db_pool,
                 db_is_mariadb,
                 &group_denylist,

@@ -12,13 +12,15 @@ pub enum ListAllUsersError {
 }
 
 impl ListAllUsersError {
+    #[must_use]
     pub fn to_error_message(&self) -> String {
         match self {
-            ListAllUsersError::MySqlError(err) => format!("MySQL error: {}", err),
+            ListAllUsersError::MySqlError(err) => format!("MySQL error: {err}"),
         }
     }
 
     #[allow(dead_code)]
+    #[must_use]
     pub fn error_type(&self) -> String {
         match self {
             ListAllUsersError::MySqlError(_) => "mysql-error".to_string(),

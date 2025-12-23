@@ -19,7 +19,7 @@ use crate::{
 
 #[derive(Parser, Debug, Clone)]
 pub struct DropUserArgs {
-    /// The MySQL user(s) to drop
+    /// The `MySQL` user(s) to drop
     #[arg(num_args = 1.., value_name = "USER_NAME")]
     #[cfg_attr(not(feature = "suid-sgid-mode"), arg(add = ArgValueCompleter::new(mysql_user_completer)))]
     username: Vec<MySQLUser>,
@@ -47,7 +47,7 @@ pub async fn drop_users(
                 "Are you sure you want to drop the users?\n\n{}\n\nThis action cannot be undone",
                 args.username
                     .iter()
-                    .map(|d| format!("- {}", d))
+                    .map(|d| format!("- {d}"))
                     .collect::<Vec<_>>()
                     .join("\n")
             ))
@@ -61,7 +61,7 @@ pub async fn drop_users(
         }
     }
 
-    let message = Request::DropUsers(args.username.to_owned());
+    let message = Request::DropUsers(args.username.clone());
 
     if let Err(err) = server_connection.send(message).await {
         server_connection.close().await.ok();
@@ -86,13 +86,13 @@ pub async fn drop_users(
                 ))
             )
         }) {
-            print_authorization_owner_hint(&mut server_connection).await?
+            print_authorization_owner_hint(&mut server_connection).await?;
         }
     }
 
     server_connection.send(Request::Exit).await?;
 
-    if result.values().any(|res| res.is_err()) {
+    if result.values().any(std::result::Result::is_err) {
         std::process::exit(1);
     }
 

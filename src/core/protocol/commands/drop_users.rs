@@ -29,7 +29,7 @@ pub fn print_drop_users_output_status(output: &DropUsersResponse) {
     for (username, result) in output {
         match result {
             Ok(()) => {
-                println!("User '{}' dropped successfully.", username);
+                println!("User '{username}' dropped successfully.");
             }
             Err(err) => {
                 eprintln!("{}", err.to_error_message(username));
@@ -63,20 +63,22 @@ pub fn print_drop_users_output_status_json(output: &DropUsersResponse) {
 }
 
 impl DropUserError {
+    #[must_use]
     pub fn to_error_message(&self, username: &MySQLUser) -> String {
         match self {
             DropUserError::ValidationError(err) => {
-                err.to_error_message(DbOrUser::User(username.clone()))
+                err.to_error_message(&DbOrUser::User(username.clone()))
             }
             DropUserError::UserDoesNotExist => {
-                format!("User '{}' does not exist.", username)
+                format!("User '{username}' does not exist.")
             }
             DropUserError::MySqlError(err) => {
-                format!("MySQL error: {}", err)
+                format!("MySQL error: {err}")
             }
         }
     }
 
+    #[must_use]
     pub fn error_type(&self) -> String {
         match self {
             DropUserError::ValidationError(err) => err.error_type(),

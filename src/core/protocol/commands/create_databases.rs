@@ -29,7 +29,7 @@ pub fn print_create_databases_output_status(output: &CreateDatabasesResponse) {
     for (database_name, result) in output {
         match result {
             Ok(()) => {
-                println!("Database '{}' created successfully.", database_name);
+                println!("Database '{database_name}' created successfully.");
             }
             Err(err) => {
                 eprintln!("{}", err.to_error_message(database_name));
@@ -63,20 +63,22 @@ pub fn print_create_databases_output_status_json(output: &CreateDatabasesRespons
 }
 
 impl CreateDatabaseError {
+    #[must_use]
     pub fn to_error_message(&self, database_name: &MySQLDatabase) -> String {
         match self {
             CreateDatabaseError::ValidationError(err) => {
-                err.to_error_message(DbOrUser::Database(database_name.clone()))
+                err.to_error_message(&DbOrUser::Database(database_name.clone()))
             }
             CreateDatabaseError::DatabaseAlreadyExists => {
-                format!("Database {} already exists.", database_name)
+                format!("Database {database_name} already exists.")
             }
             CreateDatabaseError::MySqlError(err) => {
-                format!("MySQL error: {}", err)
+                format!("MySQL error: {err}")
             }
         }
     }
 
+    #[must_use]
     pub fn error_type(&self) -> String {
         match self {
             CreateDatabaseError::ValidationError(err) => err.error_type(),

@@ -18,7 +18,7 @@ use crate::{
 
 #[derive(Parser, Debug, Clone)]
 pub struct UnlockUserArgs {
-    /// The MySQL user(s) to unlock
+    /// The `MySQL` user(s) to unlock
     #[cfg_attr(not(feature = "suid-sgid-mode"), arg(add = ArgValueCompleter::new(mysql_user_completer)))]
     #[arg(num_args = 1.., value_name = "USER_NAME")]
     username: Vec<MySQLUser>,
@@ -36,7 +36,7 @@ pub async fn unlock_users(
         anyhow::bail!("No usernames provided");
     }
 
-    let message = Request::UnlockUsers(args.username.to_owned());
+    let message = Request::UnlockUsers(args.username.clone());
 
     if let Err(err) = server_connection.send(message).await {
         server_connection.close().await.ok();
@@ -61,13 +61,13 @@ pub async fn unlock_users(
                 ))
             )
         }) {
-            print_authorization_owner_hint(&mut server_connection).await?
+            print_authorization_owner_hint(&mut server_connection).await?;
         }
     }
 
     server_connection.send(Request::Exit).await?;
 
-    if result.values().any(|result| result.is_err()) {
+    if result.values().any(std::result::Result::is_err) {
         std::process::exit(1);
     }
 

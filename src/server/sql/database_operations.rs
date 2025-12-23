@@ -53,16 +53,16 @@ pub async fn complete_database_name(
     group_denylist: &GroupDenylist,
 ) -> CompleteDatabaseNameResponse {
     let result = sqlx::query(
-        r#"
+        r"
           SELECT CAST(`SCHEMA_NAME` AS CHAR(64)) AS `database`
           FROM `information_schema`.`SCHEMATA`
           WHERE `SCHEMA_NAME` NOT IN ('information_schema', 'performance_schema', 'mysql', 'sys')
             AND `SCHEMA_NAME` REGEXP ?
             AND `SCHEMA_NAME` LIKE ?
-        "#,
+        ",
     )
     .bind(create_user_group_matching_regex(unix_user, group_denylist))
-    .bind(format!("{}%", database_prefix))
+    .bind(format!("{database_prefix}%"))
     .fetch_all(connection)
     .await;
 
@@ -103,21 +103,21 @@ pub async fn create_databases(
         )
         .map_err(CreateDatabaseError::ValidationError)
         {
-            results.insert(database_name.to_owned(), Err(err));
+            results.insert(database_name.clone(), Err(err));
             continue;
         }
 
         match unsafe_database_exists(&database_name, &mut *connection).await {
             Ok(true) => {
                 results.insert(
-                    database_name.to_owned(),
+                    database_name.clone(),
                     Err(CreateDatabaseError::DatabaseAlreadyExists),
                 );
                 continue;
             }
             Err(err) => {
                 results.insert(
-                    database_name.to_owned(),
+                    database_name.clone(),
                     Err(CreateDatabaseError::MySqlError(err.to_string())),
                 );
                 continue;
@@ -159,21 +159,21 @@ pub async fn drop_databases(
         )
         .map_err(DropDatabaseError::ValidationError)
         {
-            results.insert(database_name.to_owned(), Err(err));
+            results.insert(database_name.clone(), Err(err));
             continue;
         }
 
         match unsafe_database_exists(&database_name, &mut *connection).await {
             Ok(false) => {
                 results.insert(
-                    database_name.to_owned(),
+                    database_name.clone(),
                     Err(DropDatabaseError::DatabaseDoesNotExist),
                 );
                 continue;
             }
             Err(err) => {
                 results.insert(
-                    database_name.to_owned(),
+                    database_name.clone(),
                     Err(DropDatabaseError::MySqlError(err.to_string())),
                 );
                 continue;
@@ -218,7 +218,7 @@ impl FromRow<'_, sqlx::mysql::MySqlRow> for DatabaseRow {
                     if s.is_empty() {
                         None
                     } else {
-                        Some(s.split(',').map(|s| s.to_owned()).collect())
+                        Some(s.split(',').map(std::borrow::ToOwned::to_owned).collect())
                     }
                 })
                 .unwrap_or_default()
@@ -258,12 +258,12 @@ pub async fn list_databases(
         )
         .map_err(ListDatabasesError::ValidationError)
         {
-            results.insert(database_name.to_owned(), Err(err));
+            results.insert(database_name.clone(), Err(err));
             continue;
         }
 
         let result = sqlx::query_as::<_, DatabaseRow>(
-            r#"
+            r"
                 SELECT
                   CAST(`information_schema`.`SCHEMATA`.`SCHEMA_NAME` AS CHAR(64)) AS `database`,
                   GROUP_CONCAT(DISTINCT CAST(`information_schema`.`TABLES`.`TABLE_NAME` AS CHAR(64)) SEPARATOR ',') AS `tables`,
@@ -281,7 +281,7 @@ pub async fn list_databases(
                   ON `information_schema`.`SCHEMATA`.`SCHEMA_NAME` = `mysql`.`db`.`DB`
                 WHERE `information_schema`.`SCHEMATA`.`SCHEMA_NAME` = ?
                 GROUP BY `information_schema`.`SCHEMATA`.`SCHEMA_NAME`
-            "#,
+            ",
 
         )
         .bind(database_name.to_string())
@@ -289,9 +289,7 @@ pub async fn list_databases(
         .await
         .map_err(|err| ListDatabasesError::MySqlError(err.to_string()))
         .and_then(|database| {
-            database
-                .map(Ok)
-                .unwrap_or_else(|| Err(ListDatabasesError::DatabaseDoesNotExist))
+            database.map_or_else(|| Err(ListDatabasesError::DatabaseDoesNotExist), Ok)
         });
 
         if let Err(err) = &result {
@@ -313,7 +311,7 @@ pub async fn list_all_databases_for_user(
     group_denylist: &GroupDenylist,
 ) -> ListAllDatabasesResponse {
     let result = sqlx::query_as::<_, DatabaseRow>(
-        r#"
+        r"
           SELECT
             CAST(`information_schema`.`SCHEMATA`.`SCHEMA_NAME` AS CHAR(64)) AS `database`,
             GROUP_CONCAT(DISTINCT CAST(`information_schema`.`TABLES`.`TABLE_NAME` AS CHAR(64)) SEPARATOR ',') AS `tables`,
@@ -332,7 +330,7 @@ pub async fn list_all_databases_for_user(
           WHERE `information_schema`.`SCHEMATA`.`SCHEMA_NAME` NOT IN ('information_schema', 'performance_schema', 'mysql', 'sys')
             AND `information_schema`.`SCHEMATA`.`SCHEMA_NAME` REGEXP ?
           GROUP BY `information_schema`.`SCHEMATA`.`SCHEMA_NAME`
-        "#,
+        ",
     )
     .bind(create_user_group_matching_regex(unix_user, group_denylist))
     .fetch_all(connection)

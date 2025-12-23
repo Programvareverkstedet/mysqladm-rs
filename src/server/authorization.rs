@@ -42,10 +42,8 @@ pub async fn check_authorization(
 /// - `gid:1001`
 /// - `group:admins`
 pub fn read_and_parse_group_denylist(denylist_path: &Path) -> anyhow::Result<GroupDenylist> {
-    let content = std::fs::read_to_string(denylist_path).context(format!(
-        "Failed to read denylist file at {:?}",
-        denylist_path
-    ))?;
+    let content = std::fs::read_to_string(denylist_path)
+        .context(format!("Failed to read denylist file at {denylist_path:?}"))?;
 
     let mut groups = HashSet::with_capacity(content.lines().count());
 
@@ -128,7 +126,6 @@ pub fn read_and_parse_group_denylist(denylist_path: &Path) -> anyhow::Result<Gro
                         line_number + 1,
                         err
                     );
-                    continue;
                 }
             },
             _ => {
