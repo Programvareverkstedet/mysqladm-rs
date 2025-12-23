@@ -82,9 +82,11 @@ const EXAMPLES: &str = const_format::concatcp!(
 
   # Show all databases
   muscl show-db
+  muscl sd
 
   # Show which users have privileges on which databases
   muscl show-privs
+  muscl sp
 "#,
 );
 
@@ -169,22 +171,27 @@ const EDIT_PRIVS_EXAMPLES: &str = color_print::cstr!(
 #[command(subcommand_required = true)]
 pub enum ClientCommand {
     /// Check whether you are authorized to manage the specified databases or users.
+    #[command(alias = "ca")]
     CheckAuth(CheckAuthArgs),
 
     /// Create one or more databases
+    #[command(alias = "cd")]
     CreateDb(CreateDbArgs),
 
     /// Delete one or more databases
+    #[command(alias = "dd")]
     DropDb(DropDbArgs),
 
     /// Print information about one or more databases
     ///
     /// If no database name is provided, all databases you have access will be shown.
+    #[command(alias = "sd")]
     ShowDb(ShowDbArgs),
 
     /// Print user privileges for one or more databases
     ///
     /// If no database names are provided, all databases you have access to will be shown.
+    #[command(alias = "sp")]
     ShowPrivs(ShowPrivsArgs),
 
     /// Change user privileges for one or more databases. See `edit-privs --help` for details.
@@ -239,27 +246,34 @@ pub enum ClientCommand {
         verbatim_doc_comment,
         override_usage = "muscl edit-privs [OPTIONS] [ -p <DB_NAME:USER_NAME:[+-]PRIVILEGES>... | <DB_NAME> <USER_NAME> <[+-]PRIVILEGES> ]",
         after_long_help = EDIT_PRIVS_EXAMPLES,
+        alias = "ep",
     )]
     EditPrivs(EditPrivsArgs),
 
     /// Create one or more users
+    #[command(alias = "cu")]
     CreateUser(CreateUserArgs),
 
     /// Delete one or more users
+    #[command(alias = "du")]
     DropUser(DropUserArgs),
 
     /// Change the MySQL password for a user
+    #[command(alias = "pu")]
     PasswdUser(PasswdUserArgs),
 
     /// Print information about one or more users
     ///
     /// If no username is provided, all users you have access will be shown.
+    #[command(alias = "su")]
     ShowUser(ShowUserArgs),
 
     /// Lock account for one or more users
+    #[command(alias = "lu")]
     LockUser(LockUserArgs),
 
     /// Unlock account for one or more users
+    #[command(alias = "uu")]
     UnlockUser(UnlockUserArgs),
 }
 
