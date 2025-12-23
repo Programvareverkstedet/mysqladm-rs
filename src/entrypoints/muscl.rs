@@ -121,10 +121,10 @@ struct Args {
     )]
     server_socket_path: Option<PathBuf>,
 
-    // TODO: conditionally include this only when compiling with SUID/SGID support
     /// Config file to use for the server.
     ///
     /// This is only useful when running in SUID/SGID mode.
+    #[cfg(feature = "suid-sgid-mode")]
     #[arg(
         long = "config",
         value_name = "PATH",
@@ -293,7 +293,10 @@ fn main() -> anyhow::Result<()> {
 
     let connection = bootstrap_server_connection_and_drop_privileges(
         args.server_socket_path,
+        #[cfg(feature = "suid-sgid-mode")]
         args.config_path,
+        #[cfg(not(feature = "suid-sgid-mode"))]
+        None,
         args.verbose,
     )?;
 
