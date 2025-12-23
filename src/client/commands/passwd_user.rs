@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{io::IsTerminal, path::PathBuf};
 
 use anyhow::Context;
 use clap::Parser;
@@ -88,6 +88,11 @@ pub async fn passwd_user(
             .context("Failed to read password from stdin")?;
         buffer.trim().to_string()
     } else {
+        if !std::io::stdin().is_terminal() {
+            anyhow::bail!(
+                "Cannot prompt for password in non-interactive mode. Use --stdin or --password-file to provide the password."
+            );
+        }
         read_password_from_stdin_with_double_check(&args.username)?
     };
 

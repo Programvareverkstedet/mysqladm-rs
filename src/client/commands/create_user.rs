@@ -1,3 +1,5 @@
+use std::io::IsTerminal;
+
 use clap::Parser;
 use clap_complete::ArgValueCompleter;
 use dialoguer::Confirm;
@@ -77,6 +79,15 @@ pub async fn create_users(
             .iter()
             .filter_map(|(username, result)| result.as_ref().ok().map(|()| username))
             .collect::<Vec<_>>();
+
+        if !std::io::stdin().is_terminal()
+            && !args.no_password
+            && !successfully_created_users.is_empty()
+        {
+            anyhow::bail!(
+                "Cannot prompt for passwords in non-interactive mode. Use --no-password to skip setting passwords."
+            );
+        }
 
         for username in successfully_created_users {
             if !args.no_password

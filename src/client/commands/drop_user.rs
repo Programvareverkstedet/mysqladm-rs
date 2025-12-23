@@ -1,3 +1,5 @@
+use std::io::IsTerminal;
+
 use clap::Parser;
 use clap_complete::ArgValueCompleter;
 use dialoguer::Confirm;
@@ -39,6 +41,12 @@ pub async fn drop_users(
 ) -> anyhow::Result<()> {
     if args.username.is_empty() {
         anyhow::bail!("No usernames provided");
+    }
+
+    if !std::io::stdin().is_terminal() && !args.yes {
+        anyhow::bail!(
+            "Cannot prompt for confirmation in non-interactive mode. Use --yes to automatically confirm."
+        );
     }
 
     if !args.yes {

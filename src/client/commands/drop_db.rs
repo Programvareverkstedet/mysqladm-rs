@@ -1,3 +1,5 @@
+use std::io::IsTerminal;
+
 use clap::Parser;
 use clap_complete::ArgValueCompleter;
 use dialoguer::Confirm;
@@ -41,6 +43,12 @@ pub async fn drop_databases(
         anyhow::bail!("No database names provided");
     }
 
+    if !std::io::stdin().is_terminal() && !args.yes {
+        anyhow::bail!(
+            "Cannot prompt for confirmation in non-interactive mode. Use --yes to automatically confirm."
+        );
+    }
+
     if !args.yes {
         let confirmation = Confirm::new()
             .with_prompt(format!(
@@ -53,7 +61,6 @@ pub async fn drop_databases(
             ))
             .interact()?;
 
-        //
         if !confirmation {
             // TODO: should we return with an error code here?
             println!("Aborting drop operation.");

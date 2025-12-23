@@ -1,4 +1,7 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    io::IsTerminal,
+};
 
 use anyhow::Context;
 use clap::{Args, Parser};
@@ -213,6 +216,11 @@ pub async fn edit_database_privileges(
     };
 
     let diffs: BTreeSet<DatabasePrivilegesDiff> = if privs.is_empty() {
+        if !std::io::stdin().is_terminal() {
+            anyhow::bail!(
+                "Cannot launch editor in non-interactive mode. Please provide privileges via command line arguments."
+            );
+        }
         let privileges_to_change =
             edit_privileges_with_editor(&existing_privilege_rows, use_database.as_ref())?;
         diff_privileges(&existing_privilege_rows, &privileges_to_change)
@@ -275,7 +283,8 @@ pub async fn edit_database_privileges(
     println!("The following changes will be made:\n");
     println!("{}", display_privilege_diffs(&diffs));
 
-    if !args.yes
+    if std::io::stdin().is_terminal()
+        && !args.yes
         && !Confirm::new()
             .with_prompt("Do you want to apply these changes?")
             .default(false)
