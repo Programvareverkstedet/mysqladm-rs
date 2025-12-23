@@ -26,6 +26,9 @@ use muscl_lib::{
     },
 };
 
+#[cfg(feature = "suid-sgid-mode")]
+use muscl_lib::core::common::executing_in_suid_sgid_mode;
+
 const fn long_version() -> &'static str {
     macro_rules! feature {
         ($title:expr, $flag:expr) => {
@@ -314,7 +317,7 @@ fn handle_dynamic_completion() -> anyhow::Result<Option<()>> {
     if std::env::var_os("COMPLETE").is_some() {
         #[cfg(feature = "suid-sgid-mode")]
         if executing_in_suid_sgid_mode()? {
-            use crate::core::bootstrap::drop_privs;
+            use muscl_lib::core::bootstrap::drop_privs;
             drop_privs()?
         }
 
