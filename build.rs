@@ -23,8 +23,19 @@ fn embed_build_time_info() {
         .unwrap_or("unknown")
         .to_string();
 
+    let dependencies = build_info_build::build_script()
+        .collect_runtime_dependencies(build_info_build::DependencyDepth::Depth(1))
+        .build()
+        .crate_info
+        .dependencies
+        .into_iter()
+        .map(|dep| format!("{}: {}", dep.name, dep.version))
+        .collect::<Vec<_>>()
+        .join(";");
+
     println!("cargo:rustc-env=GIT_COMMIT={}", commit);
     println!("cargo:rustc-env=BUILD_PROFILE={}", build_profile);
+    println!("cargo:rustc-env=DEPENDENCY_LIST={}", dependencies);
 }
 
 fn generate_mysql_admutils_symlinks() -> anyhow::Result<()> {

@@ -2,6 +2,7 @@
 name = "muscl"
 version = "0.1.0"
 edition = "2024"
+resolver = "2"
 license = "BSD-3-Clause"
 authors = [
   "oysteikt@pvv.ntnu.no",
@@ -56,6 +57,7 @@ tracing-journald = "0.3.2"
 
 [build-dependencies]
 anyhow = "1.0.100"
+build-info-build = "0.0.42"
 git2 = { version = "0.20.3", default-features = false }
 
 [dev-dependencies]

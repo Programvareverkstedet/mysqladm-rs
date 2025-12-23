@@ -36,6 +36,7 @@ const fn long_version() -> &'static str {
             }
         };
     }
+
     const_format::concatcp!(
         crate_version!(),
         "\n",
@@ -53,6 +54,9 @@ const fn long_version() -> &'static str {
             "mysql-admutils-compatibility"
         ),
         "\n",
+        "\n",
+        "[dependencies]\n",
+        const_format::str_replace!(env!("DEPENDENCY_LIST"), ";", "\n")
     )
 }
 
