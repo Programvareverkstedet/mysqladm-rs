@@ -3,11 +3,11 @@ use std::path::PathBuf;
 use anyhow::Context;
 use clap::{Parser, Subcommand};
 use clap_verbosity_flag::{InfoLevel, Verbosity};
-use tracing_subscriber::prelude::*;
+use tracing_subscriber::layer::SubscriberExt;
 
-use crate::{
+use muscl_lib::{
     core::common::{ASCII_BANNER, DEFAULT_CONFIG_PATH, KIND_REGARDS},
-    server::supervisor::Supervisor,
+    server::{landlock::landlock_restrict_server, supervisor::Supervisor},
 };
 
 #[derive(Parser, Debug, Clone)]
@@ -25,6 +25,29 @@ pub struct ServerArgs {
     /// This is useful if you are planning to reload the server's configuration.
     #[arg(long)]
     pub disable_landlock: bool,
+
+    // NOTE: be careful not to add short options that collide with the `edit-privs` privilege
+    //       characters. It should in theory be possible for `edit-privs` to ignore any options
+    //       specified here, but in practice clap is being difficult to work with.
+    /// Path to where the server's unix socket should be created. This is only relevant when
+    /// not using systemd socket activation.
+    #[arg(
+        long = "socket",
+        value_name = "PATH",
+        value_hint = clap::ValueHint::FilePath,
+    )]
+    socket_path: Option<PathBuf>,
+
+    /// Config file to use for the server.
+    #[arg(
+        long = "config",
+        value_name = "PATH",
+        value_hint = clap::ValueHint::FilePath,
+    )]
+    config_path: Option<PathBuf>,
+
+    #[command(flatten)]
+    verbosity: Verbosity<InfoLevel>,
 }
 
 #[derive(Subcommand, Debug, Clone)]
@@ -48,16 +71,34 @@ const LOG_LEVEL_WARNING: &str = r#"
 ===================================================
 "#;
 
-pub fn trace_server_prelude() {
+const MIN_TOKIO_WORKER_THREADS: usize = 4;
+
+fn main() -> anyhow::Result<()> {
+    let args = ServerArgs::parse();
+
+    if !args.disable_landlock {
+        landlock_restrict_server(args.config_path.as_deref())
+            .context("Failed to apply Landlock restrictions to the server process")?;
+    }
+
+    let worker_thread_count = std::cmp::max(num_cpus::get(), MIN_TOKIO_WORKER_THREADS);
+
+    tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(worker_thread_count)
+        .enable_all()
+        .build()
+        .context("Failed to start Tokio runtime")?
+        .block_on(handle_command(args))?;
+
+    Ok(())
+}
+
+fn trace_server_prelude() {
     let message = [ASCII_BANNER, "", KIND_REGARDS, ""].join("\n");
     tracing::info!(message);
 }
 
-pub async fn handle_command(
-    config_path: Option<PathBuf>,
-    verbosity: Verbosity<InfoLevel>,
-    args: ServerArgs,
-) -> anyhow::Result<()> {
+async fn handle_command(args: ServerArgs) -> anyhow::Result<()> {
     let mut auto_detected_systemd_mode = false;
 
     #[cfg(target_os = "linux")]
@@ -77,7 +118,7 @@ pub async fn handle_command(
         #[cfg(target_os = "linux")]
         {
             let subscriber = tracing_subscriber::Registry::default()
-                .with(verbosity.tracing_level_filter())
+                .with(args.verbosity.tracing_level_filter())
                 .with(tracing_journald::layer()?);
 
             tracing::subscriber::set_global_default(subscriber)
@@ -85,7 +126,7 @@ pub async fn handle_command(
 
             trace_server_prelude();
 
-            if verbosity.tracing_level_filter() >= tracing::Level::TRACE {
+            if args.verbosity.tracing_level_filter() >= tracing::Level::TRACE {
                 tracing::warn!("{}", LOG_LEVEL_WARNING.trim());
             }
 
@@ -97,7 +138,7 @@ pub async fn handle_command(
         }
     } else {
         let subscriber = tracing_subscriber::Registry::default()
-            .with(verbosity.tracing_level_filter())
+            .with(args.verbosity.tracing_level_filter())
             .with(
                 tracing_subscriber::fmt::layer()
                     .with_line_number(cfg!(debug_assertions))
@@ -114,7 +155,9 @@ pub async fn handle_command(
         tracing::debug!("Running in standalone mode");
     }
 
-    let config_path = config_path.unwrap_or_else(|| PathBuf::from(DEFAULT_CONFIG_PATH));
+    let config_path = args
+        .config_path
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_CONFIG_PATH));
 
     match args.subcmd {
         ServerCommand::Listen => {

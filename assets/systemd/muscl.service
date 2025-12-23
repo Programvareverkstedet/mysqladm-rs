@@ -5,7 +5,7 @@ After=mysql.service mariadb.service
 
 [Service]
 Type=notify
-ExecStart=/usr/bin/muscl server --systemd --disable-landlock socket-activate
+ExecStart=/usr/bin/muscl-server --systemd --disable-landlock socket-activate
 ExecReload=/usr/bin/kill -HUP $MAINPID
 
 WatchdogSec=15

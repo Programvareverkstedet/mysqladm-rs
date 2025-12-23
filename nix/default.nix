@@ -84,7 +84,7 @@ buildFunction ({
     install -Dm444 assets/systemd/muscl.socket -t "$out/lib/systemd/system"
     install -Dm644 assets/systemd/muscl.service -t "$out/lib/systemd/system"
     substituteInPlace "$out/lib/systemd/system/muscl.service" \
-      --replace-fail '/usr/bin/muscl' "$out/bin/muscl"
+      --replace-fail '/usr/bin/muscl-server' "$out/bin/muscl-server"
   '';
 
   meta = with lib; {

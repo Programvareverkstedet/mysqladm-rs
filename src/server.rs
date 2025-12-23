@@ -1,5 +1,4 @@
 pub mod authorization;
-pub mod command;
 mod common;
 pub mod config;
 pub mod landlock;

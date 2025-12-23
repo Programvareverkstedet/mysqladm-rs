@@ -132,7 +132,7 @@ in
       serviceConfig = {
         ExecStart = [
           ""
-          "${lib.getExe cfg.package} ${cfg.logLevel} server --systemd --disable-landlock socket-activate"
+          "${lib.getExe' cfg.package "muscl-server"} ${cfg.logLevel} --systemd --disable-landlock socket-activate"
         ];
 
         ExecReload = [

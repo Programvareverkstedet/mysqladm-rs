@@ -67,10 +67,19 @@ default = ["mysql-admutils-compatibility"]
 mysql-admutils-compatibility = []
 suid-sgid-mode = []
 
+[lib]
+name = "muscl_lib"
+path = "src/lib.rs"
+
 [[bin]]
 name = "muscl"
 bench = false
-path = "src/main.rs"
+path = "src/entrypoints/muscl.rs"
+
+[[bin]]
+name = "muscl-server"
+bench = false
+path = "src/entrypoints/muscl_server.rs"
 
 [profile.release-lto]
 inherits = "release"
@@ -117,6 +126,11 @@ changelog = "CHANGELOG.md"
 assets = [
     [
         "target/release/muscl",
+        "usr/bin/",
+        "755",
+    ],
+    [
+        "target/release/muscl-server",
         "usr/bin/",
         "755",
     ],
