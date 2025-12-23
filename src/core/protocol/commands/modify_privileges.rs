@@ -96,9 +96,10 @@ impl ModifyDatabasePrivilegesError {
     #[allow(dead_code)]
     pub fn error_type(&self) -> String {
         match self {
-            // TODO: should these be subtyped?
-            ModifyDatabasePrivilegesError::DatabaseValidationError(err) => err.error_type(),
-            ModifyDatabasePrivilegesError::UserValidationError(err) => err.error_type(),
+            ModifyDatabasePrivilegesError::DatabaseValidationError(err) => {
+                err.error_type() + "/database"
+            }
+            ModifyDatabasePrivilegesError::UserValidationError(err) => err.error_type() + "/user",
             ModifyDatabasePrivilegesError::DatabaseDoesNotExist => {
                 "database-does-not-exist".to_string()
             }
