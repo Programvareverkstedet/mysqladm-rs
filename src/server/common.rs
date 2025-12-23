@@ -37,7 +37,7 @@ pub fn create_user_group_matching_regex(user: &UnixUser, group_denylist: &GroupD
 
 /// Some mysql versions with some collations mark some columns as binary fields,
 /// which in the current version of sqlx is not parsable as string.
-/// See: https://github.com/launchbadge/sqlx/issues/3387
+/// See: <https://github.com/launchbadge/sqlx/issues/3387>
 #[inline]
 pub fn try_get_with_binary_fallback(
     row: &sqlx::mysql::MySqlRow,
