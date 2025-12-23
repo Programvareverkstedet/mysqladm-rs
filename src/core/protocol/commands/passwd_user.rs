@@ -6,7 +6,12 @@ use crate::core::{
     types::{DbOrUser, MySQLUser},
 };
 
-pub type SetUserPasswordRequest = (MySQLUser, String);
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SetUserPasswordRequest {
+  pub user: MySQLUser,
+  pub new_password: Option<String>,
+  pub expiry: Option<chrono::NaiveDate>,
+}
 
 pub type SetUserPasswordResponse = Result<(), SetPasswordError>;
 
@@ -17,6 +22,9 @@ pub enum SetPasswordError {
 
     #[error("User does not exist")]
     UserDoesNotExist,
+
+    #[error("Cannot clear password with an expiry date set")]
+    ClearPasswordWithExpiry,
 
     #[error("MySQL error: {0}")]
     MySqlError(String),
@@ -44,6 +52,9 @@ impl SetPasswordError {
             SetPasswordError::UserDoesNotExist => {
                 format!("User '{username}' does not exist.")
             }
+            SetPasswordError::ClearPasswordWithExpiry => {
+                format!("Cannot clear password for user '{username}' when an expiry date is set.")
+            }
             SetPasswordError::MySqlError(err) => {
                 format!("MySQL error: {err}")
             }
@@ -56,6 +67,7 @@ impl SetPasswordError {
         match self {
             SetPasswordError::ValidationError(err) => err.error_type(),
             SetPasswordError::UserDoesNotExist => "user-does-not-exist".to_string(),
+            SetPasswordError::ClearPasswordWithExpiry => "clear-password-with-expiry".to_string(),
             SetPasswordError::MySqlError(_) => "mysql-error".to_string(),
         }
     }

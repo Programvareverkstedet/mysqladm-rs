@@ -188,7 +188,8 @@ pub async fn drop_database_users(
 
 pub async fn set_password_for_database_user(
     db_user: &MySQLUser,
-    password: &str,
+    password: Option<&str>,
+    expiry: Option<chrono::NaiveDate>,
     unix_user: &UnixUser,
     connection: &mut MySqlConnection,
     _db_is_mariadb: bool,
@@ -197,24 +198,44 @@ pub async fn set_password_for_database_user(
     validate_db_or_user_request(&DbOrUser::User(db_user.clone()), unix_user, group_denylist)
         .map_err(SetPasswordError::ValidationError)?;
 
+    if password.is_none() && expiry.is_some() {
+        return Err(SetPasswordError::ClearPasswordWithExpiry);
+    }
+
     match unsafe_user_exists(db_user, &mut *connection).await {
         Ok(false) => return Err(SetPasswordError::UserDoesNotExist),
         Err(err) => return Err(SetPasswordError::MySqlError(err.to_string())),
         _ => {}
     }
 
-    let result = sqlx::query(
-        format!(
+    let result = if let Some(password) = password {
+        let mut query = format!(
             "ALTER USER {}@'%' IDENTIFIED BY {}",
             quote_literal(db_user),
             quote_literal(password).as_str(),
-        )
-        .as_str(),
-    )
-    .execute(&mut *connection)
-    .await
-    .map(|_| ())
-    .map_err(|err| SetPasswordError::MySqlError(err.to_string()));
+        );
+
+        if let Some(expiry_date) = expiry {
+            query.push_str(&format!(" PASSWORD EXPIRE DATE '{}'", expiry_date));
+        }
+
+        sqlx::query(query.as_str())
+            .execute(&mut *connection)
+            .await
+            .map(|_| ())
+            .map_err(|err| SetPasswordError::MySqlError(err.to_string()))
+    } else {
+        let query = format!(
+            "ALTER USER {}@'%' IDENTIFIED WITH mysql_native_password AS ''",
+            quote_literal(db_user),
+        );
+
+        sqlx::query(query.as_str())
+            .execute(&mut *connection)
+            .await
+            .map(|_| ())
+            .map_err(|err| SetPasswordError::MySqlError(err.to_string()))
+    };
 
     if result.is_err() {
         tracing::error!(

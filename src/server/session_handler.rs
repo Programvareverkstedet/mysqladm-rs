@@ -11,7 +11,8 @@ use crate::{
         common::UnixUser,
         protocol::{
             Request, Response, ServerToClientMessageStream, SetPasswordError,
-            create_server_to_client_message_stream, request_validation::GroupDenylist,
+            SetUserPasswordRequest, create_server_to_client_message_stream,
+            request_validation::GroupDenylist,
         },
     },
     server::{
@@ -175,9 +176,15 @@ async fn session_handler_with_db_connection(
 
         // TODO: don't clone the request
         let request_to_display = match &request {
-            Request::PasswdUser((db_user, _)) => {
-                Request::PasswdUser((db_user.to_owned(), "<REDACTED>".to_string()))
-            }
+            Request::PasswdUser(SetUserPasswordRequest {
+                user,
+                new_password,
+                expiry,
+            }) => Request::PasswdUser(SetUserPasswordRequest {
+                user: user.clone(),
+                new_password: new_password.as_ref().map(|_| "<REDACTED>".to_string()),
+                expiry: *expiry,
+            }),
             request => request.to_owned(),
         };
 
@@ -339,10 +346,15 @@ async fn session_handler_with_db_connection(
                 .await;
                 Response::DropUsers(result)
             }
-            Request::PasswdUser((db_user, password)) => {
+            Request::PasswdUser(SetUserPasswordRequest {
+                user,
+                new_password,
+                expiry,
+            }) => {
                 let result = set_password_for_database_user(
-                    &db_user,
-                    &password,
+                    &user,
+                    new_password.as_deref(),
+                    expiry,
                     unix_user,
                     db_connection,
                     db_is_mariadb,

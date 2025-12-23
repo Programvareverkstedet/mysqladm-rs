@@ -8,7 +8,7 @@ use tokio::net::UnixStream as TokioUnixStream;
 
 use crate::{
     client::{
-        commands::{erroneous_server_response, read_password_from_stdin_with_double_check},
+        commands::{erroneous_server_response, interactive_password_dialogue_with_double_check},
         mysql_admutils_compatibility::{
             common::trim_user_name_to_32_chars,
             error_messages::{
@@ -20,7 +20,7 @@ use crate::{
         bootstrap::bootstrap_server_connection_and_drop_privileges,
         completion::{mysql_user_completer, prefix_completer},
         protocol::{
-            ClientToServerMessageStream, Request, Response, create_client_to_server_message_stream,
+            ClientToServerMessageStream, Request, Response, SetUserPasswordRequest, create_client_to_server_message_stream
         },
         types::MySQLUser,
     },
@@ -252,8 +252,12 @@ async fn passwd_users(
         .collect::<Vec<_>>();
 
     for user in users {
-        let password = read_password_from_stdin_with_double_check(&user.user)?;
-        let message = Request::PasswdUser((user.user.clone(), password));
+        let password = interactive_password_dialogue_with_double_check(&user.user)?;
+        let message = Request::PasswdUser(SetUserPasswordRequest {
+            user: user.user.clone(),
+            new_password: Some(password),
+            expiry: None,
+        });
         server_connection.send(message).await?;
         match server_connection.next().await {
             Some(Ok(Response::SetUserPassword(result))) => match result {

@@ -22,6 +22,7 @@ autolib = false
 anyhow = "1.0.100"
 async-bincode = "0.8.0"
 bincode = "2.0.1"
+chrono = { version = "0.4.42", features = ["serde"] }
 clap = { version = "4.5.53", features = ["cargo", "derive"] }
 clap-verbosity-flag = { version = "3.0.4", features = [ "tracing" ] }
 clap_complete = { version = "4.5.62", features = ["unstable-dynamic"] }

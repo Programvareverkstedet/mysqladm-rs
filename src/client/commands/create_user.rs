@@ -6,15 +6,16 @@ use tokio_stream::StreamExt;
 
 use crate::{
     client::commands::{
-        erroneous_server_response, print_authorization_owner_hint,
-        read_password_from_stdin_with_double_check,
+        erroneous_server_response, interactive_password_dialogue_with_double_check,
+        interactive_password_expiry_dialogue, print_authorization_owner_hint,
     },
     core::{
         completion::prefix_completer,
         protocol::{
             ClientToServerMessageStream, CreateUserError, Request, Response,
-            print_create_users_output_status, print_create_users_output_status_json,
-            print_set_password_output_status, request_validation::ValidationError,
+            SetUserPasswordRequest, print_create_users_output_status,
+            print_create_users_output_status_json, print_set_password_output_status,
+            request_validation::ValidationError,
         },
         types::MySQLUser,
     },
@@ -87,8 +88,14 @@ pub async fn create_users(
                     .default(false)
                     .interact()?
             {
-                let password = read_password_from_stdin_with_double_check(username)?;
-                let message = Request::PasswdUser((username.to_owned(), password));
+                let password = interactive_password_dialogue_with_double_check(username)?;
+                let expiry = interactive_password_expiry_dialogue(username)?;
+
+                let message = Request::PasswdUser(SetUserPasswordRequest {
+                    user: username.clone(),
+                    new_password: Some(password),
+                    expiry: expiry,
+                });
 
                 if let Err(err) = server_connection.send(message).await {
                     server_connection.close().await.ok();

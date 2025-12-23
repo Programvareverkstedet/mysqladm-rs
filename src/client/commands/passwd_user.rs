@@ -13,7 +13,8 @@ use crate::{
         completion::mysql_user_completer,
         protocol::{
             ClientToServerMessageStream, ListUsersError, Request, Response, SetPasswordError,
-            print_set_password_output_status, request_validation::ValidationError,
+            SetUserPasswordRequest, print_set_password_output_status,
+            request_validation::ValidationError,
         },
         types::MySQLUser,
     },
@@ -37,9 +38,21 @@ pub struct PasswdUserArgs {
     /// Print the information as JSON
     #[arg(short, long)]
     json: bool,
+
+    /// Set the password to expire on the given date (YYYY-MM-DD)
+    #[arg(short, long, value_name = "DATE", conflicts_with = "no-expire")]
+    expire_on: Option<chrono::NaiveDate>,
+
+    /// Set the password to never expire
+    #[arg(short, long, conflicts_with = "expire_on")]
+    no_expire: bool,
+
+    /// Clear the password for the user instead of setting a new one
+    #[arg(short, long, conflicts_with_all = &["password_file", "stdin", "expire_on", "no-expire"])]
+    clear: bool,
 }
 
-pub fn read_password_from_stdin_with_double_check(username: &MySQLUser) -> anyhow::Result<String> {
+pub fn interactive_password_dialogue_with_double_check(username: &MySQLUser) -> anyhow::Result<String> {
     Password::new()
         .with_prompt(format!("New MySQL password for user '{username}'"))
         .with_confirmation(
@@ -48,6 +61,29 @@ pub fn read_password_from_stdin_with_double_check(username: &MySQLUser) -> anyho
         )
         .interact()
         .map_err(Into::into)
+}
+
+pub fn interactive_password_expiry_dialogue(username: &MySQLUser) -> anyhow::Result<Option<chrono::NaiveDate>> {
+    let input = dialoguer::Input::<String>::new()
+        .with_prompt(format!(
+            "Enter the password expiry date for user '{username}' (YYYY-MM-DD)"
+        ))
+        .allow_empty(true)
+        .validate_with(|input: &String| {
+            chrono::NaiveDate::parse_from_str(input, "%Y-%m-%d")
+                .map(|_| ())
+                .map_err(|_| "Invalid date format. Please use YYYY-MM-DD".to_string())
+        })
+        .interact_text()?;
+
+    if input.trim().is_empty() {
+        return Ok(None);
+    }
+
+    let date = chrono::NaiveDate::parse_from_str(&input, "%Y-%m-%d")
+        .map_err(|e| anyhow::anyhow!("Failed to parse date: {}", e))?;
+
+    Ok(Some(date))
 }
 
 pub async fn passwd_user(
@@ -76,22 +112,38 @@ pub async fn passwd_user(
         }
     }
 
-    let password = if let Some(password_file) = args.password_file {
-        std::fs::read_to_string(password_file)
-            .context("Failed to read password file")?
-            .trim()
-            .to_string()
+    let password: Option<String> = if let Some(password_file) = args.password_file {
+        Some(
+            std::fs::read_to_string(password_file)
+                .context("Failed to read password file")?
+                .trim()
+                .to_string(),
+        )
     } else if args.stdin {
         let mut buffer = String::new();
         std::io::stdin()
             .read_line(&mut buffer)
             .context("Failed to read password from stdin")?;
-        buffer.trim().to_string()
+        Some(buffer.trim().to_string())
+    } else if args.clear {
+        None
     } else {
-        read_password_from_stdin_with_double_check(&args.username)?
+        Some(interactive_password_dialogue_with_double_check(&args.username)?)
     };
 
-    let message = Request::PasswdUser((args.username.clone(), password));
+    let expiry_date = if args.no_expire {
+        None
+    } else if let Some(date) = args.expire_on {
+        Some(date)
+    } else {
+        interactive_password_expiry_dialogue(&args.username)?
+    };
+
+    let message = Request::PasswdUser(SetUserPasswordRequest {
+        user: args.username.clone(),
+        new_password: password,
+        expiry: expiry_date,
+    });
 
     if let Err(err) = server_connection.send(message).await {
         server_connection.close().await.ok();
