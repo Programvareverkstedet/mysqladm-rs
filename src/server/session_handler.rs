@@ -173,18 +173,13 @@ async fn session_handler_with_db_connection(
             }
         };
 
-        // TODO: don't clone the request
-        let request_to_display = match &request {
-            Request::PasswdUser((db_user, _)) => {
+        match &request {
+            Request::Exit => tracing::debug!("Received request: {:#?}", request),
+            Request::PasswdUser((db_user, _)) => tracing::info!(
+                "Received request: {:#?}",
                 Request::PasswdUser((db_user.to_owned(), "<REDACTED>".to_string()))
-            }
-            request => request.to_owned(),
-        };
-
-        if request_to_display == Request::Exit {
-            tracing::debug!("Received request: {:#?}", request_to_display);
-        } else {
-            tracing::info!("Received request: {:#?}", request_to_display);
+            ),
+            request => tracing::info!("Received request: {:#?}", request),
         }
 
         let response = match request {
